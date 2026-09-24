@@ -1,16 +1,20 @@
 using AutoFateGrind.Core.Game.Ops;
+using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Zones;
 using clib.Extensions;
 using clib.TaskSystem;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Types;
 using ECommons.DalamudServices;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Network;
 using System.Numerics;
 using System.Threading.Tasks;
 using PlayerHelpers = ECommons.GameHelpers.Player;
 
 namespace AutoFateGrind.Core.Tasks;
+
+internal readonly record struct FlightReplanPolicy(int GroundTravelGraceMs, float MinDistanceMeters, int MaxReplans);
 
 // A single clib movement/teleport operation run as its OWN AutoTask, so it owns its own
 // CancellationTokenSource. The parent grind loop can therefore Cancel() exactly one operation
@@ -43,6 +47,89 @@ internal sealed class MoveOp(System.Func<MoveOp, Task> body) : TaskBase
 
     public Task MoveInZone(Vector3 dest, MovementConfig config, System.Func<bool>? stopCondition)
         => MoveTo(dest, config, allowTeleportIfFaster: false, stopCondition, null, allowAethernet: false);
+
+    public async Task MoveInZoneWithFlightRecovery(Vector3 dest, MovementConfig config,
+        System.Func<bool>? stopCondition, FlightReplanPolicy policy, System.Action<string> diag)
+    {
+        if (!config.Movement.HasFlag(MovementOptions.Fly) || config.Pathing == PathingStrategy.Direct)
+        {
+            await MoveInZone(dest, config, stopCondition);
+            return;
+        }
+
+        var budgetExhaustionLogged = false;
+        for (var replans = 0; ; replans++)
+        {
+            if (CancelToken.IsCancellationRequested || stopCondition?.Invoke() == true)
+            {
+                return;
+            }
+
+            var groundSinceMs = 0L;
+            var replanForFlight = false;
+            var callerStopped = false;
+            bool? canFlyWhenPlanned = null;
+            bool ShouldStop()
+            {
+                // clib has already chosen the route by its first stop callback. If flight was ready
+                // then, a grounded take-off is not evidence that it chose a ground route.
+                canFlyWhenPlanned ??= Control.CanFly;
+                callerStopped |= CancelToken.IsCancellationRequested || stopCondition?.Invoke() == true;
+                if (callerStopped || replanForFlight)
+                {
+                    return true;
+                }
+
+                if (canFlyWhenPlanned.Value || !ReadyForFlight()
+                 || Svc.Condition[ConditionFlag.InFlight] || !NavmeshIPC.Instance.IsRunning()
+                 || Svc.Objects.LocalPlayer is not { } player
+                 || Vector3.Distance(player.Position, dest) <= Math.Max(policy.MinDistanceMeters, config.Tolerance ?? 0))
+                {
+                    groundSinceMs = 0;
+                    return false;
+                }
+
+                var now = Environment.TickCount64;
+                if (groundSinceMs == 0)
+                {
+                    groundSinceMs = now;
+                }
+                if (now - groundSinceMs < policy.GroundTravelGraceMs)
+                {
+                    return false;
+                }
+
+                if (replans >= policy.MaxReplans)
+                {
+                    if (!budgetExhaustionLogged)
+                    {
+                        diag("Flight replan budget spent; continuing on the ground route");
+                        budgetExhaustionLogged = true;
+                    }
+                    return false;
+                }
+
+                replanForFlight = true;
+                return true;
+            }
+
+            // clib decides whether to mount. Replan only when flight became available after it
+            // planned a ground route and navigation stayed grounded past the grace period.
+            await MoveInZone(dest, config, ShouldStop);
+            if (callerStopped || !replanForFlight || CancelToken.IsCancellationRequested)
+            {
+                return;
+            }
+            diag($"Flight became available during a ground route; replanning ({replans + 1}/{policy.MaxReplans})");
+        }
+    }
+
+    private static bool ReadyForFlight()
+        => Svc.Condition[ConditionFlag.Mounted]
+        && !Svc.Condition[ConditionFlag.Mounting]
+        && !Svc.Condition[ConditionFlag.Mounting71]
+        && Svc.Objects.LocalPlayer is { IsDead: false, IsCasting: false }
+        && Control.CanFly;
 
     public Task Teleport(uint territoryId, Vector3 dest, bool allowSameZoneTeleport)
         => TeleportTo(territoryId, dest, allowSameZoneTeleport);
