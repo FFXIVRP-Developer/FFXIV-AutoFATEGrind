@@ -503,6 +503,8 @@
   "settings.general.swapWaitHelp": "在空区域停留多久后再前往下一个区域。开启节奏后，实际等待时间会围绕此值随机，避免满是AFG用户的区域同时离开。",
   "settings.general.keepTwist": "保留命运扭转",
   "settings.general.keepTwistHelp": "命运扭转加成期间留在区域内：不切换区域、不使用传送捷径、不离开已完成的区域，直到加成结束。",
+  "settings.general.mountWhileWaiting": "等待FATE时上坐骑",
+  "settings.general.mountWhileWaitingHelp": "空闲等待FATE时，短暂延迟后自动上坐骑。妖怪手表奖牌目标下禁用。",
   "settings.general.autoPause": "副本中自动暂停",
   "settings.general.autoPauseHelp": "在副本、讨伐战、大型任务或其他实例内容中暂停运行，离开后自动继续。区域、目标和会话统计都会保留，暂停的时间不计入时间目标。",
   "settings.general.autoResume": "故障后自动恢复",

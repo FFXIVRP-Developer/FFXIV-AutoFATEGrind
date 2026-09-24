@@ -503,6 +503,8 @@
   "settings.general.swapWaitHelp": "FATEのないエリアで次のエリアへ移る前に待つ時間。ペーシングが有効なら実際の待機時間はこの値の前後でランダムになり、AFG利用者が一斉に移動しないようにします。",
   "settings.general.keepTwist": "ツイスト・オブ・フェイトを維持",
   "settings.general.keepTwistHelp": "ツイスト・オブ・フェイトの効果中はエリアに留まります。効果が切れるまでエリア移動、テレポの近道、完了エリアからの移動を行いません。",
+  "settings.general.mountWhileWaiting": "FATE待機中にマウントに乗る",
+  "settings.general.mountWhileWaitingHelp": "FATEの待機中、少し時間をおいて自動でマウントに乗ります。妖怪メダル周回では無効です。",
   "settings.general.autoPause": "コンテンツ中は自動で一時停止",
   "settings.general.autoPauseHelp": "ダンジョン、討伐戦、レイドなどインスタンスコンテンツにいる間は周回を一時停止し、出たら再開します。エリア、目標、セッション統計は保持され、一時停止中の時間は時間目標に含まれません。",
   "settings.general.autoResume": "エラー後に自動再開",

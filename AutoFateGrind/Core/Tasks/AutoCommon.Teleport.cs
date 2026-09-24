@@ -199,7 +199,7 @@ public abstract partial class AutoCommon
                 && !Svc.Condition[ConditionFlag.BetweenAreas]
                 && !Svc.Condition[ConditionFlag.BetweenAreas51])
             {
-                UseGeneralAction(ReturnGeneralActionId);
+                UseGeneralAction(ReturnGeneralActionId, out _);
                 nextCastAt = Environment.TickCount64 + ReturnHomeReissueMs;
             }
             await DelayMs(ReturnHomePollMs);
@@ -209,11 +209,16 @@ public abstract partial class AutoCommon
         return false;
     }
 
-    private static unsafe void UseGeneralAction(uint generalActionId)
+    protected static unsafe bool UseGeneralAction(uint generalActionId, out uint? actionStatus)
     {
         var actionManager = ActionManager.Instance();
-        if (actionManager is null) return;
-        actionManager->UseAction(ActionType.GeneralAction, generalActionId);
+        if (actionManager is null)
+        {
+            actionStatus = null;
+            return false;
+        }
+        actionStatus = actionManager->GetActionStatus(ActionType.GeneralAction, generalActionId);
+        return actionStatus == 0 && actionManager->UseAction(ActionType.GeneralAction, generalActionId);
     }
 
     private const int MaxTeleportFaults = 2;

@@ -503,6 +503,8 @@
   "settings.general.swapWaitHelp": "Quanto tempo ficar em uma zona vazia antes de pular para a próxima. Com o ritmo ligado, a espera real é sorteada em torno deste valor para que uma zona cheia de usuários do AFG não saia toda de uma vez.",
   "settings.general.keepTwist": "Manter Twist of Fate",
   "settings.general.keepTwistHelp": "Enquanto o bônus Twist of Fate estiver ativo, ficar na zona: sem troca de zona, sem atalho de teleporte e sem sair de uma zona concluída até ele acabar.",
+  "settings.general.mountWhileWaiting": "Montar enquanto espera FATEs",
+  "settings.general.mountWhileWaitingHelp": "Monta automaticamente após um breve atraso enquanto espera por FATEs. Desativado nas sessões de medalhas Yo-kai.",
   "settings.general.autoPause": "Pausar automaticamente em conteúdo",
   "settings.general.autoPauseHelp": "Pausa a sessão enquanto você está em uma masmorra, provação, raid ou qualquer outro conteúdo instanciado e retoma ao sair. Suas zonas, meta e estatísticas são mantidas, e o tempo em pausa não conta para uma meta de tempo.",
   "settings.general.autoResume": "Retomar automaticamente após falha",

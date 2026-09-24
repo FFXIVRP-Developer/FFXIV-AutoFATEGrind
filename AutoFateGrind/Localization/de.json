@@ -503,6 +503,8 @@
   "settings.general.swapWaitHelp": "Wie lange in einem leeren Gebiet gewartet wird, bevor es zum nächsten geht. Mit aktiver Taktung wird die echte Wartezeit um diesen Wert herum ausgewürfelt, damit ein Gebiet voller AFG-Nutzer nicht gleichzeitig aufbricht.",
   "settings.general.keepTwist": "Twist of Fate behalten",
   "settings.general.keepTwistHelp": "Solange der Twist-of-Fate-Bonus aktiv ist, im Gebiet bleiben: kein Gebietswechsel, keine Teleport-Abkürzung und kein Weiterziehen aus einem fertigen Gebiet, bis er abläuft.",
+  "settings.general.mountWhileWaiting": "Beim Warten auf FATEs aufsitzen",
+  "settings.general.mountWhileWaitingHelp": "Nach einer kurzen Verzögerung beim Warten auf FATEs automatisch aufsitzen. Bei Yo-kai-Medaillenläufen deaktiviert.",
   "settings.general.autoPause": "Im Inhalt automatisch pausieren",
   "settings.general.autoPauseHelp": "Pausiert den Durchlauf, während du in einem Dungeon, einer Prüfung, einem Raid oder anderem Instanzinhalt bist, und setzt ihn draußen fort. Gebiete, Ziel und Sitzungsstatistik bleiben erhalten, und pausierte Zeit zählt nicht für ein Zeitziel.",
   "settings.general.autoResume": "Nach Fehler automatisch fortsetzen",
