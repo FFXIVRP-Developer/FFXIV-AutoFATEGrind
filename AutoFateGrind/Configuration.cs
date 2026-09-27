@@ -64,6 +64,7 @@ public sealed class Configuration : IPluginConfiguration
     public int MaxLevelAbove { get; set; } = 5;
 
     public bool SwapZonesWhenEmpty { get; set; } = true;
+    public int SwapZoneWaitSec { get; set; } = 30;
     public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
     // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
     public bool KeepTwistOfFate { get; set; } = true;

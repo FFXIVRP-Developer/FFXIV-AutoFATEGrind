@@ -70,7 +70,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private const int   CombatClearTimeoutMs = 30_000;
     private const int   RaiseWaitMs = 30_000;
     private const int   ReleaseTransitionWaitMs = 60_000;
-    private const int   IdleWaitBeforeSwapMs = 30_000;
+    private const int   DefaultSwapWaitMs = 30_000;
+    private const int   MaxSwapWaitSec = 300;
     private const int   IdleScanIntervalMs   = 1_000;
     private const int   MidPathRetargetIntervalMs = 1_500;
     // Retarget hysteresis: stops Progress ticks (ranked above Distance) from flip-flopping the target.
@@ -113,7 +114,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private long  followUpWatchUntilMs;
     private int   followUpWatchMs = FollowUpWatchMs;
     private long  zoneIdleSinceMs;
-    private int   zoneIdleWaitMs = IdleWaitBeforeSwapMs;
+    private int   zoneIdleWaitMs = DefaultSwapWaitMs;
     private uint? abandonedFateId;
     private uint? engageStallFateId;
     private int   engageStallStrikes;
@@ -459,7 +460,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         if (zoneIdleSinceMs == 0)
         {
             zoneIdleSinceMs = Environment.TickCount64;
-            zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(IdleWaitBeforeSwapMs);
+            zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(Math.Clamp(Plugin.Cfg.SwapZoneWaitSec, 0, MaxSwapWaitSec) * 1000);
         }
 
         if (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !KeepingTwistOfFate()

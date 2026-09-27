@@ -76,6 +76,18 @@ internal static class GeneralSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.SwapZonesWhenEmpty, v => cfg.SwapZonesWhenEmpty = v, "##gen_swap"),
             SettingsRow.ToggleHeight);
 
+        using (Motion.PushSwitch("##gen_swap_body", cfg.SwapZonesWhenEmpty))
+        {
+            if (cfg.SwapZonesWhenEmpty)
+            {
+                SettingsRow.Draw(Loc.T(L.Settings.SwapWait),
+                    Loc.T(L.Settings.SwapWaitHelp),
+                    SettingsControls.RowSliderWidth,
+                    () => SettingsControls.DrawIntSlider(cfg, "##gen_swap_wait",
+                        () => cfg.SwapZoneWaitSec, v => cfg.SwapZoneWaitSec = v, SwapWaitMinSec, SwapWaitMaxSec, Loc.T(L.Settings.MinTimeFormat)));
+            }
+        }
+
         SettingsRow.Draw(Loc.T(L.Settings.KeepTwist),
             Loc.T(L.Settings.KeepTwistHelp),
             SettingsControls.ToggleWidth,
@@ -95,6 +107,8 @@ internal static class GeneralSettings
             SettingsRow.ToggleHeight);
     }
 
+    private const int SwapWaitMinSec = 0;
+    private const int SwapWaitMaxSec = 300;
     private const int CollectHandInBatchMin = 1;
     // Nine keeps AFG's trip ahead of BossMod's fixed 10-item hand-in, so the two never race for the NPC.
     private const int CollectHandInBatchMax = 9;

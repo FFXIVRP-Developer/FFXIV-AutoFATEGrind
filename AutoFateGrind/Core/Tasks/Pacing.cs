@@ -13,8 +13,9 @@ internal static class Pacing
 
     private const float  TeleportShortcutMinSavingMeters = 220f;
     private const float  TeleportShortcutMaxSavingMeters = 450f;
-    private const int    IdleSwapMinMs = 20_000;
-    private const int    IdleSwapMaxMs = 60_000;
+    // The empty-zone wait spreads around the user's setting rather than a fixed band, so a short setting stays short.
+    private const double IdleSwapSpreadLow = 0.7;
+    private const double IdleSwapSpreadHigh = 1.5;
     private const int    FollowUpExtraMaxMs = 10_000;
     private const int    ReviveMinMs = 2_000;
     private const int    ReviveMaxMs = 8_000;
@@ -50,7 +51,7 @@ internal static class Pacing
             : baselineMeters;
 
     public static int IdleWaitBeforeSwapMs(int baselineMs)
-        => Active ? Roll(IdleSwapMinMs, IdleSwapMaxMs) : baselineMs;
+        => Active ? Roll((int)(baselineMs * IdleSwapSpreadLow), (int)(baselineMs * IdleSwapSpreadHigh)) : baselineMs;
 
     // Only ever lengthens the watch: cutting it short would miss chain sequels.
     public static int FollowUpWatchMs(int baselineMs)

@@ -101,10 +101,16 @@ internal static class L
         public static readonly LocString StatusQuestMissing = new("grind.status.questMissing", "quest not active");
         public static readonly LocString StatusZenithMissing = new("grind.status.zenithMissing", "Zenith weapon not equipped");
         public static readonly LocString NotePlain = new("grind.note.plain", "No target of its own. A limit below, or the Stop button, ends the run.");
-        public static readonly LocString StopWhen = new("grind.stopWhen", "Stop when");
-        public static readonly LocString StopGoalReached = new("grind.stopGoalReached", "the goal is reached");
-        public static readonly LocString StopNoGoal = new("grind.stopNoGoal", "you press Stop, or a limit below is hit");
-        public static readonly LocString StopOrAfter = new("grind.stopOrAfter", "or after");
+        public static readonly LocString HowLong = new("grind.howLong", "How long");
+        public static readonly LocString UntilGoalDone = new("grind.untilGoalDone", "Until the goal is done");
+        public static readonly LocString UntilYouStopIt = new("grind.untilYouStopIt", "Until you stop it");
+        public static readonly LocString ANumberOfFates = new("grind.aNumberOfFates", "A number of FATEs");
+        public static readonly LocString ALengthOfTime = new("grind.aLengthOfTime", "A length of time");
+        public static readonly LocString Afterwards = new("grind.afterwards", "Afterwards");
+        public static readonly LocString AfterStayShort = new("grind.after.stay.short", "Stay put");
+        public static readonly LocString AfterInnShort = new("grind.after.inn.short", "Go to the inn");
+        public static readonly LocString AfterLogoutShort = new("grind.after.logout.short", "Log out");
+        public static readonly LocString AfterCloseShort = new("grind.after.close.short", "Close the game");
         public static readonly LocString Summary = new("grind.summary", "{0} in {1} until {2}, then {3}.");
         public static readonly LocString SummaryGems = new("grind.summary.gems", "Farm Bicolor Gemstones");
         public static readonly LocString SummaryPlain = new("grind.summary.plain", "Grind FATEs");
@@ -113,7 +119,6 @@ internal static class L
         public static readonly LocString SummaryYokai = new("grind.summary.yokai", "Farm Yo-kai medals");
         public static readonly LocString Or = new("grind.or", " or ");
         public static readonly LocString UntilShort = new("grind.untilShort", "until {0}");
-        public static readonly LocString SentenceThen = new("grind.sentence.then", "then");
         public static readonly LocString SentenceEnd = new("grind.sentence.end", ".");
         public static readonly LocString ZonesYokaiNone = new("grind.zonesYokaiNone", "no yo-kai to farm");
         public static readonly LocPlural ZonesCount = new("grind.zonesCount", "{0} zone", "{0} zones");
@@ -131,16 +136,12 @@ internal static class L
         public static readonly LocString GoalEndless = new("grind.goal.endless", "you stop it");
         public static readonly LocString PlanLocked = new("grind.planLocked", "Stop the run to change the plan.");
         public static readonly LocString AfterStayToken = new("grind.after.stay.token", "stay where you are");
-        public static readonly LocString AfterStayName = new("grind.after.stay.name", "Stay where you are");
         public static readonly LocString AfterStayDetail = new("grind.after.stay.detail", "Just stop. You're left standing wherever the last FATE ended.");
         public static readonly LocString AfterInnToken = new("grind.after.inn.token", "return to the inn");
-        public static readonly LocString AfterInnName = new("grind.after.inn.name", "Return to the inn");
         public static readonly LocString AfterInnDetail = new("grind.after.inn.detail", "Travel to your Grand Company city and enter the inn room.");
         public static readonly LocString AfterLogoutToken = new("grind.after.logout.token", "log out");
-        public static readonly LocString AfterLogoutName = new("grind.after.logout.name", "Log out to title");
         public static readonly LocString AfterLogoutDetail = new("grind.after.logout.detail", "Log out to the title screen.");
         public static readonly LocString AfterCloseToken = new("grind.after.close.token", "close the game");
-        public static readonly LocString AfterCloseName = new("grind.after.close.name", "Close the game");
         public static readonly LocString AfterCloseDetail = new("grind.after.close.detail", "Close FFXIV entirely (via XIVLauncher's /xlkill).");
         public static readonly LocString StopAt = new("grind.stopAt", "Stop at");
         public static readonly LocString UnitGemstones = new("grind.unit.gemstones", "gemstones");
@@ -415,17 +416,16 @@ internal static class L
 
         public static readonly LocString[] Release21400 =
         [
-            new("changelog.r21400.1", "Added the Shared FATEs goal: grinds each zone until its Shared FATE rank is maxed, then moves on to the next"),
-            new("changelog.r21400.2", "Shadowbringers and later zone cards now show their Shared FATE rank, with the full numbers on hover"),
-            new("changelog.r21400.3", "Zones without Shared FATE ranks are skipped by that goal, and the run says in chat when it leaves a maxed zone"),
-            new("changelog.r21400.4", "The level range and skipped FATE types now also apply to a FATE you are already standing in or died in, which is left instead of fought"),
-            new("changelog.r21400.5", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste, each grinding only the zones that still owe items"),
-            new("changelog.r21400.6", "Added /afg start, stop, stop soft and run <count>, plus Ctrl+click on Stop to finish the current FATE before stopping"),
-            new("changelog.r21400.7", "Zone swaps, teleport shortcuts and finished-zone rotation now wait for Twist of Fate to wear off (toggle in Settings)"),
-            new("changelog.r21400.8", "New filters: skip FATEs over a duration limit, and a fixed level window"),
-            new("changelog.r21400.9", "The live tracker lists passed-over FATEs with the reason, walks you to a FATE on click while idle, and the FATE name format is configurable"),
-            new("changelog.r21400.10", "FATEs skipped for routing trouble get another chance after the next completion, and the headline offers to pick your newest expansion's zones for you"),
-            new("changelog.r21400.11", "Reworked the Grind page: one Goal section with Farm, Ranks, Relics and Events tabs and a live status on every card, a Stop-when row where a FATE count and a clock can cap any goal, and the zone order under the zone library"),
+            new("changelog.r21400.1", "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards"),
+            new("changelog.r21400.2", "Added the Shared FATE ranks goal: grinds each zone until its rank is maxed, then moves on, with the rank shown on every Shadowbringers and later zone card"),
+            new("changelog.r21400.3", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste"),
+            new("changelog.r21400.4", "Added run limits that work with any goal: stop after a number of FATEs or a length of time"),
+            new("changelog.r21400.5", "Added /afg start, stop, stop soft and run <count>, and Ctrl+click on Stop to finish the current FATE first"),
+            new("changelog.r21400.6", "Added filters for long FATEs and a fixed level window, and a Keep Twist of Fate option that holds zone swaps while the bonus is up"),
+            new("changelog.r21400.7", "Added a setting for how long to wait in an empty zone before swapping, which the pacing roll now respects"),
+            new("changelog.r21400.8", "Improved the live tracker: passed-over FATEs are listed with the reason, a click walks you to a FATE while idle, and the FATE name format is configurable"),
+            new("changelog.r21400.9", "Fixed the level range and skipped FATE types not applying to a FATE you were already standing in or died in"),
+            new("changelog.r21400.10", "Fixed FATEs skipped for routing trouble staying skipped for the whole session; they are retried after the next completion"),
         ];
 
         public static readonly LocString[] Release21300 =
@@ -551,6 +551,8 @@ internal static class L
         public static readonly LocString GeneralBehavior = new("settings.general.behavior", "Behavior");
         public static readonly LocString SwapZones = new("settings.general.swapZones", "Swap zones when empty");
         public static readonly LocString SwapZonesHelp = new("settings.general.swapZonesHelp", "When the current zone runs out of eligible FATEs, jump to the next zone in your priority order.");
+        public static readonly LocString SwapWait = new("settings.general.swapWait", "Wait before swapping");
+        public static readonly LocString SwapWaitHelp = new("settings.general.swapWaitHelp", "How long to sit in an empty zone before jumping to the next one. With pacing on, the real wait is rolled around this value so a zone full of AFG users does not all leave at once.");
         public static readonly LocString KeepTwist = new("settings.general.keepTwist", "Keep Twist of Fate");
         public static readonly LocString KeepTwistHelp = new("settings.general.keepTwistHelp", "While the Twist of Fate bonus is up, stay in the zone: no zone swap, no teleport shortcut, and no rotating past a finished zone until it wears off.");
         public static readonly LocString AutoPause = new("settings.general.autoPause", "Auto-pause in content");

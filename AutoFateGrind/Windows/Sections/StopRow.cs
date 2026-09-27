@@ -5,35 +5,39 @@ using AutoFateGrind.Windows.Components;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using System.Numerics;
 
 namespace AutoFateGrind.Windows.Sections;
 
-// "Stop when": the goal itself, two optional caps that apply to any goal, and what happens afterwards.
+// Two questions, each answered with one segmented row: how long the run goes, and what happens afterwards.
 internal static class StopRow
 {
+    private enum Limit { GoalOnly, Fates, Minutes }
+
     private const float PadX = 18f;
     private const float PadY = 14f;
-    private const float RowGap = 8f;
+    private const float RowGap = 10f;
     private const float Gap = 10f;
-    private const float DropdownWidth = 260f;
+    private const float LabelWidth = 104f;
+    private const float StepperWidth = 124f;
+    private const float SegmentedMaxWidth = 620f;
+    private const float SegmentHeight = 36f;
     private const int FateStep = 5;
     private const int MinuteStep = 5;
 
     private static readonly AfterRunAction[] afterOrder =
         [AfterRunAction.StayLoggedIn, AfterRunAction.ReturnToInn, AfterRunAction.Logout, AfterRunAction.CloseGame];
 
-    private static readonly (LocString Name, LocString Detail)[] afterChoices =
+    private static readonly (LocString Short, LocString Detail)[] afterChoices =
     [
-        (L.Grind.AfterStayName, L.Grind.AfterStayDetail),
-        (L.Grind.AfterInnName, L.Grind.AfterInnDetail),
-        (L.Grind.AfterLogoutName, L.Grind.AfterLogoutDetail),
-        (L.Grind.AfterCloseName, L.Grind.AfterCloseDetail),
+        (L.Grind.AfterStayShort, L.Grind.AfterStayDetail),
+        (L.Grind.AfterInnShort, L.Grind.AfterInnDetail),
+        (L.Grind.AfterLogoutShort, L.Grind.AfterLogoutDetail),
+        (L.Grind.AfterCloseShort, L.Grind.AfterCloseDetail),
     ];
 
-    private static readonly string[] afterLabels = new string[4];
-    private static readonly string[] afterDetails = new string[4];
+    private static readonly Segmented.Item[] limitItems = new Segmented.Item[3];
+    private static readonly Segmented.Item[] afterItems = new Segmented.Item[4];
 
     public static void Draw(Configuration cfg, AutoFateController ctrl)
     {
@@ -44,26 +48,16 @@ internal static class StopRow
         var padY = PadY * scale;
         var editable = !ctrl.Running;
         var dl = ImGui.GetWindowDrawList();
+        var left = origin.X + padX;
+        var right = origin.X + width - padX;
 
         dl.ChannelsSplit(2);
         dl.ChannelsSetCurrent(1);
 
-        var x = origin.X + padX;
         var y = origin.Y + padY;
-        var title = Loc.T(L.Grind.StopWhen);
-        var titleSize = TextDraw.SectionTitleSize(title);
-        TextDraw.SectionTitle(title, new Vector2(x, y), Styling.TextStrong);
-        y += titleSize.Y + 12f * scale;
-
-        y = DrawGoalRow(cfg, x, y);
+        y = DrawLimitRow(cfg, editable, left, right, y);
         y += RowGap * scale;
-        y = DrawCapRow(cfg, editable, "##afg_cap_fates", x, y, () => cfg.StopAfterFatesEnabled, value => cfg.StopAfterFatesEnabled = value,
-            () => cfg.TargetFateCount, value => cfg.TargetFateCount = value, FateStep, RunLimits.MaxFates, Loc.T(L.Grind.UnitFates));
-        y += RowGap * scale;
-        y = DrawCapRow(cfg, editable, "##afg_cap_minutes", x, y, () => cfg.StopAfterMinutesEnabled, value => cfg.StopAfterMinutesEnabled = value,
-            () => cfg.TargetMinutes, value => cfg.TargetMinutes = value, MinuteStep, RunLimits.MaxMinutes, Loc.T(L.Grind.UnitMinutes));
-        y += RowGap * scale;
-        y = DrawAfterRow(cfg, editable, x, y);
+        y = DrawAfterRow(cfg, editable, left, right, y);
 
         var end = new Vector2(origin.X + width, y + padY);
 
@@ -80,91 +74,111 @@ internal static class StopRow
         ImGui.Dummy(new Vector2(width, end.Y - origin.Y));
     }
 
-    private static float DrawGoalRow(Configuration cfg, float x, float y)
+    private static float DrawLimitRow(Configuration cfg, bool editable, float left, float right, float y)
     {
         var scale = ImGuiHelpers.GlobalScale;
-        var rowHeight = ImGui.GetFrameHeight();
-        var midY = y + rowHeight * 0.5f;
-        var hasTarget = GoalSummary.HasTarget(cfg);
-        var icon = hasTarget ? FontAwesomeIcon.CheckCircle : FontAwesomeIcon.Infinity;
-        var iconSize = TextDraw.IconSize(icon);
-        var iconX = x + (ToggleSwitch.Width * scale - iconSize.X) * 0.5f;
-        TextDraw.Icon(icon, new Vector2(iconX, midY - iconSize.Y * 0.5f), hasTarget ? Styling.AccentMintSoft : Styling.TextDim);
-
-        var text = hasTarget ? Loc.T(L.Grind.StopGoalReached) : Loc.T(L.Grind.StopNoGoal);
-        var textSize = TextDraw.Measure(text);
-        TextDraw.At(text, new Vector2(x + ToggleSwitch.Width * scale + Gap * scale, midY - textSize.Y * 0.5f), Styling.TextSecondary);
-        return y + rowHeight;
-    }
-
-    private static float DrawCapRow(
-        Configuration cfg, bool editable, string id, float x, float y,
-        Func<bool> getEnabled, Action<bool> setEnabled, Func<int> getValue, Action<int> setValue, int step, int max, string unit)
-    {
-        var scale = ImGuiHelpers.GlobalScale;
-        var rowHeight = ImGui.GetFrameHeight();
-        var midY = y + rowHeight * 0.5f;
+        var rowHeight = SegmentHeight * scale;
         var gap = Gap * scale;
+        var limit = CurrentLimit(cfg);
 
-        ImGui.SetCursorScreenPos(new Vector2(x, midY - ToggleSwitch.Height * scale * 0.5f));
-        var enabled = getEnabled();
-        if (ToggleSwitch.Draw(id, ref enabled, editable))
+        var controlX = DrawRowLabel(Loc.T(L.Grind.HowLong), left, y, rowHeight);
+        var unit = limit == Limit.Minutes ? Loc.T(L.Grind.UnitMinutes) : Loc.T(L.Grind.UnitFates);
+        var stepperArea = limit == Limit.GoalOnly ? 0f : gap + StepperWidth * scale + gap + TextDraw.Measure(unit).X;
+        var segmentedWidth = MathF.Min(SegmentedMaxWidth * scale, right - controlX - stepperArea);
+
+        limitItems[(int)Limit.GoalOnly] = new Segmented.Item(GoalSummary.HasTarget(cfg) ? FontAwesomeIcon.CheckCircle : FontAwesomeIcon.HandPaper,
+            GoalSummary.HasTarget(cfg) ? Loc.T(L.Grind.UntilGoalDone) : Loc.T(L.Grind.UntilYouStopIt));
+        limitItems[(int)Limit.Fates] = new Segmented.Item(FontAwesomeIcon.ListOl, Loc.T(L.Grind.ANumberOfFates));
+        limitItems[(int)Limit.Minutes] = new Segmented.Item(FontAwesomeIcon.Stopwatch, Loc.T(L.Grind.ALengthOfTime));
+
+        ImGui.SetCursorScreenPos(new Vector2(controlX, y));
+        var selected = (int)limit;
+        if (Segmented.Draw("##afg_limit", limitItems, ref selected, editable, SegmentHeight, segmentedWidth) && editable)
         {
-            setEnabled(enabled);
-            cfg.SaveDebounced();
+            ApplyLimit(cfg, (Limit)selected);
+            limit = (Limit)selected;
         }
 
-        var cursorX = x + ToggleSwitch.Width * scale + gap;
-        var label = Loc.T(L.Grind.StopOrAfter);
-        var labelSize = TextDraw.Measure(label);
-        TextDraw.At(label, new Vector2(cursorX, midY - labelSize.Y * 0.5f), enabled ? Styling.TextSecondary : Styling.TextMuted);
-        cursorX += labelSize.X + gap;
-
-        ImGui.SetCursorScreenPos(new Vector2(cursorX, y));
-        var value = Math.Clamp(getValue(), 1, max);
-        ImGui.PushID(id);
-        if (Stepper.Draw("##value", ref value, step, 1, max, "%d") && editable)
+        if (limit != Limit.GoalOnly)
         {
-            setValue(Math.Clamp(value, 1, max));
-            cfg.SaveDebounced();
+            DrawLimitValue(cfg, editable, limit, controlX + segmentedWidth + gap, y, rowHeight);
         }
 
-        ImGui.PopID();
-        cursorX += Stepper.DefaultWidth * scale + gap;
-
-        var unitSize = TextDraw.Measure(unit);
-        TextDraw.At(unit, new Vector2(cursorX, midY - unitSize.Y * 0.5f), enabled ? Styling.TextDim : Styling.TextMuted);
         return y + rowHeight;
     }
 
-    private static float DrawAfterRow(Configuration cfg, bool editable, float x, float y)
+    private static void DrawLimitValue(Configuration cfg, bool editable, Limit limit, float x, float y, float rowHeight)
     {
         var scale = ImGuiHelpers.GlobalScale;
-        var rowHeight = ImGui.GetFrameHeight();
+        var frameHeight = ImGui.GetFrameHeight();
         var midY = y + rowHeight * 0.5f;
+        var fates = limit == Limit.Fates;
+        var max = fates ? RunLimits.MaxFates : RunLimits.MaxMinutes;
+        var value = Math.Clamp(fates ? cfg.TargetFateCount : cfg.TargetMinutes, 1, max);
 
-        var label = Loc.T(L.Grind.SentenceThen);
-        var labelSize = TextDraw.Measure(label);
-        var labelX = x + (ToggleSwitch.Width * scale - labelSize.X) * 0.5f;
-        TextDraw.At(label, new Vector2(MathF.Max(x, labelX), midY - labelSize.Y * 0.5f), Styling.TextSecondary);
-
-        for (var index = 0; index < afterChoices.Length; index++)
+        ImGui.SetCursorScreenPos(new Vector2(x, midY - frameHeight * 0.5f));
+        if (Stepper.Draw(fates ? "##afg_limit_fates" : "##afg_limit_minutes", ref value, fates ? FateStep : MinuteStep, 1, max, "%d", StepperWidth) && editable)
         {
-            afterLabels[index] = Loc.T(afterChoices[index].Name);
-            afterDetails[index] = Loc.T(afterChoices[index].Detail);
+            if (fates) cfg.TargetFateCount = Math.Clamp(value, 1, max);
+            else cfg.TargetMinutes = Math.Clamp(value, 1, max);
+            cfg.SaveDebounced();
         }
 
+        var unit = fates ? Loc.T(L.Grind.UnitFates) : Loc.T(L.Grind.UnitMinutes);
+        var unitSize = TextDraw.Measure(unit);
+        TextDraw.At(unit, new Vector2(x + StepperWidth * scale + Gap * scale, midY - unitSize.Y * 0.5f), Styling.TextDim);
+    }
+
+    private static float DrawAfterRow(Configuration cfg, bool editable, float left, float right, float y)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var rowHeight = SegmentHeight * scale;
+        var controlX = DrawRowLabel(Loc.T(L.Grind.Afterwards), left, y, rowHeight);
+        var segmentedWidth = MathF.Min(SegmentedMaxWidth * scale, right - controlX);
+
+        afterItems[0] = new Segmented.Item(FontAwesomeIcon.MapMarkerAlt, Loc.T(afterChoices[0].Short));
+        afterItems[1] = new Segmented.Item(FontAwesomeIcon.Bed, Loc.T(afterChoices[1].Short));
+        afterItems[2] = new Segmented.Item(FontAwesomeIcon.SignOutAlt, Loc.T(afterChoices[2].Short));
+        afterItems[3] = new Segmented.Item(FontAwesomeIcon.PowerOff, Loc.T(afterChoices[3].Short));
+
+        ImGui.SetCursorScreenPos(new Vector2(controlX, y));
         var selected = Math.Max(0, Array.IndexOf(afterOrder, cfg.AfterRun));
-        ImGui.SetCursorScreenPos(new Vector2(x + ToggleSwitch.Width * scale + Gap * scale, y));
-        using (ImRaii.Disabled(!editable))
+        if (Segmented.Draw("##afg_after_run", afterItems, ref selected, editable, SegmentHeight, segmentedWidth) && editable)
         {
-            if (Dropdown.DrawDetailed("##afg_after_run", afterLabels, afterDetails, ref selected, DropdownWidth, DropdownWidth + 120f))
-            {
-                cfg.AfterRun = afterOrder[selected];
-                cfg.SaveDebounced();
-            }
+            cfg.AfterRun = afterOrder[selected];
+            cfg.SaveDebounced();
         }
 
-        return y + rowHeight;
+        y += rowHeight + 6f * scale;
+        using (Fonts.PushCaption())
+        {
+            var detail = Loc.T(afterChoices[selected].Detail);
+            var detailWidth = right - controlX;
+            TextDraw.Wrapped(detail, new Vector2(controlX, y), detailWidth, Styling.TextMuted);
+            return y + TextDraw.MeasureWrapped(detail, detailWidth).Y;
+        }
+    }
+
+    private static float DrawRowLabel(string label, float left, float y, float rowHeight)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var labelSize = TextDraw.Measure(label);
+        TextDraw.At(label, new Vector2(left, y + (rowHeight - labelSize.Y) * 0.5f), Styling.TextSecondary);
+        return left + MathF.Max(LabelWidth * scale, labelSize.X + Gap * scale);
+    }
+
+    // One cap at a time keeps the row a single choice; a config that has both on (older versions) reads as the FATE count.
+    private static Limit CurrentLimit(Configuration cfg)
+    {
+        if (cfg.StopAfterFatesEnabled) return Limit.Fates;
+        if (cfg.StopAfterMinutesEnabled) return Limit.Minutes;
+        return Limit.GoalOnly;
+    }
+
+    private static void ApplyLimit(Configuration cfg, Limit limit)
+    {
+        cfg.StopAfterFatesEnabled = limit == Limit.Fates;
+        cfg.StopAfterMinutesEnabled = limit == Limit.Minutes;
+        cfg.SaveDebounced();
     }
 }
