@@ -50,6 +50,7 @@ public sealed class Plugin : IDalamudPlugin
 
         ECommonsMain.Init(PluginInterface, this);
         CLibMain.Init(PluginInterface, this, CLibModule.Automation);
+        Core.Game.SharedFates.SharedFateProgress.Initialize();
 
         unobservedTaskHandler = OnUnobservedTaskException;
         TaskScheduler.UnobservedTaskException += unobservedTaskHandler;
@@ -120,6 +121,7 @@ public sealed class Plugin : IDalamudPlugin
         partyInviteWatcher.Dispose();
         dutyWatcher.Dispose();
 
+        Core.Game.SharedFates.SharedFateProgress.Shutdown();
         CLibMain.Dispose();
         ECommonsMain.Dispose();
     }

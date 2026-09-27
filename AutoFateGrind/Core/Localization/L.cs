@@ -60,6 +60,10 @@ internal static class L
         public static readonly LocString DetailPickZones = new("grind.detail.pickZones", "Tick zones in the library and they'll appear in your plan.");
         public static readonly LocString TitleNoYokai = new("grind.title.noYokai", "No yo-kai left to farm");
         public static readonly LocString DetailNoYokai = new("grind.detail.noYokai", "Tick more yo-kai below or raise the medal target.");
+        public static readonly LocString TitleNoRankedZones = new("grind.title.noRankedZones", "Pick a Shadowbringers or later zone");
+        public static readonly LocString DetailNoRankedZones = new("grind.detail.noRankedZones", "Only zones from Shadowbringers onward have Shared FATE ranks.");
+        public static readonly LocString TitleRanksMaxed = new("grind.title.ranksMaxed", "Every selected zone is maxed");
+        public static readonly LocString DetailRanksMaxed = new("grind.detail.ranksMaxed", "Tick zones whose Shared FATE rank still has room to grow.");
         public static readonly LocString TitleReady = new("grind.title.ready", "Ready to grind");
         public static readonly LocString DetailReady = new("grind.detail.ready", "Everything's set. Press Start whenever you're ready.");
         public static readonly LocString TitleRunning = new("grind.title.running", "Grinding");
@@ -85,6 +89,7 @@ internal static class L
         public static readonly LocString GoalFates = new("grind.goal.fates", "{0} FATEs");
         public static readonly LocString GoalMinutes = new("grind.goal.minutes", "{0} minutes");
         public static readonly LocString GoalYokai = new("grind.goal.yokai", "{0} medals per yo-kai");
+        public static readonly LocString GoalSharedFates = new("grind.goal.sharedFates", "every Shared FATE rank is maxed");
         public static readonly LocString GoalEndless = new("grind.goal.endless", "you stop it");
         public static readonly LocString PlanLocked = new("grind.planLocked", "Stop the run to change the plan.");
         public static readonly LocString AfterStayToken = new("grind.after.stay.token", "stay where you are");
@@ -104,6 +109,7 @@ internal static class L
         public static readonly LocString ModeFates = new("grind.mode.fates", "FATEs");
         public static readonly LocString ModeTime = new("grind.mode.time", "Time");
         public static readonly LocString ModeYokai = new("grind.mode.yokai", "Yo-kai");
+        public static readonly LocString ModeSharedFates = new("grind.mode.sharedFates", "Shared FATEs");
         public static readonly LocString ModeEndless = new("grind.mode.endless", "Endless");
         public static readonly LocString EndlessNote = new("grind.endlessNote", "Rotates your zones until you press Stop.");
         public static readonly LocString StopAt = new("grind.stopAt", "Stop at");
@@ -116,6 +122,8 @@ internal static class L
         public static readonly LocString NoteFates = new("grind.note.fates", "Counts every FATE that hands out a reward.");
         public static readonly LocString NoteMinutes = new("grind.note.minutes", "Paused time does not count.");
         public static readonly LocString NoteYokai = new("grind.note.yokai", "Summons each yo-kai minion you own, grinds its zones, and moves on once it holds this many Legendary Medals. Keep the Yo-kai Watch equipped or in your armoury chest.");
+        public static readonly LocString NoteSharedFates = new("grind.note.sharedFates", "Grinds each zone until its Shared FATE rank is maxed, then moves on to the next one in your order. Only Shadowbringers and later zones have ranks; other zones in the plan are skipped.");
+        public static readonly LocString NoteSharedFatesSummary = new("grind.note.sharedFatesSummary", "{0} of {1} selected zones already maxed.");
         public static readonly LocString YokaiEventTitle = new("grind.event.yokai.title", "Yo-kai Watch event");
         public static readonly LocString YokaiEventOwned = new("grind.event.yokai.owned", "{0} of {1} yo-kai owned");
         public static readonly LocPlural YokaiEventWeaponsLeft = new("grind.event.yokai.weaponsLeft", "{0} weapon left", "{0} weapons left");
@@ -134,9 +142,16 @@ internal static class L
         public static readonly LocString ZonesLockedRunning = new("grind.library.lockedRunning", "Stop the run to change your zones.");
         public static readonly LocString LockedGateway = new("grind.library.lockedGateway", "Locked: attune {0}; {1} is entered from there over the aethernet.");
         public static readonly LocString LockedAetheryte = new("grind.library.lockedAetheryte", "Locked: attune an aetheryte in this zone first.");
+        public static readonly LocString RankBadge = new("grind.library.rank", "Rank {0}  ·  {1}/{2}");
+        public static readonly LocString RankMaxed = new("grind.library.rankMaxed", "Maxed");
+        public static readonly LocString RankSyncing = new("grind.library.rankSyncing", "Reading rank…");
+        public static readonly LocString RankTooltip = new("grind.library.rankTooltip", "Shared FATE rank {0} of {1}  ·  {2} of {3} FATEs toward the next rank  ·  {4} of {5} in total");
+        public static readonly LocString RankMaxedTooltip = new("grind.library.rankMaxedTooltip", "Shared FATE rank maxed: all {0} FATEs done.");
+        public static readonly LocString NoRanksHere = new("grind.library.noRanks", "No Shared FATE ranks in this zone. Only Shadowbringers and later zones have them.");
         public static readonly LocString OrderHint = new("grind.order.hint", "Your grind order will appear here once you pick a zone.");
         public static readonly LocString DragToReorder = new("grind.order.drag", "Drag to reorder");
         public static readonly LocString RemoveFromOrder = new("grind.order.remove", "Remove from grind order");
+        public static readonly LocString OrderSkippedNoRanks = new("grind.order.skippedNoRanks", "Skipped: this zone has no Shared FATE ranks.");
 
         public static readonly LocString Yokai = new("grind.yokai.title", "Yo-kai");
         public static readonly LocString YokaiSummary = new("grind.yokai.summary", "{0} of {1} Legendary Medals");
@@ -165,11 +180,14 @@ internal static class L
         public static readonly LocString ReasonPickZone = new("grind.reason.pickZone", "pick at least one zone");
         public static readonly LocString ReasonNoYokai = new("grind.reason.noYokai", "no yo-kai left to farm");
         public static readonly LocString ReasonNoWatch = new("grind.reason.noWatch", "get the Yo-kai Watch first");
+        public static readonly LocString ReasonNoRankedZones = new("grind.reason.noRankedZones", "pick a Shadowbringers or later zone");
+        public static readonly LocString ReasonRanksMaxed = new("grind.reason.ranksMaxed", "every selected zone is already maxed");
         public static readonly LocString StartSub = new("grind.startSub", "{0}  ·  {1}");
         public static readonly LocString StopsAtGems = new("grind.stops.gems", "stops at {0} gems");
         public static readonly LocString StopsAfterFates = new("grind.stops.fates", "stops after {0} FATEs");
         public static readonly LocString StopsAfterMinutes = new("grind.stops.minutes", "stops after {0} min");
         public static readonly LocString StopsAtYokai = new("grind.stops.yokai", "stops at {0} medals each");
+        public static readonly LocString StopsSharedFates = new("grind.stops.sharedFates", "stops when every rank is maxed");
         public static readonly LocString StopsWhenYouStop = new("grind.stops.endless", "runs until you stop");
         public static readonly LocString StateRunning = new("grind.state.running", "running");
         public static readonly LocString StatePaused = new("grind.state.paused", "paused");
@@ -206,6 +224,10 @@ internal static class L
         public static readonly LocString TargetReached = new("run.goal.targetReached", "target reached");
         public static readonly LocString FatesLeft = new("run.goal.fatesLeft", "{0} FATEs left");
         public static readonly LocString YokaiToGo = new("run.goal.yokaiToGo", "{0}  ·  {1} medals to go");
+        public static readonly LocString SharedRank = new("run.goal.sharedRank", "Rank {0} of {1}  ·  {2}/{3} to the next rank");
+        public static readonly LocString SharedMaxedHere = new("run.goal.sharedMaxedHere", "rank maxed here");
+        public static readonly LocString SharedSyncing = new("run.goal.sharedSyncing", "reading Shared FATE ranks…");
+        public static readonly LocPlural SharedZonesLeft = new("run.goal.sharedZonesLeft", "{0} zone left", "{0} zones left");
         public static readonly LocString HoursLeft = new("run.goal.hoursLeft", "{0}h {1:00}m left");
         public static readonly LocString MinutesLeft = new("run.goal.minutesLeft", "{0}m {1:00}s left");
         public static readonly LocString TimeReached = new("run.goal.timeReached", "time reached");
@@ -330,6 +352,13 @@ internal static class L
         public static readonly LocString Latest = new("changelog.latest", "Latest");
         public static readonly LocString New = new("changelog.new", "New");
         public static readonly LocPlural Changes = new("changelog.changes", "{0} change", "{0} changes");
+
+        public static readonly LocString[] Release21400 =
+        [
+            new("changelog.r21400.1", "Added the Shared FATEs goal: grinds each zone until its Shared FATE rank is maxed, then moves on to the next"),
+            new("changelog.r21400.2", "Shadowbringers and later zone cards now show their Shared FATE rank, with the full numbers on hover"),
+            new("changelog.r21400.3", "Zones without Shared FATE ranks are skipped by that goal, and the run says in chat when it leaves a maxed zone"),
+        ];
 
         public static readonly LocString[] Release21300 =
         [

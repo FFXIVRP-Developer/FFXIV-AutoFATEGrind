@@ -8,6 +8,7 @@ public static class FateGrindModes
         new MaxGemstonesMode(),
         new RunCountMode(),
         new TimeBoxedMode(),
+        new SharedFateRanksMode(),
         new YokaiMedalsMode(),
         new EndlessMode(),
     ];
@@ -24,6 +25,7 @@ public static class FateGrindModes
         GrindMode.MaxGemstones => MaxGemstonesMode.ModeId,
         GrindMode.RunCount     => RunCountMode.ModeId,
         GrindMode.Endless      => EndlessMode.ModeId,
+        GrindMode.MaxFates     => SharedFateRanksMode.ModeId,
         _                      => MaxGemstonesMode.ModeId,
     };
 }

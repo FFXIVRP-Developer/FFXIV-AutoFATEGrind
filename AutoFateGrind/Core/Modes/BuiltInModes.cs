@@ -1,3 +1,4 @@
+using AutoFateGrind.Core.Game.SharedFates;
 using AutoFateGrind.Core.Game.Yokai;
 using AutoFateGrind.Core.Trading;
 
@@ -59,6 +60,21 @@ public sealed class RunCountMode : IFateGrindMode
     {
         var remaining = Math.Max(0, Plugin.Cfg.TargetFateCount - ctx.CompletedCount);
         return remaining > 0 ? $"{remaining} FATEs left" : null;
+    }
+}
+
+public sealed class SharedFateRanksMode : IFateGrindMode
+{
+    public const string ModeId = "sharedfateranks";
+    public string Id => ModeId;
+    public string DisplayName => "Shared FATE Ranks";
+    public string Description => "Grinds each selected zone until its Shared FATE rank is maxed, then moves on to the next one, and stops once every zone with ranks is maxed.";
+    public bool IsComplete(ModeContext ctx) => SharedFateProgress.AllMaxed(ctx.Zones);
+
+    public string? GetRemainingDisplay(ModeContext ctx)
+    {
+        var remaining = SharedFateProgress.CountUnmaxed(ctx.Zones);
+        return remaining > 0 ? $"{remaining} zone{(remaining == 1 ? "" : "s")} left" : null;
     }
 }
 

@@ -290,6 +290,7 @@ public sealed partial class AutoFate
             if (isCollect) session.UpdateGemstones(); else await SettleGemstoneReward();
             session.UpdateExp();
             YokaiProgress.Invalidate();
+            NoteSharedFateCompletion();
             Diag($"FATE {fateId} done (session total: {session.CompletedCount}, wallet {session.GemstoneCurrent}g)");
             LogYokaiDropState();
             StartFollowUpWatch(fateId);

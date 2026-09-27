@@ -1,4 +1,5 @@
 using AutoFateGrind.Core.External;
+using AutoFateGrind.Core.Game.SharedFates;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Modes;
 using AutoFateGrind.Core.Tasks;
@@ -49,17 +50,34 @@ internal static class ReadyState
                 Loc.T(L.Grind.TitleSetupNeeded), Loc.T(L.Grind.DetailSetupNeeded));
         }
 
-        var zones = ZoneSelection.ResolveStartList(cfg).Count;
-        if (zones == 0 && ZoneSelection.GoalPlansZones(cfg))
+        var zones = ZoneSelection.ResolveStartList(cfg);
+        if (zones.Count == 0 && ZoneSelection.GoalPlansZones(cfg))
         {
             return new Info(Kind.NothingToFarm, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.Ghost,
                 Loc.T(L.Grind.TitleNoYokai), Loc.T(L.Grind.DetailNoYokai));
         }
 
-        if (zones == 0)
+        if (zones.Count == 0 && ZoneSelection.GoalNeedsRankedZones(cfg))
+        {
+            return new Info(Kind.PickZones, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.MapMarkedAlt,
+                Loc.T(L.Grind.TitleNoRankedZones), Loc.T(L.Grind.DetailNoRankedZones));
+        }
+
+        if (zones.Count == 0)
         {
             return new Info(Kind.PickZones, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.MapMarkedAlt,
                 Loc.T(L.Grind.TitlePickZones), Loc.T(L.Grind.DetailPickZones));
+        }
+
+        if (ZoneSelection.GoalNeedsRankedZones(cfg))
+        {
+            SharedFateProgress.Request(zones);
+        }
+
+        if (ZoneSelection.GoalNeedsRankedZones(cfg) && SharedFateProgress.AllMaxed(zones))
+        {
+            return new Info(Kind.NothingToFarm, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.Trophy,
+                Loc.T(L.Grind.TitleRanksMaxed), Loc.T(L.Grind.DetailRanksMaxed));
         }
 
         return new Info(Kind.Ready, Styling.AccentMint, Styling.AccentMintSoft, FontAwesomeIcon.CheckCircle,
@@ -93,6 +111,7 @@ internal static class ReadyState
         RunCountMode.ModeId     => Loc.T(L.Grind.StopsAfterFates, cfg.TargetFateCount),
         TimeBoxedMode.ModeId    => Loc.T(L.Grind.StopsAfterMinutes, cfg.TargetMinutes),
         YokaiMedalsMode.ModeId  => Loc.T(L.Grind.StopsAtYokai, cfg.TargetYokaiMedals),
+        SharedFateRanksMode.ModeId => Loc.T(L.Grind.StopsSharedFates),
         _                       => Loc.T(L.Grind.StopsWhenYouStop),
     };
 }

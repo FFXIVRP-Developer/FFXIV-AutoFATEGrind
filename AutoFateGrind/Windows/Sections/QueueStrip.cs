@@ -72,7 +72,8 @@ internal static class QueueStrip
             rects[index] = (origin, end);
 
             var isDropTarget = dragActive && dragIndex != index && Contains(origin, end, mouse);
-            DrawChip(origin, end, metrics, zone, index, running, isDropTarget, ref remove);
+            var skipped = ZoneSelection.IsSkippedByGoal(cfg, zone.TerritoryId);
+            DrawChip(origin, end, metrics, zone, index, running, skipped, isDropTarget, ref remove);
 
             x += metrics.Total + gap;
             maxY = Math.Max(maxY, y + height);
@@ -139,11 +140,12 @@ internal static class QueueStrip
     }
 
     private static void DrawChip(
-        Vector2 origin, Vector2 end, ChipMetrics metrics, ZoneInfo zone, int index, bool running,
+        Vector2 origin, Vector2 end, ChipMetrics metrics, ZoneInfo zone, int index, bool running, bool skipped,
         bool isDropTarget, ref int? remove)
     {
         var dl = ImGui.GetWindowDrawList();
         var scale = ImGuiHelpers.GlobalScale;
+        var dimmed = running || skipped;
 
         ImGui.SetCursorScreenPos(origin);
         ImGui.InvisibleButton($"##qchip{zone.TerritoryId}", new Vector2(metrics.BodyWidth, metrics.Height));
@@ -152,7 +154,7 @@ internal static class QueueStrip
         var beingDragged = dragIndex == index;
         if (!running && (bodyHovered || beingDragged)) ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
         if (!running && bodyHovered && !beingDragged && !ImGui.IsMouseDown(ImGuiMouseButton.Left))
-            Tooltip.Show(Loc.T(L.Grind.DragToReorder));
+            Tooltip.Show(skipped ? Loc.T(L.Grind.OrderSkippedNoRanks) : Loc.T(L.Grind.DragToReorder));
 
         ImGui.SetCursorScreenPos(new Vector2(origin.X + metrics.BodyWidth, origin.Y));
         var closeClicked = ImGui.InvisibleButton($"##qx{zone.TerritoryId}", new Vector2(end.X - origin.X - metrics.BodyWidth, metrics.Height));
@@ -166,18 +168,18 @@ internal static class QueueStrip
         var hover = Motion.Hover(Motion.Key("##qchip", zone.TerritoryId), !running && (bodyHovered || beingDragged));
         var accent = Styling.AccentViolet;
         var rounding = metrics.Height * 0.5f;
-        var tint = running ? 0.06f : beingDragged ? 0.55f : isDropTarget ? 0.5f : 0.28f + 0.14f * hover;
+        var tint = dimmed ? 0.06f : beingDragged ? 0.55f : isDropTarget ? 0.5f : 0.28f + 0.14f * hover;
         var top = Styling.Tint(Styling.Surface2, accent, tint);
         var bottom = Styling.Tint(Styling.Surface1, accent, tint * 0.8f);
         Paint.Gradient(dl, origin, end, top, bottom, rounding);
         Paint.TopLight(dl, origin, end, rounding, 0.09f);
-        var border = running ? Styling.WithAlpha(Styling.BorderDim, 0.6f)
+        var border = dimmed ? Styling.WithAlpha(Styling.BorderDim, 0.6f)
             : isDropTarget ? Styling.AccentVioletSoft
             : Styling.WithAlpha(accent, 0.5f + 0.35f * hover);
         Paint.Stroke(dl, origin, end, border, rounding, isDropTarget ? 1.8f : 1f);
 
-        var dim = running ? Styling.TextMuted : Styling.TextDim;
-        var strong = running ? Styling.TextDim : Styling.TextStrong;
+        var dim = dimmed ? Styling.TextMuted : Styling.TextDim;
+        var strong = dimmed ? Styling.TextDim : Styling.TextStrong;
         var midY = origin.Y + metrics.Height * 0.5f;
         var cursorX = origin.X + metrics.PadX;
 
@@ -189,7 +191,7 @@ internal static class QueueStrip
         if (metrics.HasActive)
         {
             cursorX += metrics.Gap;
-            var bolt = running ? Styling.TextMuted : Styling.AccentAmber;
+            var bolt = dimmed ? Styling.TextMuted : Styling.AccentAmber;
             var boltSize = TextDraw.IconSize(FontAwesomeIcon.Bolt);
             TextDraw.Icon(FontAwesomeIcon.Bolt, new Vector2(cursorX, midY - boltSize.Y * 0.5f), bolt);
             cursorX += metrics.BoltWidth + 3f * scale;

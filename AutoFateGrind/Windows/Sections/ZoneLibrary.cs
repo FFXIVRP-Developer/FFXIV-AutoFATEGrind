@@ -1,3 +1,4 @@
+using AutoFateGrind.Core.Game.SharedFates;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Tasks;
 using AutoFateGrind.Core.Zones;
@@ -24,6 +25,8 @@ internal static class ZoneLibrary
     private static readonly Segmented.Item[] segments = new Segmented.Item[expansions.Length];
     private static readonly string[] countLabels = BuildLabels(string.Empty);
     private static readonly string[] queueLabels = BuildLabels("#");
+    private static readonly (SharedFateRank Rank, LanguageInfo? Language, string? Text)[] rankLabels =
+        new (SharedFateRank, LanguageInfo?, string?)[SharedFateCatalog.Entries.Length];
 
     private static ZoneInfo[]? snapshot;
     private static ZoneInfo[][] groups = [];
@@ -240,7 +243,9 @@ internal static class ZoneLibrary
         var selected = queuePosition > 0;
         var locked = !zone.Unlocked;
         var running = ctrl.Running;
-        var interactive = !locked && !running;
+        var rankIndex = ZoneSelection.GoalNeedsRankedZones(cfg) ? SharedFateCatalog.IndexOfTerritory(zone.TerritoryId) : -1;
+        var unranked = ZoneSelection.IsSkippedByGoal(cfg, zone.TerritoryId);
+        var interactive = !locked && !running && !unranked;
 
         ImGui.PushID((nint)zone.TerritoryId);
         var hit = Hit.Area("##zone", size, interactive);
@@ -260,11 +265,16 @@ internal static class ZoneLibrary
 
         var rightX = end.X - 12f * scale;
         if (queuePosition > 0) rightX -= DrawQueueBadge(dl, Label(queueLabels, queuePosition), rightX, midY) + 8f * scale;
+        if (rankIndex >= 0 && !locked)
+        {
+            SharedFateProgress.Request(zone.TerritoryId);
+            rightX -= DrawRankBadge(dl, zone.TerritoryId, rankIndex, rightX, midY) + 8f * scale;
+        }
         if (zone.ActiveFateCount > 0) rightX -= DrawActiveFates(dl, zone.ActiveFateCount, rightX, midY) + 8f * scale;
         if (showExpansion) rightX -= DrawExpansionTag(dl, ExpansionLabels.Name(zone.Expansion), rightX, midY) + 8f * scale;
 
         var textX = discCenter.X + discRadius + 12f * scale;
-        var nameColor = locked ? Styling.TextMuted : Vector4.Lerp(Styling.TextSecondary, Styling.TextStrong, MathF.Max(active, hover));
+        var nameColor = locked || unranked ? Styling.TextMuted : Vector4.Lerp(Styling.TextSecondary, Styling.TextStrong, MathF.Max(active, hover));
         var name = TextDraw.Truncate(zone.Name, rightX - textX);
         var nameSize = TextDraw.Measure(name);
         TextDraw.At(name, new Vector2(textX, midY - nameSize.Y * 0.5f), nameColor);
@@ -275,8 +285,50 @@ internal static class ZoneLibrary
         }
         else if (!interactive && Hit.HoveringRect(origin, end))
         {
-            Tooltip.Show(running ? Loc.T(L.Grind.ZonesLockedRunning) : LockedTooltip(zone));
+            Tooltip.Show(running ? Loc.T(L.Grind.ZonesLockedRunning) : unranked ? Loc.T(L.Grind.NoRanksHere) : LockedTooltip(zone));
         }
+        else if (rankIndex >= 0 && Hit.HoveringRect(origin, end) && SharedFateProgress.TryGet(zone.TerritoryId, out var rank))
+        {
+            Tooltip.Show(rank.IsMaxed
+                ? Loc.T(L.Grind.RankMaxedTooltip, rank.Total)
+                : Loc.T(L.Grind.RankTooltip, rank.Rank, rank.MaxRank, rank.RankProgress, rank.RankSize, rank.Completed, rank.Total));
+        }
+    }
+
+    private static float DrawRankBadge(ImDrawListPtr dl, uint territoryId, int rankIndex, float rightX, float midY)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var known = SharedFateProgress.TryGet(territoryId, out var rank);
+        var label = RankLabel(rankIndex, known, rank);
+        using (Fonts.PushCaption())
+        {
+            if (!known)
+            {
+                var labelSize = TextDraw.Measure(label);
+                TextDraw.At(label, new Vector2(rightX - labelSize.X, midY - labelSize.Y * 0.5f), Styling.TextMuted);
+                return labelSize.X;
+            }
+
+            var badgeSize = TextDraw.Measure(label) + new Vector2(12f * scale, 4f * scale);
+            var badgeMin = new Vector2(rightX - badgeSize.X, midY - badgeSize.Y * 0.5f);
+            var badgeMax = badgeMin + badgeSize;
+            var accent = rank.IsMaxed ? Styling.AccentMint : Styling.AccentBlue;
+            Paint.Pill(dl, badgeMin, badgeMax, Styling.WithAlpha(accent, 0.22f), Styling.WithAlpha(accent, 0.5f));
+            TextDraw.Middle(label, badgeMin, badgeMax, rank.IsMaxed ? Styling.AccentMintSoft : Styling.AccentBlueSoft);
+            return badgeSize.X;
+        }
+    }
+
+    private static string RankLabel(int rankIndex, bool known, SharedFateRank rank)
+    {
+        if (!known) return Loc.T(L.Grind.RankSyncing);
+
+        var cached = rankLabels[rankIndex];
+        if (cached.Text is not null && cached.Rank == rank && ReferenceEquals(cached.Language, Loc.Current)) return cached.Text;
+
+        var text = rank.IsMaxed ? Loc.T(L.Grind.RankMaxed) : Loc.T(L.Grind.RankBadge, rank.Rank, rank.RankProgress, rank.RankSize);
+        rankLabels[rankIndex] = (rank, Loc.Current, text);
+        return text;
     }
 
     private static void DrawSelector(ImDrawListPtr dl, Vector2 center, float radius, bool locked, float active)
@@ -356,7 +408,7 @@ internal static class ZoneLibrary
         var unlocked = 0;
         for (var index = 0; index < zones.Length; index++)
         {
-            if (!zones[index].Unlocked) continue;
+            if (!zones[index].Unlocked || ZoneSelection.IsSkippedByGoal(cfg, zones[index].TerritoryId)) continue;
             unlocked++;
             if (!cfg.SelectedZones.Contains(zones[index].TerritoryId)) return false;
         }
@@ -390,7 +442,7 @@ internal static class ZoneLibrary
         for (var index = 0; index < zones.Length; index++)
         {
             var id = zones[index].TerritoryId;
-            if (selected && zones[index].Unlocked && !cfg.SelectedZones.Contains(id)) cfg.SelectedZones.Add(id);
+            if (selected && zones[index].Unlocked && !ZoneSelection.IsSkippedByGoal(cfg, id) && !cfg.SelectedZones.Contains(id)) cfg.SelectedZones.Add(id);
             else if (!selected) cfg.SelectedZones.Remove(id);
         }
 

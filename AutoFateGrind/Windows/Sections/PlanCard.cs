@@ -1,4 +1,5 @@
 using AutoFateGrind.Core;
+using AutoFateGrind.Core.Game.SharedFates;
 using AutoFateGrind.Core.Game.Yokai;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Modes;
@@ -232,6 +233,7 @@ internal static class PlanCard
         RunCountMode.ModeId     => Loc.T(L.Grind.GoalFates, cfg.TargetFateCount),
         TimeBoxedMode.ModeId    => Loc.T(L.Grind.GoalMinutes, cfg.TargetMinutes),
         YokaiMedalsMode.ModeId  => Loc.T(L.Grind.GoalYokai, cfg.TargetYokaiMedals),
+        SharedFateRanksMode.ModeId => Loc.T(L.Grind.GoalSharedFates),
         _                       => Loc.T(L.Grind.GoalEndless),
     };
 
@@ -264,6 +266,7 @@ internal static class PlanCard
                 MaxGemstonesMode.ModeId => new Segmented.Item(FontAwesomeIcon.Gem, Loc.T(L.Grind.ModeGemstones)),
                 RunCountMode.ModeId     => new Segmented.Item(FontAwesomeIcon.ListOl, Loc.T(L.Grind.ModeFates)),
                 TimeBoxedMode.ModeId    => new Segmented.Item(FontAwesomeIcon.Stopwatch, Loc.T(L.Grind.ModeTime)),
+                SharedFateRanksMode.ModeId => new Segmented.Item(FontAwesomeIcon.Trophy, Loc.T(L.Grind.ModeSharedFates)),
                 EndlessMode.ModeId      => new Segmented.Item(FontAwesomeIcon.Infinity, Loc.T(L.Grind.ModeEndless)),
                 _                       => new Segmented.Item(FontAwesomeIcon.Flag, modes[index].DisplayName),
             };
@@ -349,6 +352,12 @@ internal static class PlanCard
             return;
         }
 
+        if (cfg.ActiveMode.Id == SharedFateRanksMode.ModeId)
+        {
+            Caption(SharedFateNote(cfg), width);
+            return;
+        }
+
         var (label, unit, step, min, max, value, note) = cfg.ActiveMode.Id switch
         {
             MaxGemstonesMode.ModeId => (Loc.T(L.Grind.StopAt), Loc.T(L.Grind.UnitGemstones), 50, 1, AfgConstants.BicolorCap, cfg.TargetGemstoneCount,
@@ -374,6 +383,13 @@ internal static class PlanCard
 
         Styling.VSpace(8f);
         Caption(note, width);
+    }
+
+    private static string SharedFateNote(Configuration cfg)
+    {
+        var (maxed, ranked) = SharedFateProgress.CountMaxed(cfg.SelectedZones);
+        var note = Loc.T(L.Grind.NoteSharedFates);
+        return ranked == 0 ? note : string.Concat(note, " ", Loc.T(L.Grind.NoteSharedFatesSummary, maxed, ranked));
     }
 
     private static void Caption(string text, float width)

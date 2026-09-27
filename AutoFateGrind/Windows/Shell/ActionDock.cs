@@ -59,12 +59,16 @@ internal static class ActionDock
         var startList = ZoneSelection.ResolveStartList(cfg);
         var depsOk = ExternalPlugins.AllRequiredInstalled();
         var yokai = ZoneSelection.GoalPlansZones(cfg);
+        var ranked = ZoneSelection.GoalNeedsRankedZones(cfg);
         var watchMissing = yokai && !YokaiOps.OwnsWatch();
-        var canStart = startList.Count > 0 && depsOk && !watchMissing;
+        var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);
+        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed;
         var reason = !depsOk ? Loc.T(L.Grind.ReasonInstall)
             : watchMissing ? Loc.T(L.Grind.ReasonNoWatch)
+            : ranksMaxed ? Loc.T(L.Grind.ReasonRanksMaxed)
             : startList.Count > 0 ? string.Empty
             : yokai ? Loc.T(L.Grind.ReasonNoYokai)
+            : ranked ? Loc.T(L.Grind.ReasonNoRankedZones)
             : Loc.T(L.Grind.ReasonPickZone);
         var sub = Loc.T(L.Grind.StartSub, Loc.Plural(L.Grind.ZonesCount, startList.Count), ReadyState.StopSummary(cfg));
 

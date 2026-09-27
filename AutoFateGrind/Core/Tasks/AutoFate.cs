@@ -137,6 +137,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         SwapZone,             // Rotate to next selected zone when the current one stays empty.
         AllDone,              // Stop condition met; return cleanly.
         YokaiAdvance,         // The yo-kai being farmed is done; hand off so the controller plans the next one.
+        SharedFateZoneDone,   // This zone's Shared FATE rank is maxed; rotate to the next zone that still has ranks to earn.
         Unconscious,          // Player KO'd, run revive.
         WaitingForFollowUp,   // Just finished a chain parent; hold briefly for sequel.
         WaitingForCollectReward, // Nothing left to pick here, but a finished Collect FATE still owes its reward.
@@ -173,6 +174,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             // Eat up front so the buff is live before the first FATE (food works anywhere out of combat).
             await EnsureConsumables();
             await EnsureYokaiCompanion();
+            await SyncSharedFateRanks();
             await RunStateMachine();
             Svc.Chat.Print($"[AFG] {zone.Name}: zone done.");
         }
@@ -211,6 +213,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
           try
           {
             session.UpdateGemstones();
+            TickSharedFateRefresh();
 
             var state = ComputeState();
 
@@ -244,6 +247,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 case GrindState.YokaiAdvance:
                     await HandOffToNextYokai();
                     return;
+
+                case GrindState.SharedFateZoneDone:
+                    if (await LeaveMaxedSharedFateZone() is ExitReason.Quit) return;
+                    break;
 
                 case GrindState.Unconscious:
                     await Revive();
@@ -328,7 +335,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         var nav = NavmeshIPC.Instance;
         var navStr = $"run={nav.IsRunning()} busy={nav.IsBusy()}";
         Diag($"HEARTBEAT state={state} ({inState}s) terr={Svc.ClientState.TerritoryType} zone={zone.Name} pos={posStr} fate={fateStr} {navStr} cond={ConditionTag()} " +
-             $"done={session.CompletedCount} ret={returnToFateId?.ToString() ?? "-"} followUp={followUpFateId?.ToString() ?? "-"} collectReward={(CollectRewardPending ? pendingRewardSpawn.FateId.ToString() : "-")} stuckBL={sessionStuckFateIds.Count}");
+             $"done={session.CompletedCount} ret={returnToFateId?.ToString() ?? "-"} followUp={followUpFateId?.ToString() ?? "-"} collectReward={(CollectRewardPending ? pendingRewardSpawn.FateId.ToString() : "-")} stuckBL={sessionStuckFateIds.Count}{SharedFateHeartbeat()}");
 
         if (state is not GrindState.Engaging and not GrindState.WaitingForFates and not GrindState.WaitingForCollectReward and not GrindState.WaitingForYokaiMinion && inState >= 180)
             Diag($"STALL WARNING: state {state} held {inState}s — see prior heartbeats for context.");
@@ -381,6 +388,9 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
         if (YokaiTargetChanged())
             return GrindState.YokaiAdvance;
+
+        if (SharedFateZoneMaxed())
+            return GrindState.SharedFateZoneDone;
 
         if (Svc.ClientState.TerritoryType != zone.TerritoryId)
             return GrindState.WrongZone;
@@ -535,6 +545,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         {
             var candidateIndex = (zoneIndex + step) % zones.Count;
             if (session.UnreachableZoneIds.Contains(zones[candidateIndex].TerritoryId)) continue;
+            if (SharedFateZoneMaxedAt(candidateIndex)) continue;
 
             zoneIndex = candidateIndex;
             sessionStuckFateIds.Clear();
