@@ -377,7 +377,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
         if (IsPlayerKO())
         {
-            if (PublicEvent.CurrentFate is { Progress: < 100 } dying && !FateBlacklist.Contains(Plugin.Cfg, dying))
+            if (PublicEvent.CurrentFate is { Progress: < 100 } dying && !IsExcluded(dying))
                 returnToFateId = dying.Id;
             followUpFateId = null;
             return GrindState.Unconscious;
@@ -461,21 +461,22 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         return GrindState.WaitingForFates;
     }
 
-    // A FATE that despawned, was un-banned, or left the session stuck set is free to be engaged again.
+    // A FATE that despawned, was un-banned, left the session stuck set, or grew into the level band is free to be engaged again.
     private bool IsStillExcluded(uint fateId)
         => PublicEvent.GetFateById(fateId) is { } fate && IsExcluded(fate);
 
     private bool IsExcluded(PublicEvent fate)
-        => sessionStuckFateIds.Contains(fate.Id) || FateBlacklist.Contains(Plugin.Cfg, fate);
+        => FateScanner.IsExcluded(fate, Plugin.Cfg, sessionStuckFateIds);
 
     private bool LeaveIfExcluded(PublicEvent fate)
     {
-        if (!IsExcluded(fate))
+        var exclusion = FateScanner.ExclusionFor(fate, Plugin.Cfg, sessionStuckFateIds);
+        if (exclusion == FateExclusion.None)
         {
             return false;
         }
 
-        Diag($"FATE {fate.Id} ({fate.Name}) is blacklisted or skipped this session; leaving it for the next pick");
+        Diag($"FATE {fate.Id} ({fate.Name}) is {FateScanner.DescribeExclusion(fate, exclusion, Plugin.Cfg)}; leaving it for the next pick");
         LeaveFate(fate.Id);
         return true;
     }

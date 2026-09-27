@@ -326,6 +326,7 @@
   "changelog.r21400.1": "Ziel „FATE-Fortschritt“ hinzugefügt: grindet jedes Gebiet bis zum Maximalrang und wechselt dann zum nächsten",
   "changelog.r21400.2": "Gebietskarten ab Shadowbringers zeigen jetzt ihren FATE-Fortschritt, mit allen Zahlen beim Überfahren",
   "changelog.r21400.3": "Gebiete ohne FATE-Fortschritt überspringt dieses Ziel, und der Lauf meldet im Chat, wenn er ein Gebiet mit Maximalrang verlässt",
+  "changelog.r21400.4": "Stufenspanne und übersprungene FATE-Typen gelten jetzt auch für eine FATE, in der du bereits stehst oder gestorben bist: sie wird verlassen statt bekämpft",
   "changelog.r21300.1": "Konsole hinzugefügt, um die Protokolle des Plugins anzusehen, zu filtern und zu kopieren",
   "changelog.r21300.2": "Dieses Änderungsprotokoll hinzugefügt, mit einem Hinweis, sobald ein Update Neues bringt",
   "changelog.r21300.3": "Die Info-Seite komplett überarbeitet, mit dem neuen Discord-Link",

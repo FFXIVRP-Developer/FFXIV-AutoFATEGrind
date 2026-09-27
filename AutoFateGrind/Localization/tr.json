@@ -326,6 +326,7 @@
   "changelog.r21400.1": "Shared FATE hedefi eklendi: her bölgeyi rütbesi maksimuma ulaşana kadar kasar, sonra bir sonrakine geçer",
   "changelog.r21400.2": "Shadowbringers ve sonrası bölge kartları artık Shared FATE rütbesini gösteriyor; tam sayılar üzerine gelince görünür",
   "changelog.r21400.3": "Bu hedef Shared FATE rütbesi olmayan bölgeleri atlar ve maksimumdaki bir bölgeden ayrılırken sohbette bildirir",
+  "changelog.r21400.4": "Seviye aralığı ve atlanan FATE türleri artık içinde bulunduğunuz veya öldüğünüz bir FATE için de geçerli: o FATE ile savaşılmaz, terk edilir",
   "changelog.r21300.1": "Eklentinin günlüklerini görüntülemek, filtrelemek ve kopyalamak için Konsol sayfası eklendi",
   "changelog.r21300.2": "Bu değişiklik günlüğü eklendi; bir güncelleme yenilik getirdiğinde rozetle bildirir",
   "changelog.r21300.3": "Hakkında sayfası baştan yenilendi, Discord bağlantısı güncellendi",

@@ -358,6 +358,7 @@ internal static class L
             new("changelog.r21400.1", "Added the Shared FATEs goal: grinds each zone until its Shared FATE rank is maxed, then moves on to the next"),
             new("changelog.r21400.2", "Shadowbringers and later zone cards now show their Shared FATE rank, with the full numbers on hover"),
             new("changelog.r21400.3", "Zones without Shared FATE ranks are skipped by that goal, and the run says in chat when it leaves a maxed zone"),
+            new("changelog.r21400.4", "The level range and skipped FATE types now also apply to a FATE you are already standing in or died in, which is left instead of fought"),
         ];
 
         public static readonly LocString[] Release21300 =

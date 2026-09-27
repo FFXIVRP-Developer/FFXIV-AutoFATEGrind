@@ -21,7 +21,7 @@ internal static class FateScanner
         => f.State == FateState.Preparing && f.MotivationNpcId != NoMotivationNpcId;
 
     // forcedReturnId (set after a KO) returns the FATE we died in unconditionally, bypassing normal
-    // eligibility like low TimeRemaining — but still respects the blacklists so broken FATEs skip.
+    // eligibility like low TimeRemaining, but never the hard exclusions so broken or lethal FATEs skip.
     public static PublicEvent? PickNext(
         Configuration cfg,
         Vector3 playerPos,
@@ -33,8 +33,7 @@ internal static class FateScanner
 
         if (forcedReturnId is { } returnId
             && PublicEvent.GetFateById(returnId) is { Progress: < 100 } ret
-            && !FateBlacklist.Contains(cfg, ret)
-            && (sessionBlacklist is null || !sessionBlacklist.Contains(ret.Id)))
+            && !IsExcluded(ret, cfg, sessionBlacklist))
         {
             return ret;
         }
@@ -108,21 +107,40 @@ internal static class FateScanner
     {
         var awaitsNpcStart = AwaitsNpcStart(f);
         if (f.State != FateState.Running && !awaitsNpcStart) return false;
-        if (FateBlacklist.Contains(cfg, f)) return false;
-        if (sessionBlacklist is not null && sessionBlacklist.Contains(f.Id)) return false;
-        if (cfg.SkippedFateRules.Contains((int)f.Rule)) return false;
+        if (IsExcluded(f, cfg, sessionBlacklist)) return false;
         if (!awaitsNpcStart && FateClock.Remaining(f) < cfg.MinTimeRemainingSec) return false;
         if (f.Progress > cfg.MaxProgressPct) return false;
         // A Collect FATE stays Running at 100% as its hand-in window; nothing can be contributed to it anymore.
         if (f.Progress >= 100) return false;
         if (!FateClock.IsOnMap(f)) return false;
+        return true;
+    }
+
+    public static bool IsExcluded(PublicEvent f, Configuration cfg, IReadOnlySet<uint>? sessionBlacklist)
+        => ExclusionFor(f, cfg, sessionBlacklist) != FateExclusion.None;
+
+    // The rules no FATE may pass however it came up: picked off the list, stood in, or died in.
+    public static FateExclusion ExclusionFor(PublicEvent f, Configuration cfg, IReadOnlySet<uint>? sessionBlacklist)
+    {
+        if (FateBlacklist.Contains(cfg, f)) return FateExclusion.Blacklisted;
+        if (sessionBlacklist is not null && sessionBlacklist.Contains(f.Id)) return FateExclusion.SessionStuck;
+        if (cfg.SkippedFateRules.Contains((int)f.Rule)) return FateExclusion.SkippedRule;
         // A goal that picks its own zones sends a capped character into low-level ones, where the band would reject everything.
         if (cfg.LevelRangeFilterEnabled && !ZoneSelection.GoalPlansZones(cfg) && !IsWithinLevelRange(f, cfg))
         {
-            return false;
+            return FateExclusion.OutsideLevelBand;
         }
-        return true;
+        return FateExclusion.None;
     }
+
+    public static string DescribeExclusion(PublicEvent f, FateExclusion exclusion, Configuration cfg) => exclusion switch
+    {
+        FateExclusion.Blacklisted      => "blacklisted",
+        FateExclusion.SessionStuck     => "skipped for this session",
+        FateExclusion.SkippedRule      => $"a skipped FATE type ({f.Rule})",
+        FateExclusion.OutsideLevelBand => $"Lv {f.Level}, outside the Lv {LevelBandFloor(cfg)}-{LevelBandCeiling(cfg)} band",
+        _                              => "eligible",
+    };
 
     // Player level comes from PlayerState rather than the (possibly synced) FATE level so the range is
     // always measured against the character's real level, matching what will actually take damage.
@@ -136,6 +154,10 @@ internal static class FateScanner
 
         return f.Level >= playerLevel - cfg.MaxLevelBelow && f.Level <= playerLevel + cfg.MaxLevelAbove;
     }
+
+    private static int LevelBandFloor(Configuration cfg) => Math.Max(1, Svc.PlayerState.Level - cfg.MaxLevelBelow);
+
+    private static int LevelBandCeiling(Configuration cfg) => Svc.PlayerState.Level + cfg.MaxLevelAbove;
 
     public static IOrderedEnumerable<PublicEvent> ApplySort(
         IEnumerable<PublicEvent> source,

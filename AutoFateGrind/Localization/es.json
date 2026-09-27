@@ -326,6 +326,7 @@
   "changelog.r21400.1": "Añadido el objetivo FATE compartidos: farmea cada zona hasta que su rango esté al máximo y luego pasa a la siguiente",
   "changelog.r21400.2": "Las tarjetas de zonas desde Shadowbringers ahora muestran su rango de FATE compartidos, con todas las cifras al pasar el ratón",
   "changelog.r21400.3": "Ese objetivo omite las zonas sin rango de FATE compartidos, y la partida avisa en el chat al salir de una zona al máximo",
+  "changelog.r21400.4": "El rango de nivel y los tipos de FATE omitidos ahora también se aplican a un FATE en el que ya estás o en el que moriste: se abandona en vez de combatirlo",
   "changelog.r21300.1": "Añadida la página Consola para ver, filtrar y copiar los registros del plugin",
   "changelog.r21300.2": "Añadido este registro de cambios, con un aviso cada vez que una actualización trae novedades",
   "changelog.r21300.3": "Renovada por completo la página Acerca de, con el enlace de Discord actualizado",

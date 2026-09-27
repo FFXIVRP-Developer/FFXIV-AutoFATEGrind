@@ -326,6 +326,7 @@
   "changelog.r21400.1": "Ajout de l'objectif Rang ALÉA : enchaîne les ALÉA de chaque zone jusqu'au rang maximal, puis passe à la suivante",
   "changelog.r21400.2": "Les cartes des zones à partir de Shadowbringers affichent désormais leur rang ALÉA, avec le détail au survol",
   "changelog.r21400.3": "Cet objectif ignore les zones sans rang ALÉA, et le tchat signale quand la session quitte une zone au rang maximal",
+  "changelog.r21400.4": "La plage de niveau et les types d'ALÉA ignorés s'appliquent désormais aussi à un ALÉA dans lequel vous êtes déjà ou êtes mort : il est quitté au lieu d'être combattu",
   "changelog.r21300.1": "Ajout de la page Console pour consulter, filtrer et copier les journaux du plugin",
   "changelog.r21300.2": "Ajout de ce journal des modifications, avec un badge dès qu'une mise à jour apporte du nouveau",
   "changelog.r21300.3": "Refonte complète de la page À propos, avec le nouveau lien Discord",

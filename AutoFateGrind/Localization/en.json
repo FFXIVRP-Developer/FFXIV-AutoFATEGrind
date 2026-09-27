@@ -326,6 +326,7 @@
   "changelog.r21400.1": "Added the Shared FATEs goal: grinds each zone until its Shared FATE rank is maxed, then moves on to the next",
   "changelog.r21400.2": "Shadowbringers and later zone cards now show their Shared FATE rank, with the full numbers on hover",
   "changelog.r21400.3": "Zones without Shared FATE ranks are skipped by that goal, and the run says in chat when it leaves a maxed zone",
+  "changelog.r21400.4": "The level range and skipped FATE types now also apply to a FATE you are already standing in or died in, which is left instead of fought",
   "changelog.r21300.1": "Added the Console page to view, filter and copy the plugin's logs",
   "changelog.r21300.2": "Added this changelog, with a badge whenever an update brings something new",
   "changelog.r21300.3": "Overhauled the About page, with the updated Discord link",

@@ -326,6 +326,7 @@
   "changelog.r21400.1": "Adicionada a meta FATE compartilhados: farma cada zona até o rank chegar ao máximo e então passa para a próxima",
   "changelog.r21400.2": "Os cartões de zonas a partir de Shadowbringers agora mostram o rank de FATE compartilhados, com os números completos ao passar o mouse",
   "changelog.r21400.3": "Essa meta pula zonas sem rank de FATE compartilhados, e a sessão avisa no chat ao sair de uma zona no máximo",
+  "changelog.r21400.4": "A faixa de nível e os tipos de FATE ignorados agora também valem para um FATE em que você já está ou no qual morreu: ele é abandonado em vez de combatido",
   "changelog.r21300.1": "Adicionada a página Console para ver, filtrar e copiar os logs do plugin",
   "changelog.r21300.2": "Adicionado este registro de mudanças, com um aviso sempre que uma atualização trouxer novidades",
   "changelog.r21300.3": "Página Sobre totalmente reformulada, com o link do Discord atualizado",
