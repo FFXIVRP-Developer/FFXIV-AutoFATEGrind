@@ -57,6 +57,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Cfg = Configuration;
+        if (Configuration.MigrateGoal()) Configuration.Save();
         if (Core.Zones.CityCatalog.MigrateSelection(Configuration.HumanizerCities)) Configuration.Save();
         History = new RunHistory();
         Controller = new AutoFateController();
@@ -129,24 +130,64 @@ public sealed class Plugin : IDalamudPlugin
     private void OnCommand(string command, string args)
     {
         var trimmed = args.Trim();
-        if (trimmed.Equals("config", StringComparison.OrdinalIgnoreCase))
-            ToggleConfigUi();
-        else if (trimmed.Equals("about", StringComparison.OrdinalIgnoreCase))
-            ToggleAboutUi();
-        else if (trimmed.Equals("deps", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("dependencies", StringComparison.OrdinalIgnoreCase))
-            ToggleDependenciesUi();
-        else if (trimmed.Equals("stats", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("history", StringComparison.OrdinalIgnoreCase))
-            ToggleHistoryUi();
-        else if (trimmed.Equals("log", StringComparison.OrdinalIgnoreCase))
-            ToggleLogUi();
-        else if (trimmed.Equals("changelog", StringComparison.OrdinalIgnoreCase))
-            ToggleChangelogUi();
-        else if (trimmed.Equals("pause", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("resume", StringComparison.OrdinalIgnoreCase))
-            Controller.TogglePause();
-        else if (trimmed.Equals("target", StringComparison.OrdinalIgnoreCase))
-            TargetDumper.Dump();
-        else
-            ToggleMainUi();
+        var space = trimmed.IndexOf(' ');
+        var verb = (space < 0 ? trimmed : trimmed[..space]).ToLowerInvariant();
+        var rest = space < 0 ? string.Empty : trimmed[(space + 1)..].Trim();
+        switch (verb)
+        {
+            case "config": ToggleConfigUi(); break;
+            case "about": ToggleAboutUi(); break;
+            case "deps": case "dependencies": ToggleDependenciesUi(); break;
+            case "stats": case "history": ToggleHistoryUi(); break;
+            case "log": ToggleLogUi(); break;
+            case "changelog": ToggleChangelogUi(); break;
+            case "pause": case "resume": Controller.TogglePause(); break;
+            case "target": TargetDumper.Dump(); break;
+            case "start": StartFromCommand(); break;
+            case "stop": if (rest.Equals("soft", StringComparison.OrdinalIgnoreCase)) Controller.StopWhenSafe(); else Controller.Stop(); break;
+            case "softstop": Controller.StopWhenSafe(); break;
+            case "run": RunCountFromCommand(rest); break;
+            default: ToggleMainUi(); break;
+        }
+    }
+
+    private void StartFromCommand()
+    {
+        if (Controller.Running)
+        {
+            Svc.Chat.Print("[AFG] A run is already going. Use /afg stop or /afg stop soft first.");
+            return;
+        }
+
+        var zones = Core.Zones.ZoneSelection.ResolveStartList(Configuration);
+        if (zones.Count == 0)
+        {
+            Svc.Chat.PrintError("[AFG] Nothing to start: pick zones in the window first.");
+            return;
+        }
+
+        Controller.RunAll(zones);
+    }
+
+    // Switches on the FATE cap for the current goal; the count is the session total, so it can raise or lower a running cap too.
+    private void RunCountFromCommand(string countText)
+    {
+        if (!int.TryParse(countText, out var count) || count <= 0)
+        {
+            Svc.Chat.PrintError("[AFG] Usage: /afg run <count>, for example /afg run 30.");
+            return;
+        }
+
+        Configuration.StopAfterFatesEnabled = true;
+        Configuration.TargetFateCount = Math.Clamp(count, 1, Core.Modes.RunLimits.MaxFates);
+        Configuration.Save();
+        if (Controller.Running)
+        {
+            Svc.Chat.Print($"[AFG] Limit set: this run stops after {Configuration.TargetFateCount} FATEs.");
+            return;
+        }
+
+        StartFromCommand();
     }
 
     public void OnLanguageChanged()

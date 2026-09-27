@@ -24,6 +24,7 @@ internal sealed class NavmeshIPC
     private readonly ICallGateSubscriber<Vector3, bool, float, Vector3?> pointOnFloor;
     private readonly ICallGateSubscriber<object> pathStop;
     private readonly ICallGateSubscriber<List<Vector3>, bool, object> pathMoveTo;
+    private readonly ICallGateSubscriber<Vector3, bool, object> simpleMovePathfindAndMoveTo;
     private readonly ICallGateSubscriber<int> pathNumWaypoints;
     private readonly ICallGateSubscriber<List<Vector3>> pathListWaypoints;
 
@@ -41,6 +42,7 @@ internal sealed class NavmeshIPC
         pointOnFloor                = Svc.PluginInterface.GetIpcSubscriber<Vector3, bool, float, Vector3?>("vnavmesh.Query.Mesh.PointOnFloor");
         pathStop                    = Svc.PluginInterface.GetIpcSubscriber<object>("vnavmesh.Path.Stop");
         pathMoveTo                  = Svc.PluginInterface.GetIpcSubscriber<List<Vector3>, bool, object>("vnavmesh.Path.MoveTo");
+        simpleMovePathfindAndMoveTo = Svc.PluginInterface.GetIpcSubscriber<Vector3, bool, object>("vnavmesh.SimpleMove.PathfindAndMoveTo");
         pathNumWaypoints            = Svc.PluginInterface.GetIpcSubscriber<int>("vnavmesh.Path.NumWaypoints");
         pathListWaypoints           = Svc.PluginInterface.GetIpcSubscriber<List<Vector3>>("vnavmesh.Path.ListWaypoints");
     }
@@ -110,4 +112,8 @@ internal sealed class NavmeshIPC
     // Follows the waypoints as given, with no path search, so the caller has to know the way is clear.
     public void MoveAlong(List<Vector3> waypoints, bool fly)
         => IpcGate.Run(pathMoveTo.HasAction, () => pathMoveTo.InvokeAction(waypoints, fly), "Path.MoveTo failed");
+
+    // Plans and walks on vnavmesh's own loop; used only for the user's manual click-to-walk, never by the grind.
+    public void PathfindAndMoveTo(Vector3 destination, bool fly)
+        => IpcGate.Run(simpleMovePathfindAndMoveTo.HasAction, () => simpleMovePathfindAndMoveTo.InvokeAction(destination, fly), "SimpleMove.PathfindAndMoveTo failed");
 }

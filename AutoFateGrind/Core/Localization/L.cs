@@ -40,6 +40,7 @@ internal static class L
         public static readonly LocString StatusPickZones = new("shell.status.pickZones", "Pick zones");
         public static readonly LocString StatusNothingToFarm = new("shell.status.nothingToFarm", "Nothing to farm");
         public static readonly LocString StatusSetupNeeded = new("shell.status.setupNeeded", "Setup needed");
+        public static readonly LocString StatusBlocked = new("shell.status.blocked", "Blocked");
         public static readonly LocString StatusIdle = new("shell.status.idle", "Idle");
         public static readonly LocString Minimize = new("shell.minimize", "Minimize to the title strip");
         public static readonly LocString Restore = new("shell.restore", "Restore the window");
@@ -64,6 +65,12 @@ internal static class L
         public static readonly LocString DetailNoRankedZones = new("grind.detail.noRankedZones", "Only zones from Shadowbringers onward have Shared FATE ranks.");
         public static readonly LocString TitleRanksMaxed = new("grind.title.ranksMaxed", "Every selected zone is maxed");
         public static readonly LocString DetailRanksMaxed = new("grind.detail.ranksMaxed", "Tick zones whose Shared FATE rank still has room to grow.");
+        public static readonly LocString TitleNeedQuest = new("grind.title.needQuest", "Pick up the quest first");
+        public static readonly LocString DetailNeedQuest = new("grind.detail.needQuest", "These items only drop while the quest \"{0}\" is active.");
+        public static readonly LocString TitleNeedZenith = new("grind.title.needZenith", "Equip a Zenith weapon first");
+        public static readonly LocString DetailNeedZenith = new("grind.detail.needZenith", "Atma only drop with a Zodiac Zenith weapon equipped.");
+        public static readonly LocString TitleAllCollected = new("grind.title.allCollected", "Everything is collected");
+        public static readonly LocString DetailAllCollected = new("grind.detail.allCollected", "Every item for this goal is in your bags. Raise the number of weapons or pick another goal.");
         public static readonly LocString TitleReady = new("grind.title.ready", "Ready to grind");
         public static readonly LocString DetailReady = new("grind.detail.ready", "Everything's set. Press Start whenever you're ready.");
         public static readonly LocString TitleRunning = new("grind.title.running", "Grinding");
@@ -71,18 +78,43 @@ internal static class L
         public static readonly LocString DetailPausedInContent = new("grind.detail.pausedInContent", "Resumes once you leave the duty");
         public static readonly LocString DetailPausedManual = new("grind.detail.pausedManual", "Resume whenever you're ready");
         public static readonly LocString OpenPlugins = new("grind.openPlugins", "Open plugins");
+        public static readonly LocString PickForMe = new("grind.pickForMe", "Pick for me");
+        public static readonly LocString PickForMeHint = new("grind.pickForMeHint", "Selects every unlocked zone of your newest expansion that fits this goal.");
         public static readonly LocString NoRunsYet = new("grind.noRunsYet", "No runs yet");
         public static readonly LocString StatsAppearHere = new("grind.statsAppearHere", "your stats will appear here");
         public static readonly LocString LastRun = new("grind.lastRun", "Last run  ·  {0} FATEs");
         public static readonly LocString LastRunDetail = new("grind.lastRunDetail", "{0}  ·  {1} gems");
 
-        public static readonly LocString Plan = new("grind.plan", "Plan");
-        public static readonly LocString SentenceGrind = new("grind.sentence.grind", "Grind");
-        public static readonly LocString SentenceUntil = new("grind.sentence.until", "until");
+        public static readonly LocString GoalTitle = new("grind.goalTitle", "Goal");
+        public static readonly LocString CatFarm = new("grind.cat.farm", "Farm");
+        public static readonly LocString CatRanks = new("grind.cat.ranks", "Ranks");
+        public static readonly LocString CatRelics = new("grind.cat.relics", "Relics");
+        public static readonly LocString CatEvents = new("grind.cat.events", "Events");
+        public static readonly LocString CardGemstones = new("grind.card.gemstones", "Bicolor Gemstones");
+        public static readonly LocString CardPlain = new("grind.card.plain", "Just FATEs");
+        public static readonly LocString CardShared = new("grind.card.shared", "Shared FATE ranks");
+        public static readonly LocString CardYokai = new("grind.card.yokai", "Yo-kai Watch medals");
+        public static readonly LocString StatusGems = new("grind.status.gems", "{0} / {1} gemstones");
+        public static readonly LocString StatusPlain = new("grind.status.plain", "no target of its own");
+        public static readonly LocString StatusRanks = new("grind.status.ranks", "{0} of {1} zones maxed");
+        public static readonly LocString StatusRanksNoZones = new("grind.status.ranksNoZones", "needs Shadowbringers or later zones");
+        public static readonly LocString StatusQuestMissing = new("grind.status.questMissing", "quest not active");
+        public static readonly LocString StatusZenithMissing = new("grind.status.zenithMissing", "Zenith weapon not equipped");
+        public static readonly LocString NotePlain = new("grind.note.plain", "No target of its own. A limit below, or the Stop button, ends the run.");
+        public static readonly LocString StopWhen = new("grind.stopWhen", "Stop when");
+        public static readonly LocString StopGoalReached = new("grind.stopGoalReached", "the goal is reached");
+        public static readonly LocString StopNoGoal = new("grind.stopNoGoal", "you press Stop, or a limit below is hit");
+        public static readonly LocString StopOrAfter = new("grind.stopOrAfter", "or after");
+        public static readonly LocString Summary = new("grind.summary", "{0} in {1} until {2}, then {3}.");
+        public static readonly LocString SummaryGems = new("grind.summary.gems", "Farm Bicolor Gemstones");
+        public static readonly LocString SummaryPlain = new("grind.summary.plain", "Grind FATEs");
+        public static readonly LocString SummaryShared = new("grind.summary.shared", "Max Shared FATE ranks");
+        public static readonly LocString SummaryCollect = new("grind.summary.collect", "Collect {0}");
+        public static readonly LocString SummaryYokai = new("grind.summary.yokai", "Farm Yo-kai medals");
+        public static readonly LocString Or = new("grind.or", " or ");
+        public static readonly LocString UntilShort = new("grind.untilShort", "until {0}");
         public static readonly LocString SentenceThen = new("grind.sentence.then", "then");
         public static readonly LocString SentenceEnd = new("grind.sentence.end", ".");
-        public static readonly LocString ZonesNone = new("grind.zonesNone", "no zones yet");
-        public static readonly LocString ZonesYokai = new("grind.zonesYokai", "yo-kai zones");
         public static readonly LocString ZonesYokaiNone = new("grind.zonesYokaiNone", "no yo-kai to farm");
         public static readonly LocPlural ZonesCount = new("grind.zonesCount", "{0} zone", "{0} zones");
         public static readonly LocString GoalGemstones = new("grind.goal.gemstones", "{0} gemstones");
@@ -90,6 +122,12 @@ internal static class L
         public static readonly LocString GoalMinutes = new("grind.goal.minutes", "{0} minutes");
         public static readonly LocString GoalYokai = new("grind.goal.yokai", "{0} medals per yo-kai");
         public static readonly LocString GoalSharedFates = new("grind.goal.sharedFates", "every Shared FATE rank is maxed");
+        public static readonly LocString GoalAtma = new("grind.goal.atma", "your Atma are collected");
+        public static readonly LocString GoalLuminous = new("grind.goal.luminous", "your Luminous Crystals are collected");
+        public static readonly LocString GoalMemories = new("grind.goal.memories", "your Memories of the Dying are collected");
+        public static readonly LocString GoalLawsOrder = new("grind.goal.lawsOrder", "your Haunting and Vexatious Memories are collected");
+        public static readonly LocString GoalDemiatma = new("grind.goal.demiatma", "your Demiatma are collected");
+        public static readonly LocString GoalPaste = new("grind.goal.paste", "your Crystal Paste is collected");
         public static readonly LocString GoalEndless = new("grind.goal.endless", "you stop it");
         public static readonly LocString PlanLocked = new("grind.planLocked", "Stop the run to change the plan.");
         public static readonly LocString AfterStayToken = new("grind.after.stay.token", "stay where you are");
@@ -104,33 +142,39 @@ internal static class L
         public static readonly LocString AfterCloseToken = new("grind.after.close.token", "close the game");
         public static readonly LocString AfterCloseName = new("grind.after.close.name", "Close the game");
         public static readonly LocString AfterCloseDetail = new("grind.after.close.detail", "Close FFXIV entirely (via XIVLauncher's /xlkill).");
-        public static readonly LocString WhenGoalReached = new("grind.whenGoalReached", "When the goal is reached");
-        public static readonly LocString ModeGemstones = new("grind.mode.gemstones", "Gemstones");
-        public static readonly LocString ModeFates = new("grind.mode.fates", "FATEs");
-        public static readonly LocString ModeTime = new("grind.mode.time", "Time");
-        public static readonly LocString ModeYokai = new("grind.mode.yokai", "Yo-kai");
-        public static readonly LocString ModeSharedFates = new("grind.mode.sharedFates", "Shared FATEs");
-        public static readonly LocString ModeEndless = new("grind.mode.endless", "Endless");
-        public static readonly LocString EndlessNote = new("grind.endlessNote", "Rotates your zones until you press Stop.");
         public static readonly LocString StopAt = new("grind.stopAt", "Stop at");
-        public static readonly LocString StopAfter = new("grind.stopAfter", "Stop after");
         public static readonly LocString UnitGemstones = new("grind.unit.gemstones", "gemstones");
         public static readonly LocString UnitFates = new("grind.unit.fates", "FATEs");
         public static readonly LocString UnitMinutes = new("grind.unit.minutes", "minutes");
         public static readonly LocString UnitYokaiMedals = new("grind.unit.yokaiMedals", "medals per yo-kai");
         public static readonly LocString NoteGemstones = new("grind.note.gemstones", "You have {0} right now.");
-        public static readonly LocString NoteFates = new("grind.note.fates", "Counts every FATE that hands out a reward.");
-        public static readonly LocString NoteMinutes = new("grind.note.minutes", "Paused time does not count.");
         public static readonly LocString NoteYokai = new("grind.note.yokai", "Summons each yo-kai minion you own, grinds its zones, and moves on once it holds this many Legendary Medals. Keep the Yo-kai Watch equipped or in your armoury chest.");
         public static readonly LocString NoteSharedFates = new("grind.note.sharedFates", "Grinds each zone until its Shared FATE rank is maxed, then moves on to the next one in your order. Only Shadowbringers and later zones have ranks; other zones in the plan are skipped.");
         public static readonly LocString NoteSharedFatesSummary = new("grind.note.sharedFatesSummary", "{0} of {1} selected zones already maxed.");
-        public static readonly LocString YokaiEventTitle = new("grind.event.yokai.title", "Yo-kai Watch event");
+        public static readonly LocString ItemGoalAtma = new("grind.itemGoals.atma", "Atma (Zodiac)");
+        public static readonly LocString ItemGoalLuminous = new("grind.itemGoals.luminous", "Luminous Crystals (Anima)");
+        public static readonly LocString ItemGoalMemories = new("grind.itemGoals.memories", "Memories of the Dying (Resistance)");
+        public static readonly LocString ItemGoalLawsOrder = new("grind.itemGoals.lawsOrder", "Haunting and Vexatious Memories (Resistance)");
+        public static readonly LocString ItemGoalDemiatma = new("grind.itemGoals.demiatma", "Demiatma (Phantom)");
+        public static readonly LocString ItemGoalPaste = new("grind.itemGoals.paste", "Crystal Paste (Phantom)");
+        public static readonly LocString NoteAtma = new("grind.itemGoals.noteAtma", "One of each of the twelve Atma per weapon, from FATEs in the A Realm Reborn zones. They only drop with a Zodiac Zenith weapon equipped and the quest Up in Arms active.");
+        public static readonly LocString NoteLuminous = new("grind.itemGoals.noteLuminous", "One of each of the six Luminous Crystals per weapon, from FATEs in the Heavensward zones, for the Anima weapon step.");
+        public static readonly LocString NoteMemories = new("grind.itemGoals.noteMemories", "Twenty of each of the three Memories of the Dying per weapon, from FATEs in the Heavensward zones, for the Resistance weapon step.");
+        public static readonly LocString NoteLawsOrder = new("grind.itemGoals.noteLawsOrder", "Eighteen Haunting and eighteen Vexatious Memories of the Dying per weapon, from FATEs in the Stormblood zones while The Resistance Remembers is active.");
+        public static readonly LocString NoteDemiatma = new("grind.itemGoals.noteDemiatma", "Three of each of the six Demiatma per weapon, from FATEs in the Dawntrail zones while Arcane Artistry is active.");
+        public static readonly LocString NotePaste = new("grind.itemGoals.notePaste", "1,200 Crystal Paste per weapon, from FATEs anywhere in Dawntrail while In Pursuit of Perfection is active.");
+        public static readonly LocString WeaponsToMake = new("grind.itemGoals.weaponsToMake", "Weapons to make");
+        public static readonly LocString UnitWeapons = new("grind.itemGoals.unitWeapons", "weapons");
+        public static readonly LocString ItemGoalQuest = new("grind.itemGoals.quest", "Needs the quest \"{0}\" active.");
+        public static readonly LocString ItemGoalZenith = new("grind.itemGoals.zenith", "Needs a Zodiac Zenith weapon equipped.");
+        public static readonly LocString ItemsSummary = new("grind.itemGoals.summary", "{0} of {1} items");
+        public static readonly LocString ItemDropsIn = new("grind.itemGoals.dropsIn", "Drops in: {0}");
+        public static readonly LocString ItemGoalPlanZones = new("grind.itemGoals.planZones", "Zones with items still to collect: {0}");
         public static readonly LocString YokaiEventOwned = new("grind.event.yokai.owned", "{0} of {1} yo-kai owned");
         public static readonly LocPlural YokaiEventWeaponsLeft = new("grind.event.yokai.weaponsLeft", "{0} weapon left", "{0} weapons left");
         public static readonly LocString YokaiEventWatchEquipped = new("grind.event.yokai.watchEquipped", "Yo-kai Watch equipped");
         public static readonly LocString YokaiEventWatchStored = new("grind.event.yokai.watchStored", "Yo-kai Watch in your bags or armoury chest");
         public static readonly LocString YokaiEventWatchMissing = new("grind.event.yokai.watchMissing", "No Yo-kai Watch on this character");
-        public static readonly LocString YokaiGoalOnCard = new("grind.event.yokai.goalOnCard", "This run's goal is set on the Yo-kai Watch card below.");
 
         public static readonly LocString Zones = new("grind.library.zones", "Zones");
         public static readonly LocString SearchZones = new("grind.library.search", "Search zones");
@@ -182,16 +226,16 @@ internal static class L
         public static readonly LocString ReasonNoWatch = new("grind.reason.noWatch", "get the Yo-kai Watch first");
         public static readonly LocString ReasonNoRankedZones = new("grind.reason.noRankedZones", "pick a Shadowbringers or later zone");
         public static readonly LocString ReasonRanksMaxed = new("grind.reason.ranksMaxed", "every selected zone is already maxed");
+        public static readonly LocString ReasonNeedQuest = new("grind.reason.needQuest", "pick up the quest first");
+        public static readonly LocString ReasonNeedZenith = new("grind.reason.needZenith", "equip a Zenith weapon");
+        public static readonly LocString ReasonAllCollected = new("grind.reason.allCollected", "everything is collected");
         public static readonly LocString StartSub = new("grind.startSub", "{0}  ·  {1}");
-        public static readonly LocString StopsAtGems = new("grind.stops.gems", "stops at {0} gems");
-        public static readonly LocString StopsAfterFates = new("grind.stops.fates", "stops after {0} FATEs");
-        public static readonly LocString StopsAfterMinutes = new("grind.stops.minutes", "stops after {0} min");
-        public static readonly LocString StopsAtYokai = new("grind.stops.yokai", "stops at {0} medals each");
-        public static readonly LocString StopsSharedFates = new("grind.stops.sharedFates", "stops when every rank is maxed");
-        public static readonly LocString StopsWhenYouStop = new("grind.stops.endless", "runs until you stop");
         public static readonly LocString StateRunning = new("grind.state.running", "running");
         public static readonly LocString StatePaused = new("grind.state.paused", "paused");
         public static readonly LocString StopSub = new("grind.stopSub", "{0} · {1}");
+        public static readonly LocString StopAfterFate = new("grind.stopAfterFate", "stopping after this FATE");
+        public static readonly LocString StopSoftHint = new("grind.stopSoftHint", "Ctrl+click to stop after the current FATE instead of right away.");
+        public static readonly LocString StopNowHint = new("grind.stopNowHint", "Stops once the current FATE is over. Click to stop right away instead.");
     }
 
     internal static class Run
@@ -228,6 +272,8 @@ internal static class L
         public static readonly LocString SharedMaxedHere = new("run.goal.sharedMaxedHere", "rank maxed here");
         public static readonly LocString SharedSyncing = new("run.goal.sharedSyncing", "reading Shared FATE ranks…");
         public static readonly LocPlural SharedZonesLeft = new("run.goal.sharedZonesLeft", "{0} zone left", "{0} zones left");
+        public static readonly LocPlural ItemsToGo = new("run.goal.itemsToGo", "{0} item to go", "{0} items to go");
+        public static readonly LocString ItemsCollected = new("run.goal.itemsCollected", "all items collected");
         public static readonly LocString HoursLeft = new("run.goal.hoursLeft", "{0}h {1:00}m left");
         public static readonly LocString MinutesLeft = new("run.goal.minutesLeft", "{0}m {1:00}s left");
         public static readonly LocString TimeReached = new("run.goal.timeReached", "time reached");
@@ -251,6 +297,20 @@ internal static class L
         public static readonly LocString Ban = new("live.ban", "Blacklist this FATE for this character (skips it while grinding).");
         public static readonly LocString Blacklisted = new("live.blacklisted", "Blacklisted");
         public static readonly LocString QueueMeta = new("live.queueMeta", "{0}%  {1}");
+        public static readonly LocString EligibleTitle = new("live.eligibleTitle", "Will be automated.");
+        public static readonly LocString ReasonTitle = new("live.reasonTitle", "Passed over: {0}.");
+        public static readonly LocString WalkHint = new("live.walkHint", "Click to walk there. Click again to stop.");
+        public static readonly LocString ReasonBlacklisted = new("live.reason.blacklisted", "blacklisted");
+        public static readonly LocString ReasonSessionStuck = new("live.reason.sessionStuck", "skipped for this session");
+        public static readonly LocString ReasonSkippedRule = new("live.reason.skippedRule", "its FATE type is skipped");
+        public static readonly LocString ReasonLevelBand = new("live.reason.levelBand", "outside your level band");
+        public static readonly LocString ReasonLevelWindow = new("live.reason.levelWindow", "outside the level window");
+        public static readonly LocString ReasonTooLong = new("live.reason.tooLong", "longer than the duration limit");
+        public static readonly LocString ReasonNotStarted = new("live.reason.notStarted", "not started yet");
+        public static readonly LocString ReasonTooLittleTime = new("live.reason.tooLittleTime", "too little time left");
+        public static readonly LocString ReasonTooMuchProgress = new("live.reason.tooMuchProgress", "too far along");
+        public static readonly LocString ReasonFinished = new("live.reason.finished", "already finished");
+        public static readonly LocString ReasonNotOnMap = new("live.reason.notOnMap", "not on the map yet");
     }
 
     internal static class History
@@ -359,6 +419,13 @@ internal static class L
             new("changelog.r21400.2", "Shadowbringers and later zone cards now show their Shared FATE rank, with the full numbers on hover"),
             new("changelog.r21400.3", "Zones without Shared FATE ranks are skipped by that goal, and the run says in chat when it leaves a maxed zone"),
             new("changelog.r21400.4", "The level range and skipped FATE types now also apply to a FATE you are already standing in or died in, which is left instead of fought"),
+            new("changelog.r21400.5", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste, each grinding only the zones that still owe items"),
+            new("changelog.r21400.6", "Added /afg start, stop, stop soft and run <count>, plus Ctrl+click on Stop to finish the current FATE before stopping"),
+            new("changelog.r21400.7", "Zone swaps, teleport shortcuts and finished-zone rotation now wait for Twist of Fate to wear off (toggle in Settings)"),
+            new("changelog.r21400.8", "New filters: skip FATEs over a duration limit, and a fixed level window"),
+            new("changelog.r21400.9", "The live tracker lists passed-over FATEs with the reason, walks you to a FATE on click while idle, and the FATE name format is configurable"),
+            new("changelog.r21400.10", "FATEs skipped for routing trouble get another chance after the next completion, and the headline offers to pick your newest expansion's zones for you"),
+            new("changelog.r21400.11", "Reworked the Grind page: one Goal section with Farm, Ranks, Relics and Events tabs and a live status on every card, a Stop-when row where a FATE count and a clock can cap any goal, and the zone order under the zone library"),
         ];
 
         public static readonly LocString[] Release21300 =
@@ -479,9 +546,13 @@ internal static class L
         public static readonly LocString OpenOnLoginHelp = new("settings.general.openOnLoginHelp", "Pop the main window automatically the next time you log in.");
         public static readonly LocString LivePopout = new("settings.general.livePopout", "Live FATE tracker popout");
         public static readonly LocString LivePopoutHelp = new("settings.general.livePopoutHelp", "Show the live FATE tracker as a small overlay window so you can keep it visible while the main window is closed.");
+        public static readonly LocString NameFormat = new("settings.general.nameFormat", "FATE name format");
+        public static readonly LocString NameFormatHelp = new("settings.general.nameFormatHelp", "How FATE names read in the running panel and the live tracker. Tokens: {Level}, {Name}, {Id}, {Progress}, {TimeRemaining}, {Distance}, {State}.");
         public static readonly LocString GeneralBehavior = new("settings.general.behavior", "Behavior");
         public static readonly LocString SwapZones = new("settings.general.swapZones", "Swap zones when empty");
         public static readonly LocString SwapZonesHelp = new("settings.general.swapZonesHelp", "When the current zone runs out of eligible FATEs, jump to the next zone in your priority order.");
+        public static readonly LocString KeepTwist = new("settings.general.keepTwist", "Keep Twist of Fate");
+        public static readonly LocString KeepTwistHelp = new("settings.general.keepTwistHelp", "While the Twist of Fate bonus is up, stay in the zone: no zone swap, no teleport shortcut, and no rotating past a finished zone until it wears off.");
         public static readonly LocString AutoPause = new("settings.general.autoPause", "Auto-pause in content");
         public static readonly LocString AutoPauseHelp = new("settings.general.autoPauseHelp", "Pause the run while you are inside a duty, trial, raid, or any other instanced content, then resume it once you are back outside. Your zones, goal, and session stats are kept, and paused time does not count toward a time-based goal.");
         public static readonly LocString AutoResume = new("settings.general.autoResume", "Auto-resume on fault");
@@ -499,6 +570,18 @@ internal static class L
         public static readonly LocString MinTimeFormat = new("settings.filters.minTimeFormat", "%d s");
         public static readonly LocString MaxProgress = new("settings.filters.maxProgress", "Maximum progress");
         public static readonly LocString MaxProgressHelp = new("settings.filters.maxProgressHelp", "Skip FATEs already past this percent. Keeps you off near-finished FATEs others are clearing.");
+        public static readonly LocString MaxDuration = new("settings.filters.maxDuration", "Skip long FATEs");
+        public static readonly LocString MaxDurationHelp = new("settings.filters.maxDurationHelp", "Skip FATEs whose full timer is longer than a limit, such as 30-minute boss FATEs that rarely finish.");
+        public static readonly LocString MaxDurationLimit = new("settings.filters.maxDurationLimit", "Longest timer");
+        public static readonly LocString MaxDurationLimitHelp = new("settings.filters.maxDurationLimitHelp", "FATEs with a longer full duration than this are skipped, whatever time is left on them.");
+        public static readonly LocString MaxDurationOff = new("settings.filters.maxDurationOff", "FATEs of any length are eligible.");
+        public static readonly LocString LevelWindow = new("settings.filters.levelWindow", "Level window");
+        public static readonly LocString LevelWindowHelp = new("settings.filters.levelWindowHelp", "Only target FATEs between two fixed levels, whatever your own level is. Handy for leveling a specific bracket or staying out of a zone's high-level corner.");
+        public static readonly LocString LevelWindowOff = new("settings.filters.levelWindowOff", "No fixed level window; only the band around your level applies, if it is on.");
+        public static readonly LocString LevelLowest = new("settings.filters.levelLowest", "Lowest level");
+        public static readonly LocString LevelLowestHelp = new("settings.filters.levelLowestHelp", "Skip FATEs below this level.");
+        public static readonly LocString LevelHighest = new("settings.filters.levelHighest", "Highest level");
+        public static readonly LocString LevelHighestHelp = new("settings.filters.levelHighestHelp", "Skip FATEs above this level.");
         public static readonly LocString LevelRange = new("settings.filters.levelRange", "Restrict by level");
         public static readonly LocString LevelRangeHelp = new("settings.filters.levelRangeHelp", "Only target FATEs within a level range of your current level. Useful in zones that mix low- and high-level FATEs (e.g. Lv 10-15 and Lv 40-45 in the same area) so the grinder doesn't drag you into one that can kill you.");
         public static readonly LocString LevelRangeOff = new("settings.filters.levelRangeOff", "All FATE levels in your selected zones are eligible.");
@@ -747,7 +830,7 @@ internal static class L
 
     internal static class Plugin
     {
-        public static readonly LocString CommandHelp = new("plugin.commandHelp", "Toggle the Auto FATE Grind window. /afg config | stats | deps | log | changelog | about | pause (pause or resume the run) | target (dump current target's BaseId).");
+        public static readonly LocString CommandHelp = new("plugin.commandHelp", "Toggle the Auto FATE Grind window. /afg start | stop | stop soft (finish the current FATE first) | run <count> (stop after that many FATEs) | pause | config | stats | deps | log | changelog | about | target.");
         public static readonly LocString CommandHelpAlias = new("plugin.commandHelpAlias", "Alias for /afg.");
     }
 }

@@ -1,4 +1,5 @@
 using AutoFateGrind.Core.External;
+using AutoFateGrind.Core.Game.Items;
 using AutoFateGrind.Core.Game.SharedFates;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Modes;
@@ -12,7 +13,7 @@ namespace AutoFateGrind.Windows.Sections;
 
 internal static class ReadyState
 {
-    public enum Kind { SetupNeeded, PickZones, NothingToFarm, Ready, Running, Paused }
+    public enum Kind { SetupNeeded, PickZones, NothingToFarm, Blocked, Ready, Running, Paused }
 
     public readonly record struct Info(Kind Kind, Vector4 Accent, Vector4 AccentSoft, FontAwesomeIcon Icon, string Title, string Detail);
 
@@ -50,6 +51,11 @@ internal static class ReadyState
                 Loc.T(L.Grind.TitleSetupNeeded), Loc.T(L.Grind.DetailSetupNeeded));
         }
 
+        if (ItemGoalCatalog.Find(cfg.ActiveMode.Id) is { } goal && ItemBlocker(goal, cfg) is { } blocked)
+        {
+            return blocked;
+        }
+
         var zones = ZoneSelection.ResolveStartList(cfg);
         if (zones.Count == 0 && ZoneSelection.GoalPlansZones(cfg))
         {
@@ -84,6 +90,17 @@ internal static class ReadyState
             Loc.T(L.Grind.TitleReady), Loc.T(L.Grind.DetailReady));
     }
 
+    private static Info? ItemBlocker(ItemGoalDefinition goal, Configuration cfg) => ItemGoalProgress.Blocker(goal, cfg) switch
+    {
+        ItemGoalBlocker.NeedQuest => new Info(Kind.Blocked, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.Scroll,
+            Loc.T(L.Grind.TitleNeedQuest), Loc.T(L.Grind.DetailNeedQuest, ItemGoalProgress.QuestName(goal.QuestId))),
+        ItemGoalBlocker.NeedZenith => new Info(Kind.Blocked, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.Gavel,
+            Loc.T(L.Grind.TitleNeedZenith), Loc.T(L.Grind.DetailNeedZenith)),
+        ItemGoalBlocker.AllCollected => new Info(Kind.NothingToFarm, Styling.AccentMint, Styling.AccentMintSoft, FontAwesomeIcon.CheckCircle,
+            Loc.T(L.Grind.TitleAllCollected), Loc.T(L.Grind.DetailAllCollected)),
+        _ => null,
+    };
+
     public static string ShortLabel(Kind kind) => kind switch
     {
         Kind.Running       => Loc.T(L.Shell.StatusRunning),
@@ -91,6 +108,7 @@ internal static class ReadyState
         Kind.Ready         => Loc.T(L.Shell.StatusReady),
         Kind.PickZones     => Loc.T(L.Shell.StatusPickZones),
         Kind.NothingToFarm => Loc.T(L.Shell.StatusNothingToFarm),
+        Kind.Blocked       => Loc.T(L.Shell.StatusBlocked),
         Kind.SetupNeeded   => Loc.T(L.Shell.StatusSetupNeeded),
         _                  => Loc.T(L.Shell.StatusIdle),
     };
@@ -103,15 +121,5 @@ internal static class ReadyState
         AutoPhase.Finishing  => Loc.T(L.Run.PhaseFinishing),
         AutoPhase.Grinding   => Loc.T(L.Run.PhaseGrinding),
         _                    => Loc.T(L.Run.PhaseStandingBy),
-    };
-
-    public static string StopSummary(Configuration cfg) => cfg.ActiveMode.Id switch
-    {
-        MaxGemstonesMode.ModeId => Loc.T(L.Grind.StopsAtGems, cfg.TargetGemstoneCount),
-        RunCountMode.ModeId     => Loc.T(L.Grind.StopsAfterFates, cfg.TargetFateCount),
-        TimeBoxedMode.ModeId    => Loc.T(L.Grind.StopsAfterMinutes, cfg.TargetMinutes),
-        YokaiMedalsMode.ModeId  => Loc.T(L.Grind.StopsAtYokai, cfg.TargetYokaiMedals),
-        SharedFateRanksMode.ModeId => Loc.T(L.Grind.StopsSharedFates),
-        _                       => Loc.T(L.Grind.StopsWhenYouStop),
     };
 }

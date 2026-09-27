@@ -104,16 +104,21 @@ internal static class FateScanner
         => sortOrder is { Count: > 0 } ? sortOrder : DefaultSortOrder;
 
     public static bool IsEligible(PublicEvent f, Configuration cfg, IReadOnlySet<uint>? sessionBlacklist)
+        => Ineligibility(f, cfg, sessionBlacklist) == FateExclusion.None;
+
+    // Every reason a FATE is passed over, hard exclusions and the soft timing rules alike, so the tracker can name it.
+    public static FateExclusion Ineligibility(PublicEvent f, Configuration cfg, IReadOnlySet<uint>? sessionBlacklist)
     {
         var awaitsNpcStart = AwaitsNpcStart(f);
-        if (f.State != FateState.Running && !awaitsNpcStart) return false;
-        if (IsExcluded(f, cfg, sessionBlacklist)) return false;
-        if (!awaitsNpcStart && FateClock.Remaining(f) < cfg.MinTimeRemainingSec) return false;
-        if (f.Progress > cfg.MaxProgressPct) return false;
+        if (f.State != FateState.Running && !awaitsNpcStart) return FateExclusion.NotStarted;
+        var excluded = ExclusionFor(f, cfg, sessionBlacklist);
+        if (excluded != FateExclusion.None) return excluded;
+        if (!awaitsNpcStart && FateClock.Remaining(f) < cfg.MinTimeRemainingSec) return FateExclusion.TooLittleTime;
         // A Collect FATE stays Running at 100% as its hand-in window; nothing can be contributed to it anymore.
-        if (f.Progress >= 100) return false;
-        if (!FateClock.IsOnMap(f)) return false;
-        return true;
+        if (f.Progress >= 100) return FateExclusion.Finished;
+        if (f.Progress > cfg.MaxProgressPct) return FateExclusion.TooMuchProgress;
+        if (!FateClock.IsOnMap(f)) return FateExclusion.NotOnMap;
+        return FateExclusion.None;
     }
 
     public static bool IsExcluded(PublicEvent f, Configuration cfg, IReadOnlySet<uint>? sessionBlacklist)
@@ -130,6 +135,14 @@ internal static class FateScanner
         {
             return FateExclusion.OutsideLevelBand;
         }
+        if (cfg.LevelWindowEnabled && f.Level > 0 && (f.Level < cfg.MinFateLevel || f.Level > cfg.MaxFateLevel))
+        {
+            return FateExclusion.OutsideLevelWindow;
+        }
+        if (cfg.MaxDurationFilterEnabled && f.Duration > cfg.MaxFateDurationSec)
+        {
+            return FateExclusion.TooLong;
+        }
         return FateExclusion.None;
     }
 
@@ -139,6 +152,13 @@ internal static class FateScanner
         FateExclusion.SessionStuck     => "skipped for this session",
         FateExclusion.SkippedRule      => $"a skipped FATE type ({f.Rule})",
         FateExclusion.OutsideLevelBand => $"Lv {f.Level}, outside the Lv {LevelBandFloor(cfg)}-{LevelBandCeiling(cfg)} band",
+        FateExclusion.OutsideLevelWindow => $"Lv {f.Level}, outside the Lv {cfg.MinFateLevel}-{cfg.MaxFateLevel} window",
+        FateExclusion.TooLong          => $"lasts {f.Duration / 60} min, over the {cfg.MaxFateDurationSec / 60} min limit",
+        FateExclusion.NotStarted       => "not started yet",
+        FateExclusion.TooLittleTime    => $"{FateClock.Remaining(f):F0}s left, under the {cfg.MinTimeRemainingSec}s minimum",
+        FateExclusion.TooMuchProgress  => $"{f.Progress}% done, over the {cfg.MaxProgressPct}% limit",
+        FateExclusion.Finished         => "already finished",
+        FateExclusion.NotOnMap         => "not on the map yet",
         _                              => "eligible",
     };
 

@@ -1,5 +1,8 @@
+using AutoFateGrind.Core.Game.Fates;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Windows.Components;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 
 namespace AutoFateGrind.Windows.Sections.Config;
 
@@ -42,6 +45,25 @@ internal static class GeneralSettings
                 Plugin.Instance.LiveFateWindow.IsOpen = v;
             }, "##gen_popout"),
             SettingsRow.ToggleHeight);
+
+        SettingsRow.Draw(Loc.T(L.Settings.NameFormat),
+            Loc.T(L.Settings.NameFormatHelp),
+            SettingsControls.RowComboWidth,
+            () => DrawNameFormat(cfg));
+    }
+
+    private static void DrawNameFormat(Configuration cfg)
+    {
+        var text = cfg.FateNameFormat;
+        ImGui.SetNextItemWidth(SettingsControls.RowComboWidth * ImGuiHelpers.GlobalScale);
+        using (SettingsControls.PushFrameColors())
+        {
+            if (ImGui.InputText("##gen_namefmt", ref text, FateNameFormatter.MaxFormatLength))
+            {
+                cfg.FateNameFormat = text;
+                cfg.SaveDebounced();
+            }
+        }
     }
 
     private static void DrawBehaviorGroup(Configuration cfg)
@@ -52,6 +74,12 @@ internal static class GeneralSettings
             Loc.T(L.Settings.SwapZonesHelp),
             SettingsControls.ToggleWidth,
             () => SettingsControls.DrawToggle(cfg, () => cfg.SwapZonesWhenEmpty, v => cfg.SwapZonesWhenEmpty = v, "##gen_swap"),
+            SettingsRow.ToggleHeight);
+
+        SettingsRow.Draw(Loc.T(L.Settings.KeepTwist),
+            Loc.T(L.Settings.KeepTwistHelp),
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.KeepTwistOfFate, v => cfg.KeepTwistOfFate = v, "##gen_keeptwist"),
             SettingsRow.ToggleHeight);
 
         SettingsRow.Draw(Loc.T(L.Settings.AutoPause),

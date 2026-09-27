@@ -20,6 +20,8 @@ internal static class YokaiRoster
     public static void Draw(Configuration cfg, AutoFateController ctrl, bool scrollIntoView)
     {
         DrawHeader(cfg, scrollIntoView);
+        Styling.VSpace(6f);
+        DrawPlanNote(cfg);
         Styling.VSpace(10f);
         DrawGrid(cfg, ctrl);
     }

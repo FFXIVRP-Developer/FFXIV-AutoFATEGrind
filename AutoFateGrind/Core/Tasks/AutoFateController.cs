@@ -1,6 +1,7 @@
 using AutoFateGrind.Core.External;
 using AutoFateGrind.Core.Game.Player;
 using AutoFateGrind.Core.Game.Yokai;
+using AutoFateGrind.Core.Modes;
 using AutoFateGrind.Core.Trading;
 using AutoFateGrind.Core.Zones;
 using clib.Services;
@@ -69,7 +70,7 @@ internal sealed partial class AutoFateController
         s.CaptureStartExp();
 
         var startIndex = 0;
-        if (ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        if (Plugin.Cfg.ActiveMode.Id == YokaiMedalsMode.ModeId)
         {
             if (!PlanYokaiZones(s))
             {
@@ -77,6 +78,10 @@ internal sealed partial class AutoFateController
                 activeZones = [];
                 return;
             }
+        }
+
+        if (ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        {
             startIndex = CurrentTerritoryIndex();
         }
 
@@ -135,6 +140,27 @@ internal sealed partial class AutoFateController
             ECommons.DalamudServices.Svc.Chat.Print($"[AFG] Switching to {label}.");
         else
             ECommons.DalamudServices.Svc.Chat.PrintError($"[AFG] Could not equip {label} (game refused — combat, mount, or transient lock?). See /xllog for details.");
+    }
+
+    public bool StopPending => session?.StopWhenSafe == true;
+
+    // Finishes the FATE in progress, clears combat, and ends the run without any after-run action.
+    public void StopWhenSafe()
+    {
+        if (session is null || !Running || Paused)
+        {
+            Stop();
+            return;
+        }
+
+        if (session.StopWhenSafe)
+        {
+            return;
+        }
+
+        session.StopWhenSafe = true;
+        Diag("Soft stop requested; the run ends once the current FATE is over.");
+        ECommons.DalamudServices.Svc.Chat.Print("[AFG] Stopping after the current FATE.");
     }
 
     public void Stop()

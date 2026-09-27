@@ -35,14 +35,26 @@ public sealed class Configuration : IPluginConfiguration
     public int TargetGemstoneCount { get; set; } = 1500;
     public int TargetMinutes { get; set; } = 60;
     public int TargetYokaiMedals { get; set; } = 10;
+    public int TargetRelicCount { get; set; } = 1;
     public HashSet<uint> YokaiSkippedMinionIds { get; set; } = [];
-    public string YokaiPreviousModeId { get; set; } = "";
+
+    // Caps that end the run whatever the goal; the run-count and time-boxed goals of older versions map onto them.
+    public bool StopAfterFatesEnabled { get; set; } = false;
+    public bool StopAfterMinutesEnabled { get; set; } = false;
 
     public string CombatPresetName { get; set; } = Core.AfgConstants.BundledCombatPresetName;
     public int BundledCombatPresetRevision { get; set; } = 0;
 
     public int MinTimeRemainingSec { get; set; } = 120;
     public int MaxProgressPct { get; set; } = 90;
+
+    public bool MaxDurationFilterEnabled { get; set; } = false;
+    public int MaxFateDurationSec { get; set; } = 900;
+
+    // An absolute level window, independent of the band around the character's own level below.
+    public bool LevelWindowEnabled { get; set; } = false;
+    public int MinFateLevel { get; set; } = 1;
+    public int MaxFateLevel { get; set; } = 100;
 
     // Restricts eligible FATEs to a level band around the character's current level. Off by default;
     // both bounds default to 5 (a modest band on either side) once enabled. The sliders go up to 100
@@ -52,6 +64,9 @@ public sealed class Configuration : IPluginConfiguration
     public int MaxLevelAbove { get; set; } = 5;
 
     public bool SwapZonesWhenEmpty { get; set; } = true;
+    public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
+    // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
+    public bool KeepTwistOfFate { get; set; } = true;
     public bool ShowLivePopout { get; set; } = false;
 
     // Auto-restart on fault, bounded by MaxConsecutiveStateErrors.
@@ -154,6 +169,37 @@ public sealed class Configuration : IPluginConfiguration
 
         LastSeenChangelogVersion = ChangelogData.LatestVersion;
         Save();
+    }
+
+    public bool MigrateGoal()
+    {
+        var changed = false;
+        if (string.IsNullOrEmpty(ModeId))
+        {
+            ModeId = FateGrindModes.IdForLegacy(Mode);
+            StopAfterFatesEnabled |= Mode == GrindMode.RunCount;
+            changed = true;
+        }
+
+        switch (ModeId)
+        {
+            case FateGrindModes.RetiredRunCountId:
+                ModeId = PlainFatesMode.ModeId;
+                StopAfterFatesEnabled = true;
+                changed = true;
+                break;
+            case FateGrindModes.RetiredTimeBoxedId:
+                ModeId = PlainFatesMode.ModeId;
+                StopAfterMinutesEnabled = true;
+                changed = true;
+                break;
+            case FateGrindModes.RetiredEndlessId:
+                ModeId = PlainFatesMode.ModeId;
+                changed = true;
+                break;
+        }
+
+        return changed;
     }
 
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);

@@ -180,7 +180,7 @@ public sealed partial class AutoFate
 
     private async Task TryTeleportShortcut(Vector3 fatePos, uint fateId, string fateName)
     {
-        if (FateScanner.PlayerHasTwistOfFate()) return;
+        if (KeepingTwistOfFate()) return;
         if (Svc.Condition[ConditionFlag.InCombat]) return;
         if (Svc.Objects.LocalPlayer is not { } player) return;
         if (!ZoneAetherytes.TryFindNearest(zone.TerritoryId, fatePos, out var aetheryte)) return;
@@ -359,7 +359,10 @@ public sealed partial class AutoFate
     }
 
     private bool StopConditionMet()
-        => Plugin.Cfg.ActiveMode.IsComplete(new ModeContext { CompletedCount = session.CompletedCount, Zones = zones, Elapsed = session.Elapsed });
+    {
+        var context = new ModeContext { CompletedCount = session.CompletedCount, Zones = zones, Elapsed = session.Elapsed };
+        return Plugin.Cfg.ActiveMode.IsComplete(context) || RunLimits.Reached(Plugin.Cfg, context);
+    }
 
     private bool AdvanceClassQueueIfCapHit()
     {

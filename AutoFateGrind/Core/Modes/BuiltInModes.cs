@@ -1,18 +1,10 @@
+using AutoFateGrind.Core.Game.Items;
 using AutoFateGrind.Core.Game.SharedFates;
 using AutoFateGrind.Core.Game.Yokai;
 using AutoFateGrind.Core.Trading;
+using AutoFateGrind.Core.Zones;
 
 namespace AutoFateGrind.Core.Modes;
-
-public sealed class EndlessMode : IFateGrindMode
-{
-    public const string ModeId = "endless";
-    public string Id => ModeId;
-    public string DisplayName => "Endless Grind";
-    public string Description => "Runs forever, rotating between selected zones, until you press Stop.";
-    public bool IsComplete(ModeContext ctx) => false;
-    public string? GetRemainingDisplay(ModeContext ctx) => null;
-}
 
 public sealed class MaxGemstonesMode : IFateGrindMode
 {
@@ -30,37 +22,14 @@ public sealed class MaxGemstonesMode : IFateGrindMode
     }
 }
 
-public sealed class TimeBoxedMode : IFateGrindMode
+// No target of its own: the run ends on a limit or when the user presses Stop.
+public sealed class PlainFatesMode : IFateGrindMode
 {
-    public const string ModeId = "timeboxed";
+    public const string ModeId = "plainfates";
     public string Id => ModeId;
-    public string DisplayName => "Farm for Time";
-    public string Description => "Runs for a set number of minutes, then stops. Always finishes the FATE in progress first.";
-    public bool IsComplete(ModeContext ctx) => ctx.Elapsed >= TimeSpan.FromMinutes(Math.Max(1, Plugin.Cfg.TargetMinutes));
-
-    public string? GetRemainingDisplay(ModeContext ctx)
-    {
-        var remaining = TimeSpan.FromMinutes(Math.Max(1, Plugin.Cfg.TargetMinutes)) - ctx.Elapsed;
-        if (remaining <= TimeSpan.Zero) return null;
-        return remaining.TotalHours >= 1
-            ? $"{(int)remaining.TotalHours}h {remaining.Minutes:D2}m left"
-            : $"{remaining.Minutes}m {remaining.Seconds:D2}s left";
-    }
-}
-
-public sealed class RunCountMode : IFateGrindMode
-{
-    public const string ModeId = "runcount";
-    public string Id => ModeId;
-    public string DisplayName => "Run N FATEs";
-    public string Description => "Stops after a fixed number of FATE completions across all selected zones.";
-    public bool IsComplete(ModeContext ctx) => ctx.CompletedCount >= Plugin.Cfg.TargetFateCount;
-
-    public string? GetRemainingDisplay(ModeContext ctx)
-    {
-        var remaining = Math.Max(0, Plugin.Cfg.TargetFateCount - ctx.CompletedCount);
-        return remaining > 0 ? $"{remaining} FATEs left" : null;
-    }
+    public string DisplayName => "Just FATEs";
+    public string Description => "Grinds your zones with no target of its own; a FATE or time limit, or Stop, ends the run.";
+    public bool IsComplete(ModeContext ctx) => false;
 }
 
 public sealed class SharedFateRanksMode : IFateGrindMode
@@ -76,6 +45,39 @@ public sealed class SharedFateRanksMode : IFateGrindMode
         var remaining = SharedFateProgress.CountUnmaxed(ctx.Zones);
         return remaining > 0 ? $"{remaining} zone{(remaining == 1 ? "" : "s")} left" : null;
     }
+
+    public bool AcceptsZone(uint territoryId) => SharedFateCatalog.HasRanks(territoryId);
+
+    public bool IsZoneDone(uint territoryId) => SharedFateProgress.IsMaxed(territoryId);
+
+    public string ZoneDoneReason(uint territoryId) => "Shared FATE rank maxed";
+}
+
+internal sealed class ItemGoalMode(ItemGoalDefinition definition) : IFateGrindMode
+{
+    public ItemGoalDefinition Definition => definition;
+    public string Id => definition.ModeId;
+    public string DisplayName => definition.DisplayName;
+    public string Description => "Grinds the zones where the items still drop, moves on once a zone has nothing left to give, and stops when every item is collected.";
+
+    // Losing the drop condition mid-run (quest turned in, relic unequipped) ends the run instead of grinding for nothing.
+    public bool IsComplete(ModeContext ctx) => !ItemGoalProgress.IsAvailable(definition) || ItemGoalProgress.AllCollected(definition, Plugin.Cfg);
+
+    public string? GetRemainingDisplay(ModeContext ctx)
+    {
+        var left = ItemGoalProgress.ItemsLeft(definition, Plugin.Cfg);
+        return left > 0 ? $"{left} item{(left == 1 ? "" : "s")} left" : null;
+    }
+
+    public bool PlansZones => true;
+
+    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => ItemGoalProgress.PlanZones(definition, cfg);
+
+    public bool AcceptsZone(uint territoryId) => ItemGoalProgress.DropsHere(definition, territoryId);
+
+    public bool IsZoneDone(uint territoryId) => ItemGoalProgress.IsZoneDone(definition, territoryId, Plugin.Cfg);
+
+    public string ZoneDoneReason(uint territoryId) => "every item that drops here is collected";
 }
 
 public sealed class YokaiMedalsMode : IFateGrindMode
@@ -91,4 +93,8 @@ public sealed class YokaiMedalsMode : IFateGrindMode
         var (collected, needed) = YokaiProgress.Totals(Plugin.Cfg);
         return collected < needed ? $"{needed - collected} medals left" : null;
     }
+
+    public bool PlansZones => true;
+
+    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => YokaiProgress.ZonesFor(YokaiProgress.ResolveTargetIndex(cfg, 0));
 }

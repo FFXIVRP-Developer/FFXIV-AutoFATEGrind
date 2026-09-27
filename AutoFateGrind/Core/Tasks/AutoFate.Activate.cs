@@ -103,8 +103,9 @@ public sealed partial class AutoFate
             await NextFrame(30);
         }
 
-        Diag($"NPC for FATE {fateId} never spawned within {NpcSpawnTimeoutMs / 1000}s; blacklisting for session");
+        Diag($"NPC for FATE {fateId} never spawned within {NpcSpawnTimeoutMs / 1000}s; skipping it until another FATE completes");
         sessionStuckFateIds.Add(fateId);
+        DeferSkipUntilNextCompletion(fateId);
         return null;
     }
 

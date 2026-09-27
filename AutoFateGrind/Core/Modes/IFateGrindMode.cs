@@ -20,4 +20,17 @@ public interface IFateGrindMode
     bool IsComplete(ModeContext ctx);
 
     string? GetRemainingDisplay(ModeContext ctx) => null;
+
+    // A goal that chooses its own zones replaces the zone library with its own roster.
+    bool PlansZones => false;
+
+    IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => [];
+
+    // A selected zone the goal cannot use is kept in the plan but skipped.
+    bool AcceptsZone(uint territoryId) => true;
+
+    // A zone with nothing left to earn is rotated past, and the run ends once every zone is done.
+    bool IsZoneDone(uint territoryId) => false;
+
+    string ZoneDoneReason(uint territoryId) => "nothing left to earn here";
 }

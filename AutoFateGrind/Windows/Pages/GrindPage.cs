@@ -1,3 +1,4 @@
+using AutoFateGrind.Core.Game.Items;
 using AutoFateGrind.Core.Tasks;
 using AutoFateGrind.Core.Zones;
 using AutoFateGrind.Windows.Sections;
@@ -8,8 +9,6 @@ namespace AutoFateGrind.Windows.Pages;
 internal sealed class GrindPage
 {
     private const float SwitchRevealMs = 320f;
-
-    private bool scrollToLibrary;
 
     public void Draw(Plugin plugin, AppWindow window)
     {
@@ -22,19 +21,25 @@ internal sealed class GrindPage
         else DrawIdle(plugin, window, cfg, ctrl);
     }
 
-    private void DrawIdle(Plugin plugin, AppWindow window, Configuration cfg, AutoFateController ctrl)
+    private static void DrawIdle(Plugin plugin, AppWindow window, Configuration cfg, AutoFateController ctrl)
     {
-        if (Headline.Draw(cfg, ctrl, plugin.History)) window.Show(AppWindow.Page.Plugins);
+        switch (Headline.Draw(cfg, ctrl, plugin.History))
+        {
+            case Headline.Action.OpenPlugins: window.Show(AppWindow.Page.Plugins); break;
+            case Headline.Action.AutoPick: ZoneSelection.AutoPick(cfg); break;
+        }
+
         Styling.VSpace(20f);
 
-        if (PlanCard.Draw(cfg, ctrl)) scrollToLibrary = true;
+        var zoneCount = ZoneSelection.ResolveStartList(cfg).Count;
+        GoalSection.Draw(cfg, ctrl, zoneCount);
         Styling.VSpace(14f);
-        YokaiEventCard.Draw(cfg, ctrl);
+        StopRow.Draw(cfg, ctrl);
         Styling.VSpace(26f);
 
-        if (ZoneSelection.GoalPlansZones(cfg)) YokaiRoster.Draw(cfg, ctrl, scrollToLibrary);
-        else ZoneLibrary.Draw(cfg, ctrl, scrollToLibrary);
-        scrollToLibrary = false;
+        if (ItemGoalCatalog.IsItemGoal(cfg.ActiveMode.Id)) ItemGoalRoster.Draw(cfg, ctrl, false);
+        else if (ZoneSelection.GoalPlansZones(cfg)) YokaiRoster.Draw(cfg, ctrl, false);
+        else ZoneLibrary.Draw(cfg, ctrl, false);
         Styling.VSpace(12f);
     }
 }

@@ -40,10 +40,6 @@ public sealed partial class AutoFate
         }
     }
 
-    private bool SharedFateZoneMaxed() => SharedFateGoal && SharedFateProgress.IsMaxed(zone.TerritoryId);
-
-    private bool SharedFateZoneMaxedAt(int candidateIndex) => SharedFateGoal && SharedFateProgress.IsMaxed(zones[candidateIndex].TerritoryId);
-
     private void NoteSharedFateCompletion()
     {
         if (!SharedFateGoal)
@@ -53,32 +49,6 @@ public sealed partial class AutoFate
 
         SharedFateProgress.NoteCompletion(zone.TerritoryId);
         Diag($"Shared FATE rank after this FATE: {SharedFateProgress.Describe(zone)}");
-    }
-
-    private async Task<ExitReason> LeaveMaxedSharedFateZone()
-    {
-        var done = zone;
-        Status = $"{done.Name} is maxed; moving on";
-        await HoldForCollectReward();
-        await WaitOutSettle();
-        await ClearBlockingCombat();
-        if (CancelToken.IsCancellationRequested)
-        {
-            return ExitReason.Quit;
-        }
-
-        if (AdvanceZone())
-        {
-            Diag($"Shared FATE rank in {done.Name} is maxed; moving on to {zone.Name}");
-            Svc.Chat.Print($"[AFG] {done.Name}: Shared FATE rank maxed. Moving on to {zone.Name}.");
-            return ExitReason.Continue;
-        }
-
-        Diag($"Shared FATE rank in {done.Name} is maxed and no other reachable zone is left; ending the run ({SharedFateProgress.Describe(zones)})");
-        Svc.Chat.Print($"[AFG] {done.Name}: Shared FATE rank maxed, and no other reachable zone is left in the plan.");
-        Status = "Every reachable zone is maxed";
-        session.CompletedByStopCondition = true;
-        return ExitReason.Quit;
     }
 
     private string SharedFateHeartbeat() => SharedFateGoal ? $" rank={SharedFateProgress.Describe(zone)}" : string.Empty;

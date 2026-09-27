@@ -146,7 +146,7 @@ internal static class HeaderBar
         {
             var zones = ZoneSelection.ResolveStartList(cfg).Count;
             if (zones == 0) return;
-            var plan = Loc.T(L.Grind.StartSub, Loc.Plural(L.Grind.ZonesCount, zones), ReadyState.StopSummary(cfg));
+            var plan = GoalSummary.StartSub(cfg, zones);
             using (Fonts.PushCaption())
             {
                 var planSize = TextDraw.Measure(plan);

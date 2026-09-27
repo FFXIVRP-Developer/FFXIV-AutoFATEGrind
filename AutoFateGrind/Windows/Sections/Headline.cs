@@ -11,11 +11,13 @@ namespace AutoFateGrind.Windows.Sections;
 
 internal static class Headline
 {
+    public enum Action { None, OpenPlugins, AutoPick }
+
     private const float GreetingGap = 8f;
     private const float DetailGap = 6f;
     private const float RightGap = 18f;
 
-    public static bool Draw(Configuration cfg, AutoFateController ctrl, RunHistory history)
+    public static Action Draw(Configuration cfg, AutoFateController ctrl, RunHistory history)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var info = ReadyState.Resolve(cfg, ctrl);
@@ -40,7 +42,7 @@ internal static class Headline
         var blockHeight = titleHeight + DetailGap * scale + detailHeight;
         var blockMidY = y + blockHeight * 0.5f;
 
-        var rightWidth = DrawRightColumn(info, history, origin.X + width, blockMidY, out var openPlugins);
+        var rightWidth = DrawRightColumn(info, history, origin.X + width, blockMidY, out var action);
         var maxTextWidth = width - rightWidth - RightGap * scale;
 
         using (Fonts.PushTitle())
@@ -51,7 +53,7 @@ internal static class Headline
 
         ImGui.SetCursorScreenPos(origin);
         ImGui.Dummy(new Vector2(width, y - origin.Y));
-        return openPlugins;
+        return action;
     }
 
     private static (FontAwesomeIcon Icon, Vector4 Color, string Greeting) Greeting() => DateTime.Now.Hour switch
@@ -62,10 +64,10 @@ internal static class Headline
         _              => (FontAwesomeIcon.Moon,      Styling.AccentBlue,       Loc.T(L.Shell.GreetingNight)),
     };
 
-    private static float DrawRightColumn(ReadyState.Info info, RunHistory history, float rightX, float midY, out bool openPlugins)
+    private static float DrawRightColumn(ReadyState.Info info, RunHistory history, float rightX, float midY, out Action action)
     {
         var scale = ImGuiHelpers.GlobalScale;
-        openPlugins = false;
+        action = Action.None;
 
         if (info.Kind == ReadyState.Kind.SetupNeeded)
         {
@@ -73,7 +75,30 @@ internal static class Headline
             var label = Loc.T(L.Grind.OpenPlugins);
             var buttonWidth = PillButton.Width(label, FontAwesomeIcon.Plug);
             ImGui.SetCursorScreenPos(new Vector2(rightX - buttonWidth, midY - buttonHeight * scale * 0.5f));
-            openPlugins = PillButton.Draw("##afg_open_plugins", label, Styling.AccentRose, PillButton.Emphasis.Tinted, FontAwesomeIcon.Plug, height: buttonHeight);
+            if (PillButton.Draw("##afg_open_plugins", label, Styling.AccentRose, PillButton.Emphasis.Tinted, FontAwesomeIcon.Plug, height: buttonHeight))
+            {
+                action = Action.OpenPlugins;
+            }
+
+            return buttonWidth;
+        }
+
+        if (info.Kind == ReadyState.Kind.PickZones)
+        {
+            const float buttonHeight = 30f;
+            var label = Loc.T(L.Grind.PickForMe);
+            var buttonWidth = PillButton.Width(label, FontAwesomeIcon.WandMagicSparkles);
+            ImGui.SetCursorScreenPos(new Vector2(rightX - buttonWidth, midY - buttonHeight * scale * 0.5f));
+            if (PillButton.Draw("##afg_auto_pick", label, Styling.AccentViolet, PillButton.Emphasis.Tinted, FontAwesomeIcon.WandMagicSparkles, height: buttonHeight))
+            {
+                action = Action.AutoPick;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                Tooltip.Show(Loc.T(L.Grind.PickForMeHint));
+            }
+
             return buttonWidth;
         }
 

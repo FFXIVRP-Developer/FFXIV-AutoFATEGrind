@@ -66,8 +66,9 @@ public sealed partial class AutoFate
 
         if (lastTeleportedFateId == fate.Id && moveResult is not MoveStopReason.None and not MoveStopReason.NpcSpawned)
         {
-            Diag($"Still stuck after teleport recovery for FATE {fate.Id} ({fate.Name}); blacklisting for this session");
+            Diag($"Still stuck after teleport recovery for FATE {fate.Id} ({fate.Name}); skipping it until another FATE completes");
             sessionStuckFateIds.Add(fate.Id);
+            DeferSkipUntilNextCompletion(fate.Id);
             lastTeleportedFateId = null;
             lastStuckFateId = null;
             consecutiveStuckRetries = 0;
@@ -107,10 +108,11 @@ public sealed partial class AutoFate
                 return ExitReason.Continue;
             }
             sessionStuckFateIds.Add(fate.Id);
+            DeferSkipUntilNextCompletion(fate.Id);
             lastTeleportedFateId = null;
             lastStuckFateId = null;
             consecutiveStuckRetries = 0;
-            Diag($"Teleport recovery failed for FATE {fate.Id}; blacklisting for this session");
+            Diag($"Teleport recovery failed for FATE {fate.Id}; skipping it until another FATE completes");
             return ExitReason.Continue;
         }
 
@@ -291,6 +293,7 @@ public sealed partial class AutoFate
             session.UpdateExp();
             YokaiProgress.Invalidate();
             NoteSharedFateCompletion();
+            ReleaseDeferredSkips();
             Diag($"FATE {fateId} done (session total: {session.CompletedCount}, wallet {session.GemstoneCurrent}g)");
             LogYokaiDropState();
             StartFollowUpWatch(fateId);
@@ -314,6 +317,8 @@ public sealed partial class AutoFate
     // add keeps the character in combat, so the grind fights free before it quits.
     private bool QueueHandoffIfDue()
     {
+        if (session.StopWhenSafe) return false;
+
         if (Plugin.Cfg.AutoRepair && RepairOps.NeedsRepair(Plugin.Cfg.AutoRepairThresholdPct))
         {
             Diag($"Repair threshold tripped (lowest equipped at {RepairOps.LowestEquippedConditionPct():F0}% ≤ {Plugin.Cfg.AutoRepairThresholdPct}%); queueing repair hand-off.");

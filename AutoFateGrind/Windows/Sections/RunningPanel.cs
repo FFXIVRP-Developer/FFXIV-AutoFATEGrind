@@ -103,14 +103,14 @@ internal static class RunningPanel
         {
             using (Fonts.PushHeadline())
             {
-                var name = TextDraw.Truncate($"L{fate!.Level}   {fate.Name}", columnWidth);
+                var name = TextDraw.Truncate(FateNameFormatter.Format(fate!), columnWidth);
                 var nameSize = TextDraw.Measure(name);
                 TextDraw.At(name, new Vector2(columnX, y), Styling.TextStrong);
                 y += nameSize.Y + 9f * scale;
             }
 
             var barHeight = 10f * scale;
-            var progress = Motion.Approach(Motion.Key("##afg_fate_progress"), fate.Progress / 100f, 10f);
+            var progress = Motion.Approach(Motion.Key("##afg_fate_progress"), fate!.Progress / 100f, 10f);
             Paint.Bar(dl, new Vector2(columnX, y), columnWidth, barHeight, progress, accent);
             y += barHeight + 8f * scale;
 
@@ -297,7 +297,7 @@ internal static class RunningPanel
         }
 
         var nameX = origin.X + padX + iconSize.X + 10f * scale;
-        var name = TextDraw.Truncate($"L{fate.Level}   {fate.Name}", end.X - padX - metaSize.X - 12f * scale - nameX);
+        var name = TextDraw.Truncate(FateNameFormatter.Format(fate), end.X - padX - metaSize.X - 12f * scale - nameX);
         TextDraw.At(name, new Vector2(nameX, topY), emphasize ? Styling.TextStrong : Styling.TextSecondary);
 
         Paint.Bar(dl, new Vector2(origin.X + padX, end.Y - 13f * scale), size.X - padX * 2f, Layout.QueueBarHeight * scale, fate.Progress / 100f, accent);

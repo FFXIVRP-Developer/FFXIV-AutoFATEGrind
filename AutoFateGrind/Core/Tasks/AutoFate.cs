@@ -136,8 +136,9 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         WrongZone,            // Not in target territory.
         SwapZone,             // Rotate to next selected zone when the current one stays empty.
         AllDone,              // Stop condition met; return cleanly.
+        SoftStop,             // The user asked to stop once the current FATE is over; wrap up and return.
         YokaiAdvance,         // The yo-kai being farmed is done; hand off so the controller plans the next one.
-        SharedFateZoneDone,   // This zone's Shared FATE rank is maxed; rotate to the next zone that still has ranks to earn.
+        GoalZoneDone,         // The goal has nothing left to earn in this zone; rotate to the next zone that still has some.
         Unconscious,          // Player KO'd, run revive.
         WaitingForFollowUp,   // Just finished a chain parent; hold briefly for sequel.
         WaitingForCollectReward, // Nothing left to pick here, but a finished Collect FATE still owes its reward.
@@ -240,16 +241,20 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 case GrindState.AllDone:
                     Status = "Stop condition met";
                     Diag("Stop condition met; exiting");
-                    ReportYokaiGoalMet();
+                    ReportGoalMet();
                     session.CompletedByStopCondition = true;
+                    return;
+
+                case GrindState.SoftStop:
+                    await FinishSoftStop();
                     return;
 
                 case GrindState.YokaiAdvance:
                     await HandOffToNextYokai();
                     return;
 
-                case GrindState.SharedFateZoneDone:
-                    if (await LeaveMaxedSharedFateZone() is ExitReason.Quit) return;
+                case GrindState.GoalZoneDone:
+                    if (await LeaveDoneZone() is ExitReason.Quit) return;
                     break;
 
                 case GrindState.Unconscious:
@@ -383,14 +388,17 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             return GrindState.Unconscious;
         }
 
+        if (session.StopWhenSafe && SoftStopReady())
+            return GrindState.SoftStop;
+
         if (StopConditionMet())
             return GrindState.AllDone;
 
         if (YokaiTargetChanged())
             return GrindState.YokaiAdvance;
 
-        if (SharedFateZoneMaxed())
-            return GrindState.SharedFateZoneDone;
+        if (!KeepingTwistOfFate() && GoalZoneDone())
+            return GrindState.GoalZoneDone;
 
         if (Svc.ClientState.TerritoryType != zone.TerritoryId)
             return GrindState.WrongZone;
@@ -454,7 +462,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(IdleWaitBeforeSwapMs);
         }
 
-        if (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1
+        if (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !KeepingTwistOfFate()
          && Environment.TickCount64 - zoneIdleSinceMs >= zoneIdleWaitMs)
             return GrindState.SwapZone;
 
@@ -546,10 +554,11 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         {
             var candidateIndex = (zoneIndex + step) % zones.Count;
             if (session.UnreachableZoneIds.Contains(zones[candidateIndex].TerritoryId)) continue;
-            if (SharedFateZoneMaxedAt(candidateIndex)) continue;
+            if (GoalZoneDoneAt(candidateIndex)) continue;
 
             zoneIndex = candidateIndex;
             sessionStuckFateIds.Clear();
+            retryAfterCompletionIds.Clear();
             lastStuckFateId = null;
             consecutiveStuckRetries = 0;
             lastTeleportedFateId = null;
@@ -561,10 +570,12 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private async Task TickIdleScan()
     {
         await EnsureConsumables();
-        var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1;
+        var keepingTwist = KeepingTwistOfFate();
+        var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !keepingTwist;
         var remainingSec = Math.Max(0L, zoneIdleWaitMs - (Environment.TickCount64 - zoneIdleSinceMs)) / 1000;
         Status = swapPending
             ? $"Waiting for FATEs in {zone.Name} (swapping in {remainingSec}s)"
+            : keepingTwist ? $"Waiting for FATEs in {zone.Name} (keeping Twist of Fate)"
             : $"Waiting for FATEs in {zone.Name}";
         await DelayMs(IdleScanIntervalMs);
     }

@@ -1,9 +1,11 @@
 using AutoFateGrind.Core.Game.Fates;
+using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Tasks;
 using AutoFateGrind.Windows.Components;
 using clib.Utils;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
@@ -19,6 +21,7 @@ public sealed class LiveFateWindow : Window, IDisposable
     private const float HeaderHeight = 30f;
     private const float RowHeight = 26f;
     private const int QueueLength = 3;
+    private const int SkippedLength = 3;
 
     private readonly Plugin plugin;
     private IDisposable? chrome;
@@ -133,7 +136,7 @@ public sealed class LiveFateWindow : Window, IDisposable
         using (Fonts.PushHeadline())
         {
             var starWidth = fate.HasBonus ? TextDraw.IconSize(FontAwesomeIcon.Star).X + 8f * scale : 0f;
-            var name = TextDraw.Truncate($"L{fate.Level}   {fate.Name}", width - buttonSize - 8f * scale - starWidth);
+            var name = TextDraw.Truncate(FateNameFormatter.Format(fate), width - buttonSize - 8f * scale - starWidth);
             var nameSize = TextDraw.Measure(name);
             TextDraw.At(name, new Vector2(origin.X, y), Styling.TextStrong);
             if (fate.HasBonus)
@@ -198,35 +201,51 @@ public sealed class LiveFateWindow : Window, IDisposable
         }
 
         var current = PublicEvent.CurrentFate;
-        var eligible = (PublicEvent.Fates ?? Enumerable.Empty<PublicEvent>())
+        var others = (PublicEvent.Fates ?? Enumerable.Empty<PublicEvent>())
             .Where(f => current is null || f.Id != current.Id)
-            .Where(f => FateScanner.IsEligible(f, cfg, null));
-        var fates = FateScanner.ApplySort(eligible, cfg.FateSortOrder, player.Position)
+            .ToList();
+        var eligible = FateScanner.ApplySort(others.Where(f => FateScanner.IsEligible(f, cfg, null)), cfg.FateSortOrder, player.Position)
             .Take(QueueLength)
             .ToArray();
+        var skipped = others.Where(f => !FateScanner.IsEligible(f, cfg, null)).Take(SkippedLength).ToArray();
 
-        if (fates.Length == 0)
+        if (eligible.Length == 0 && skipped.Length == 0)
         {
             Hint(Loc.T(L.Live.NoOtherFates), width);
             return;
         }
 
-        for (var index = 0; index < fates.Length; index++)
+        var idle = !plugin.Controller.Running;
+        for (var index = 0; index < eligible.Length; index++)
         {
-            DrawCompactRow(fates[index], width);
+            DrawCompactRow(eligible[index], width, FateExclusion.None, idle);
+        }
+
+        for (var index = 0; index < skipped.Length; index++)
+        {
+            DrawCompactRow(skipped[index], width, FateScanner.Ineligibility(skipped[index], cfg, null), idle);
         }
     }
 
-    private static void DrawCompactRow(PublicEvent fate, float width)
+    private static void DrawCompactRow(PublicEvent fate, float width, FateExclusion reason, bool idle)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var height = RowHeight * scale;
         var origin = ImGui.GetCursorScreenPos();
         var midY = origin.Y + height * 0.5f;
         var buttonSize = 22f * scale;
+        var passedOver = reason != FateExclusion.None;
 
-        var icon = fate.HasBonus ? FontAwesomeIcon.Star : FontAwesomeIcon.Bolt;
-        var iconColor = fate.HasBonus ? Styling.AccentAmber : Styling.TextDim;
+        ImGui.PushID((nint)fate.Id);
+        var hit = Hit.Area("##row", new Vector2(width - buttonSize - 6f * scale, height), idle);
+        ImGui.PopID();
+        if (hit.Clicked)
+        {
+            WalkTo(fate);
+        }
+
+        var icon = passedOver ? FontAwesomeIcon.Minus : fate.HasBonus ? FontAwesomeIcon.Star : FontAwesomeIcon.Bolt;
+        var iconColor = passedOver ? Styling.TextMuted : fate.HasBonus ? Styling.AccentAmber : Styling.TextDim;
         var iconSize = TextDraw.IconSize(icon);
         TextDraw.Icon(icon, new Vector2(origin.X, midY - iconSize.Y * 0.5f), iconColor);
 
@@ -245,16 +264,57 @@ public sealed class LiveFateWindow : Window, IDisposable
         {
             meta = Loc.T(L.Live.QueueMeta, fate.Progress, Formatting.Time(FateClock.Remaining(fate)));
             metaSize = TextDraw.Measure(meta);
-            TextDraw.At(meta, new Vector2(origin.X + width - buttonSize - 8f * scale - metaSize.X, midY - metaSize.Y * 0.5f), Styling.TextDim);
+            TextDraw.At(meta, new Vector2(origin.X + width - buttonSize - 8f * scale - metaSize.X, midY - metaSize.Y * 0.5f), passedOver ? Styling.TextMuted : Styling.TextDim);
         }
 
         var nameX = origin.X + iconSize.X + 8f * scale;
-        var name = TextDraw.Truncate($"L{fate.Level} {fate.Name}", origin.X + width - buttonSize - 14f * scale - metaSize.X - nameX);
+        var name = TextDraw.Truncate(FateNameFormatter.Format(fate), origin.X + width - buttonSize - 14f * scale - metaSize.X - nameX);
         var nameSize = TextDraw.Measure(name);
-        TextDraw.At(name, new Vector2(nameX, midY - nameSize.Y * 0.5f), Styling.TextSecondary);
+        TextDraw.At(name, new Vector2(nameX, midY - nameSize.Y * 0.5f), passedOver ? Styling.TextMuted : Styling.TextSecondary);
+
+        if (hit.Hovered || (Hit.HoveringRect(origin, new Vector2(origin.X + width - buttonSize - 6f * scale, origin.Y + height)) && !idle))
+        {
+            Tooltip.Show(RowTooltip(reason, idle));
+        }
 
         ImGui.SetCursorScreenPos(origin);
         ImGui.Dummy(new Vector2(width, height));
+    }
+
+    private static string RowTooltip(FateExclusion reason, bool idle)
+    {
+        var title = reason == FateExclusion.None ? Loc.T(L.Live.EligibleTitle) : Loc.T(L.Live.ReasonTitle, ReasonText(reason));
+        return idle ? string.Concat(title, "\n", Loc.T(L.Live.WalkHint)) : title;
+    }
+
+    private static string ReasonText(FateExclusion reason) => reason switch
+    {
+        FateExclusion.Blacklisted        => Loc.T(L.Live.ReasonBlacklisted),
+        FateExclusion.SessionStuck       => Loc.T(L.Live.ReasonSessionStuck),
+        FateExclusion.SkippedRule        => Loc.T(L.Live.ReasonSkippedRule),
+        FateExclusion.OutsideLevelBand   => Loc.T(L.Live.ReasonLevelBand),
+        FateExclusion.OutsideLevelWindow => Loc.T(L.Live.ReasonLevelWindow),
+        FateExclusion.TooLong            => Loc.T(L.Live.ReasonTooLong),
+        FateExclusion.NotStarted         => Loc.T(L.Live.ReasonNotStarted),
+        FateExclusion.TooLittleTime      => Loc.T(L.Live.ReasonTooLittleTime),
+        FateExclusion.TooMuchProgress    => Loc.T(L.Live.ReasonTooMuchProgress),
+        FateExclusion.Finished           => Loc.T(L.Live.ReasonFinished),
+        FateExclusion.NotOnMap           => Loc.T(L.Live.ReasonNotOnMap),
+        _                                => string.Empty,
+    };
+
+    // A second click stops the walk; the grind never uses this path, so it stays a manual convenience.
+    private static void WalkTo(PublicEvent fate)
+    {
+        var nav = NavmeshIPC.Instance;
+        if (nav.IsRunning())
+        {
+            nav.Stop();
+            return;
+        }
+
+        var destination = nav.NearestPointReachable(fate.Position) ?? fate.Position;
+        nav.PathfindAndMoveTo(destination, Svc.Condition[ConditionFlag.InFlight]);
     }
 
     private static void DrawSession(AutoFateController controller, float width)

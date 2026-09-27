@@ -13,6 +13,10 @@ namespace AutoFateGrind.Windows.Sections.Config;
 
 internal static class FilterSettings
 {
+    private const int MaxDurationMinSec = 60;
+    private const int MaxDurationMaxSec = 1800;
+    private const int MaxLevel = 100;
+
     public static void Draw(Configuration cfg)
     {
         DrawEligibilityGroup(cfg);
@@ -36,6 +40,56 @@ internal static class FilterSettings
             SettingsControls.RowSliderWidth,
             () => SettingsControls.DrawIntSlider(cfg, "##filt_maxprog",
                 () => cfg.MaxProgressPct, v => cfg.MaxProgressPct = v, 50, 99, "%d%%"));
+
+        SettingsRow.Draw(Loc.T(L.Settings.MaxDuration),
+            Loc.T(L.Settings.MaxDurationHelp),
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.MaxDurationFilterEnabled, v => cfg.MaxDurationFilterEnabled = v, "##filt_dur_on"),
+            SettingsRow.ToggleHeight);
+
+        using (Motion.PushSwitch("##filt_dur_body", cfg.MaxDurationFilterEnabled))
+        {
+            if (cfg.MaxDurationFilterEnabled)
+            {
+                SettingsRow.Draw(Loc.T(L.Settings.MaxDurationLimit),
+                    Loc.T(L.Settings.MaxDurationLimitHelp),
+                    SettingsControls.RowSliderWidth,
+                    () => SettingsControls.DrawIntSlider(cfg, "##filt_dur",
+                        () => cfg.MaxFateDurationSec, v => cfg.MaxFateDurationSec = v, MaxDurationMinSec, MaxDurationMaxSec, Loc.T(L.Settings.MinTimeFormat)));
+            }
+            else
+            {
+                SettingsRow.Note(Loc.T(L.Settings.MaxDurationOff));
+            }
+        }
+
+        SettingsRow.Draw(Loc.T(L.Settings.LevelWindow),
+            Loc.T(L.Settings.LevelWindowHelp),
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.LevelWindowEnabled, v => cfg.LevelWindowEnabled = v, "##filt_win_on"),
+            SettingsRow.ToggleHeight);
+
+        using (Motion.PushSwitch("##filt_win_body", cfg.LevelWindowEnabled))
+        {
+            if (cfg.LevelWindowEnabled)
+            {
+                SettingsRow.Draw(Loc.T(L.Settings.LevelLowest),
+                    Loc.T(L.Settings.LevelLowestHelp),
+                    SettingsControls.RowSliderWidth,
+                    () => SettingsControls.DrawIntSlider(cfg, "##filt_win_min",
+                        () => cfg.MinFateLevel, v => { cfg.MinFateLevel = v; if (cfg.MaxFateLevel < v) cfg.MaxFateLevel = v; }, 1, MaxLevel, Loc.T(L.Settings.LevelFormat)));
+
+                SettingsRow.Draw(Loc.T(L.Settings.LevelHighest),
+                    Loc.T(L.Settings.LevelHighestHelp),
+                    SettingsControls.RowSliderWidth,
+                    () => SettingsControls.DrawIntSlider(cfg, "##filt_win_max",
+                        () => cfg.MaxFateLevel, v => { cfg.MaxFateLevel = v; if (cfg.MinFateLevel > v) cfg.MinFateLevel = v; }, 1, MaxLevel, Loc.T(L.Settings.LevelFormat)));
+            }
+            else
+            {
+                SettingsRow.Note(Loc.T(L.Settings.LevelWindowOff));
+            }
+        }
 
         SettingsRow.Draw(Loc.T(L.Settings.LevelRange),
             Loc.T(L.Settings.LevelRangeHelp),

@@ -96,6 +96,7 @@ public sealed class AutoFateSession
     public ZoneInfo? PendingHumanizeFromZone;
     public uint YokaiTargetMinionId;
     public bool PendingYokaiAdvance;
+    public bool StopWhenSafe;
 
     public int FatesBeforeNextBreak(int configured)
     {

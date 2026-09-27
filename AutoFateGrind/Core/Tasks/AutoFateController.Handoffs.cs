@@ -43,6 +43,13 @@ internal sealed partial class AutoFateController
             return;
         }
 
+        if (owningSession.StopWhenSafe)
+        {
+            Diag("Soft stop: the grind task ended and no hand-off runs. Run ends.");
+            EndRun(owningSession);
+            return;
+        }
+
         if (owningSession.PendingYokaiAdvance)
         {
             owningSession.PendingYokaiAdvance = false;

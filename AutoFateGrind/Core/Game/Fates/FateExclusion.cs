@@ -7,4 +7,11 @@ internal enum FateExclusion : byte
     SessionStuck,
     SkippedRule,
     OutsideLevelBand,
+    OutsideLevelWindow,
+    TooLong,
+    NotStarted,
+    TooLittleTime,
+    TooMuchProgress,
+    Finished,
+    NotOnMap,
 }

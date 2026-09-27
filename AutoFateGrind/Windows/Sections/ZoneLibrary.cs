@@ -42,6 +42,8 @@ internal static class ZoneLibrary
         RefreshGroups();
         DrawHeader(scrollIntoView);
         Styling.VSpace(10f);
+        DrawOrder(cfg, ctrl);
+        Styling.VSpace(12f);
 
         var searching = searchQuery.Length > 0;
         if (!searching) DrawExpansionPicker();
@@ -58,6 +60,16 @@ internal static class ZoneLibrary
         var zones = groups[currentExpansion];
         DrawSummaryRow(cfg, ctrl, zones);
         DrawGrid(cfg, ctrl, zones, showExpansion: false);
+    }
+
+    private static void DrawOrder(Configuration cfg, AutoFateController ctrl)
+    {
+        using var spacing = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(6f, 6f) * ImGuiHelpers.GlobalScale);
+        ImGui.PushID("##afg_plan_chips");
+        ImGui.BeginGroup();
+        QueueStrip.Draw(cfg, ctrl);
+        ImGui.EndGroup();
+        ImGui.PopID();
     }
 
     private static void DrawExpansionPicker()

@@ -48,8 +48,16 @@ internal static class ActionDock
 
         var session = ctrl.SessionSnapshot;
         var state = ctrl.Paused ? Loc.T(L.Grind.StatePaused) : Loc.T(L.Grind.StateRunning);
-        var stopSub = session is null ? state : Loc.T(L.Grind.StopSub, state, Formatting.Elapsed(session.Elapsed));
-        if (StopButton.Draw(stopSub, half)) ctrl.Stop();
+        var stopSub = ctrl.StopPending ? Loc.T(L.Grind.StopAfterFate)
+            : session is null ? state
+            : Loc.T(L.Grind.StopSub, state, Formatting.Elapsed(session.Elapsed));
+        if (StopButton.Draw(stopSub, half))
+        {
+            if (ImGui.GetIO().KeyCtrl && !ctrl.StopPending) ctrl.StopWhenSafe();
+            else ctrl.Stop();
+        }
+
+        if (ImGui.IsItemHovered()) Tooltip.Show(Loc.T(ctrl.StopPending ? L.Grind.StopNowHint : L.Grind.StopSoftHint));
     }
 
     private static void DrawStart(Plugin plugin, float innerWidth)
@@ -62,16 +70,30 @@ internal static class ActionDock
         var ranked = ZoneSelection.GoalNeedsRankedZones(cfg);
         var watchMissing = yokai && !YokaiOps.OwnsWatch();
         var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);
-        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed;
+        var itemReason = ItemGoalReason(cfg);
+        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null;
         var reason = !depsOk ? Loc.T(L.Grind.ReasonInstall)
             : watchMissing ? Loc.T(L.Grind.ReasonNoWatch)
             : ranksMaxed ? Loc.T(L.Grind.ReasonRanksMaxed)
+            : itemReason is not null ? itemReason
             : startList.Count > 0 ? string.Empty
             : yokai ? Loc.T(L.Grind.ReasonNoYokai)
             : ranked ? Loc.T(L.Grind.ReasonNoRankedZones)
             : Loc.T(L.Grind.ReasonPickZone);
-        var sub = Loc.T(L.Grind.StartSub, Loc.Plural(L.Grind.ZonesCount, startList.Count), ReadyState.StopSummary(cfg));
+        var sub = GoalSummary.StartSub(cfg, startList.Count);
 
         if (StartButton.Draw(sub, canStart, reason, innerWidth)) ctrl.RunAll(startList);
+    }
+
+    private static string? ItemGoalReason(Configuration cfg)
+    {
+        if (Core.Game.Items.ItemGoalCatalog.Find(cfg.ActiveMode.Id) is not { } goal) return null;
+        return Core.Game.Items.ItemGoalProgress.Blocker(goal, cfg) switch
+        {
+            Core.Game.Items.ItemGoalBlocker.NeedQuest => Loc.T(L.Grind.ReasonNeedQuest),
+            Core.Game.Items.ItemGoalBlocker.NeedZenith => Loc.T(L.Grind.ReasonNeedZenith),
+            Core.Game.Items.ItemGoalBlocker.AllCollected => Loc.T(L.Grind.ReasonAllCollected),
+            _ => null,
+        };
     }
 }
