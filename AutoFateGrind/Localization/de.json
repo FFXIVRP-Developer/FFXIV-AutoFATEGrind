@@ -385,6 +385,8 @@
   "changelog.new": "Neu",
   "changelog.changes.one": "{0} Änderung",
   "changelog.changes.other": "{0} Änderungen",
+  "changelog.r21500.1": "Behoben: Relikt-Ziele verlangten die Yo-kai Watch, bevor sie starteten",
+  "changelog.r21500.2": "Behoben: Ein Relikt-Lauf konnte auf einem Charakter mit einem Yo-kai-Begleiter mittendrin zu den Yo-kai-Medaillen-Gebieten wechseln",
   "changelog.r21400.1": "Überarbeitet: Die Grind-Seite hat jetzt einen Ziel-Bereich mit den Reitern Farmen, Ränge, Relikte und Events, einen Live-Status auf jeder Zielkarte und zwei einfache Fragen dazu, wie lange gelaufen wird und was danach passiert",
   "changelog.r21400.2": "Hinzugefügt: Das Ziel FATE-Fortschritt grindet jedes Gebiet bis zum Maximalrang und zieht dann weiter; der Rang steht auf jeder Gebietskarte ab Shadowbringers",
   "changelog.r21400.3": "Hinzugefügt: Sechs Relikt- und Gegenstandsziele: Atma, leuchtende Kristalle, Erinnerungen der Sterbenden, Erinnerungen für Law's Order, Demiatma und Kristallpaste",

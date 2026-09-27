@@ -385,6 +385,8 @@
   "changelog.new": "New",
   "changelog.changes.one": "{0} change",
   "changelog.changes.other": "{0} changes",
+  "changelog.r21500.1": "Fixed the Relic goals asking for the Yo-kai Watch before they would start",
+  "changelog.r21500.2": "Fixed a Relic run being able to switch to the yo-kai medal zones partway through on a character that owns a yo-kai minion",
   "changelog.r21400.1": "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards",
   "changelog.r21400.2": "Added the Shared FATE ranks goal: grinds each zone until its rank is maxed, then moves on, with the rank shown on every Shadowbringers and later zone card",
   "changelog.r21400.3": "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste",

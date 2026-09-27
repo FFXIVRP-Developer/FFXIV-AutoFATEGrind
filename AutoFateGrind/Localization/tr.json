@@ -385,6 +385,8 @@
   "changelog.new": "Yeni",
   "changelog.changes.one": "{0} değişiklik",
   "changelog.changes.other": "{0} değişiklik",
+  "changelog.r21500.1": "Düzeltildi: Kutsal emanet hedefleri başlamadan önce Yo-kai Watch istiyordu",
+  "changelog.r21500.2": "Düzeltildi: Yo-kai minyonu olan bir karakterde kutsal emanet koşusu yarı yolda yo-kai madalya bölgelerine geçebiliyordu",
   "changelog.r21400.1": "Yenilendi: Kasma sayfasında Kasma, Rütbeler, Kutsal emanetler ve Etkinlikler sekmeli bir Hedef bölümü, her hedef kartında canlı durum ve ne kadar çalışılacağı ile sonrasında ne yapılacağına dair iki basit soru var",
   "changelog.r21400.2": "Eklendi: Shared FATE rütbeleri hedefi her bölgeyi rütbesi maksimuma ulaşana kadar kasıp sonra devam eder; rütbe Shadowbringers ve sonrası her bölge kartında gösterilir",
   "changelog.r21400.3": "Eklendi: Altı kutsal emanet ve eşya hedefi: Atma, parlak kristaller, ölmekte olanların anıları, Law's Order anıları, Demiatma ve kristal macunu",

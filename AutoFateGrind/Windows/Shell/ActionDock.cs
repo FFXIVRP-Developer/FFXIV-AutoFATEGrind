@@ -66,7 +66,7 @@ internal static class ActionDock
         var ctrl = plugin.Controller;
         var startList = ZoneSelection.ResolveStartList(cfg);
         var depsOk = ExternalPlugins.AllRequiredInstalled();
-        var yokai = ZoneSelection.GoalPlansZones(cfg);
+        var yokai = ZoneSelection.IsYokaiGoal(cfg);
         var ranked = ZoneSelection.GoalNeedsRankedZones(cfg);
         var watchMissing = yokai && !YokaiOps.OwnsWatch();
         var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);

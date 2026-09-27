@@ -57,7 +57,7 @@ internal static class ReadyState
         }
 
         var zones = ZoneSelection.ResolveStartList(cfg);
-        if (zones.Count == 0 && ZoneSelection.GoalPlansZones(cfg))
+        if (zones.Count == 0 && ZoneSelection.IsYokaiGoal(cfg))
         {
             return new Info(Kind.NothingToFarm, Styling.AccentAmber, Styling.AccentAmberSoft, FontAwesomeIcon.Ghost,
                 Loc.T(L.Grind.TitleNoYokai), Loc.T(L.Grind.DetailNoYokai));

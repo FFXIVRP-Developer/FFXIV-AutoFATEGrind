@@ -8,6 +8,8 @@ internal static class ZoneSelection
 
     public static bool GoalNeedsRankedZones(Configuration cfg) => cfg.ActiveMode.Id == SharedFateRanksMode.ModeId;
 
+    public static bool IsYokaiGoal(Configuration cfg) => cfg.ActiveMode.Id == YokaiMedalsMode.ModeId;
+
     public static bool IsSkippedByGoal(Configuration cfg, uint territoryId) => !cfg.ActiveMode.AcceptsZone(territoryId);
 
     public static IReadOnlyList<ZoneInfo> ResolveStartList(Configuration cfg)

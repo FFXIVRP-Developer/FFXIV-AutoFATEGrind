@@ -385,6 +385,8 @@
   "changelog.new": "Novo",
   "changelog.changes.one": "{0} mudança",
   "changelog.changes.other": "{0} mudanças",
+  "changelog.r21500.1": "Corrigido: as metas de relíquias pediam o Yo-kai Watch antes de começar",
+  "changelog.r21500.2": "Corrigido: uma sessão de relíquias podia trocar no meio do caminho para as zonas de medalhas yo-kai em um personagem com um mascote yo-kai",
   "changelog.r21400.1": "Reformulada a página de farm: uma seção Meta com abas Farm, Ranks, Relíquias e Eventos, status ao vivo em cada cartão de meta e duas perguntas simples sobre por quanto tempo rodar e o que fazer depois",
   "changelog.r21400.2": "Adicionada a meta de ranks de FATE compartilhados: farma cada zona até o rank máximo e então segue em frente, com o rank exibido em cada cartão de zona a partir de Shadowbringers",
   "changelog.r21400.3": "Adicionadas seis metas de relíquias e itens: Atma, cristais luminosos, memórias dos moribundos, memórias assombrosas e vexatórias, Demiatma e pasta de cristal",

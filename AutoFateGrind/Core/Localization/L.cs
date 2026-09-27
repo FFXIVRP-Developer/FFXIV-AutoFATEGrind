@@ -414,6 +414,12 @@ internal static class L
         public static readonly LocString New = new("changelog.new", "New");
         public static readonly LocPlural Changes = new("changelog.changes", "{0} change", "{0} changes");
 
+        public static readonly LocString[] Release21500 =
+        [
+            new("changelog.r21500.1", "Fixed the Relic goals asking for the Yo-kai Watch before they would start"),
+            new("changelog.r21500.2", "Fixed a Relic run being able to switch to the yo-kai medal zones partway through on a character that owns a yo-kai minion"),
+        ];
+
         public static readonly LocString[] Release21400 =
         [
             new("changelog.r21400.1", "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards"),

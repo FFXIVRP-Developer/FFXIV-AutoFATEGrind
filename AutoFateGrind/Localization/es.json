@@ -385,6 +385,8 @@
   "changelog.new": "Nuevo",
   "changelog.changes.one": "{0} cambio",
   "changelog.changes.other": "{0} cambios",
+  "changelog.r21500.1": "Corregido: los objetivos de reliquias pedían el Yo-kai Watch antes de empezar",
+  "changelog.r21500.2": "Corregido: una sesión de reliquias podía cambiar a mitad de camino a las zonas de medallas yo-kai en un personaje con una mascota yo-kai",
   "changelog.r21400.1": "Rediseñada la página de farmeo: una sección Objetivo con pestañas Farmeo, Rangos, Reliquias y Eventos, estado en vivo en cada tarjeta de objetivo y dos preguntas sencillas sobre cuánto tiempo correr y qué hacer después",
   "changelog.r21400.2": "Añadido el objetivo de rangos de FATE compartidos: farmea cada zona hasta el rango máximo y luego pasa a la siguiente, con el rango visible en cada tarjeta de zona desde Shadowbringers",
   "changelog.r21400.3": "Añadidos seis objetivos de reliquias y objetos: Atma, cristales luminosos, recuerdos de los moribundos, recuerdos inquietantes y vejatorios, Demiatma y pasta de cristal",

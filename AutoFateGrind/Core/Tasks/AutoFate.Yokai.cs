@@ -19,7 +19,7 @@ public sealed partial class AutoFate
 
     private bool YokaiTargetChanged()
     {
-        if (!ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
         {
             return false;
         }
@@ -30,7 +30,7 @@ public sealed partial class AutoFate
 
     private void ReportYokaiGoalMet()
     {
-        if (!ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
         {
             return;
         }
@@ -54,7 +54,7 @@ public sealed partial class AutoFate
     // A FATE finished without the target's own minion out pays no Legendary Medal, so the grind parks instead of fighting blind.
     private bool YokaiMinionMissing()
     {
-        if (!ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
         {
             return false;
         }
@@ -100,7 +100,7 @@ public sealed partial class AutoFate
 
     private void LogYokaiDropState()
     {
-        if (!ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
         {
             return;
         }
@@ -120,7 +120,7 @@ public sealed partial class AutoFate
     // Legendary medals only drop with the target's own minion out; the watch is equipped as well so plain medals keep coming.
     private async Task EnsureYokaiCompanion()
     {
-        if (!ZoneSelection.GoalPlansZones(Plugin.Cfg))
+        if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
         {
             return;
         }

@@ -38,7 +38,7 @@ internal sealed class GrindPage
         Styling.VSpace(26f);
 
         if (ItemGoalCatalog.IsItemGoal(cfg.ActiveMode.Id)) ItemGoalRoster.Draw(cfg, ctrl, false);
-        else if (ZoneSelection.GoalPlansZones(cfg)) YokaiRoster.Draw(cfg, ctrl, false);
+        else if (ZoneSelection.IsYokaiGoal(cfg)) YokaiRoster.Draw(cfg, ctrl, false);
         else ZoneLibrary.Draw(cfg, ctrl, false);
         Styling.VSpace(12f);
     }

@@ -1,7 +1,6 @@
 using AutoFateGrind.Core.External;
 using AutoFateGrind.Core.Game.Player;
 using AutoFateGrind.Core.Game.Yokai;
-using AutoFateGrind.Core.Modes;
 using AutoFateGrind.Core.Trading;
 using AutoFateGrind.Core.Zones;
 using clib.Services;
@@ -70,7 +69,7 @@ internal sealed partial class AutoFateController
         s.CaptureStartExp();
 
         var startIndex = 0;
-        if (Plugin.Cfg.ActiveMode.Id == YokaiMedalsMode.ModeId)
+        if (ZoneSelection.IsYokaiGoal(Plugin.Cfg))
         {
             if (!PlanYokaiZones(s))
             {

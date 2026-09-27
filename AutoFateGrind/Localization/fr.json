@@ -385,6 +385,8 @@
   "changelog.new": "Nouveau",
   "changelog.changes.one": "{0} changement",
   "changelog.changes.other": "{0} changements",
+  "changelog.r21500.1": "Correction : les objectifs de reliques exigeaient la Yo-kai Watch avant de démarrer",
+  "changelog.r21500.2": "Correction : une session de reliques pouvait basculer en cours de route vers les zones de médailles yo-kai sur un personnage possédant une mascotte yo-kai",
   "changelog.r21400.1": "Refonte de la page de farm : une section Objectif avec les onglets Farm, Rangs, Reliques et Événements, un état en direct sur chaque carte d'objectif, et deux questions simples sur la durée et la suite",
   "changelog.r21400.2": "Ajout de l'objectif Rangs ALÉA : enchaîne les ALÉA de chaque zone jusqu'au rang maximal puis passe à la suivante, avec le rang affiché sur chaque carte de zone à partir de Shadowbringers",
   "changelog.r21400.3": "Ajout de six objectifs reliques et objets : Atma, cristaux lumineux, souvenirs des mourants, souvenirs obsédants et vexatoires, Demiatma et pâte de cristal",
