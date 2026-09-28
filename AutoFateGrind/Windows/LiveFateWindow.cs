@@ -317,21 +317,32 @@ public sealed class LiveFateWindow : Window, IDisposable
         nav.PathfindAndMoveTo(destination, Svc.Condition[ConditionFlag.InFlight]);
     }
 
-    private static void DrawSession(AutoFateController controller, float width)
+    private void DrawSession(AutoFateController controller, float width)
     {
         var session = controller.SessionSnapshot;
-        if (session is null)
-        {
-            Hint(Loc.T(L.Live.NoSession), width);
-            return;
-        }
+        var line = session is null
+            ? Loc.T(L.Live.NoSession)
+            : Loc.T(L.Live.Session, session.CompletedCount, session.GemstonesEarned, Formatting.Elapsed(session.Elapsed));
+        var lineColor = session is null ? Styling.TextMuted : Styling.TextDim;
 
         var scale = ImGuiHelpers.GlobalScale;
         var origin = ImGui.GetCursorScreenPos();
-        var line = Loc.T(L.Live.Session, session.CompletedCount, session.GemstonesEarned, Formatting.Elapsed(session.Elapsed));
         var lineSize = TextDraw.Measure(line);
-        TextDraw.At(line, origin, Styling.TextDim);
+        var lineWidth = width;
+        if (WalletChip.TryRead(out var gems))
+        {
+            var chipWidth = WalletChip.Width(gems);
+            WalletChip.Draw(plugin.Configuration, gems, origin.X + width, origin.Y + lineSize.Y * 0.5f);
+            lineWidth -= chipWidth + 12f * scale;
+        }
+
+        TextDraw.At(TextDraw.Truncate(line, lineWidth), origin, lineColor);
         var height = lineSize.Y;
+        if (session is null)
+        {
+            ImGui.Dummy(new Vector2(width, height));
+            return;
+        }
 
         if (session.ExpEarned > 0)
         {

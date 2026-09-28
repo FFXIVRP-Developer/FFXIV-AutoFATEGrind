@@ -71,9 +71,24 @@ internal static class HeaderBar
         var pillEnd = DrawStatusPill(dl, info, x, buttonsLeft, midY);
         if (pillEnd > x) x = pillEnd + 14f * scale;
 
-        if (compact) DrawCompactInfo(plugin, info, x, buttonsLeft - 14f * scale, midY);
+        if (compact) DrawCompactStrip(plugin, info, x, buttonsLeft - 14f * scale, midY);
 
         DrawButtons(window, plugin, end, midY, compact);
+    }
+
+    private static void DrawCompactStrip(Plugin plugin, ReadyState.Info info, float x, float rightX, float midY)
+    {
+        if (WalletChip.TryRead(out var gems))
+        {
+            var chipWidth = WalletChip.Width(gems);
+            if (rightX - x >= chipWidth)
+            {
+                WalletChip.Draw(plugin.Configuration, gems, rightX, midY);
+                rightX -= chipWidth + 14f * ImGuiHelpers.GlobalScale;
+            }
+        }
+
+        DrawCompactInfo(plugin, info, x, rightX, midY);
     }
 
     private static void DrawButtons(AppWindow window, Plugin plugin, Vector2 end, float midY, bool compact)

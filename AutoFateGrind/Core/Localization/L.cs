@@ -47,6 +47,9 @@ internal static class L
         public static readonly LocString ShowLiveTracker = new("shell.showLiveTracker", "Show the live FATE tracker");
         public static readonly LocString HideLiveTracker = new("shell.hideLiveTracker", "Hide the live FATE tracker");
         public static readonly LocString ResumeBlocked = new("shell.resumeBlocked", "Resumes automatically once you leave the duty");
+        public static readonly LocString Wallet = new("shell.wallet", "Bicolor Gemstones: {0} / {1}");
+        public static readonly LocString WalletCapped = new("shell.walletCapped", "At the cap. Gemstones from further FATEs are lost until you spend some.");
+        public static readonly LocString WalletTradeReady = new("shell.walletTradeReady", "At or above your auto-trade threshold ({0}).");
         public static readonly LocString GreetingMorning = new("shell.greeting.morning", "Good morning");
         public static readonly LocString GreetingAfternoon = new("shell.greeting.afternoon", "Good afternoon");
         public static readonly LocString GreetingEvening = new("shell.greeting.evening", "Good evening");
