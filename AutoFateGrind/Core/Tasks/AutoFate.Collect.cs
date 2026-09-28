@@ -14,9 +14,6 @@ namespace AutoFateGrind.Core.Tasks;
 
 public sealed partial class AutoFate
 {
-    private const string FateUtilsModule = "BossMod.Autorotation.MiscAI.FateUtils";
-    private const string FateUtilsCollectTrack = "Collect";
-    private const string FateUtilsDisabledOption = "Disabled";
     private const string AutoTargetModule = "BossMod.Autorotation.MiscAI.AutoTarget";
     private const string AutoTargetGeneralTrack = "General";
     private const string AutoTargetPassiveOption = "Passive";
@@ -65,7 +62,7 @@ public sealed partial class AutoFate
     private void BeginCollectFate(FateSpawnKey spawn, string fateName)
     {
         EnableTextAdvanceForCollect();
-        presetHasFateHelper = BossModIPC.Instance.GetPreset(Plugin.Cfg.CombatPresetName)?.Contains(FateUtilsModule, StringComparison.Ordinal) == true;
+        presetHasFateHelper = BossModIPC.Instance.GetPreset(Plugin.Cfg.CombatPresetName)?.Contains(BossModFateHelper.Module, StringComparison.Ordinal) == true;
         if (handInSpawn == spawn)
         {
             return;
@@ -264,7 +261,7 @@ public sealed partial class AutoFate
         // Mirror BossMod's own hand-in trip: no new pulls, no node pickups, and no movement of its own.
         var parkedMovement = ParkBossModMovement(preset);
         BossModIPC.Instance.AddTransientStrategy(preset, AutoTargetModule, AutoTargetGeneralTrack, AutoTargetPassiveOption);
-        var parkedPickup = BossModIPC.Instance.AddTransientStrategy(preset, FateUtilsModule, FateUtilsCollectTrack, FateUtilsDisabledOption);
+        var parkedPickup = BossModIPC.Instance.AddTransientStrategy(preset, BossModFateHelper.Module, BossModFateHelper.CollectTrack, BossModFateHelper.DisabledOption);
         try
         {
             for (var attempt = 1; attempt <= NpcInteractAttempts; attempt++)
@@ -304,7 +301,7 @@ public sealed partial class AutoFate
         {
             if (parkedPickup)
             {
-                BossModIPC.Instance.ClearTransientStrategy(preset, FateUtilsModule, FateUtilsCollectTrack);
+                BossModIPC.Instance.ClearTransientStrategy(preset, BossModFateHelper.Module, BossModFateHelper.CollectTrack);
             }
             BossModIPC.Instance.ClearTransientStrategy(preset, AutoTargetModule, AutoTargetGeneralTrack);
             if (parkedMovement)

@@ -121,10 +121,6 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
     private static readonly Random rng = new();
     private bool presetEnsured;
-    private string? chocoboOverridePreset;
-    private bool? chocoboOverrideEnabled;
-    private long nextChocoboOverrideAttemptMs;
-    private bool chocoboOverrideFailureLogged;
 
     // ExecuteCommand revive opcodes, per clib.Enums (CommandFlag.Revive + AgentReviveOp).
     private const uint ReviveCommandId   = (uint)clib.Enums.CommandFlag.Revive;        // 200
@@ -206,6 +202,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         finally
         {
             DisableTextAdvance();
+            BossModFateHelper.ReleaseChocobo();
         }
     }
 

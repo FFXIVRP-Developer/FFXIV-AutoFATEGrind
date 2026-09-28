@@ -666,7 +666,7 @@
   "settings.repair.npcSetChat": "[AFG] Задан свой NPC для ремонта: {0} (территория {1}).",
   "settings.consumables.group": "Расходники",
   "settings.consumables.autoSummonChocobo": "Призывать чокобо",
-  "settings.consumables.autoSummonChocoboHelp": "Управляет стратегией Chocobo помощника FATE в BossMod. Если включено, во время синхронизированного FATE используется Gysahl Greens, когда у спутника остаётся меньше 60 секунд.",
+  "settings.consumables.autoSummonChocoboHelp": "Позволяет помощнику FATE в BossMod заново призывать чокобо с помощью Gysahl Greens, когда во время синхронизированного FATE у него остаётся меньше 60 секунд. Выключите, чтобы запретить это во время работы; сам пресет BossMod не меняется.",
   "settings.consumables.autoConsume": "Автоматически есть и принимать медикаменты",
   "settings.consumables.autoConsumeHelp": "Использует еду и медикаменты между FATE, чтобы поддерживать их баффы; одна сытость дает бесплатные +3 % опыта. Предметы используются только вне боя и обновляются до истечения баффа.",
   "settings.consumables.autoConsumeOff": "Автоиспользование выключено. Включите его, чтобы выбрать предметы.",

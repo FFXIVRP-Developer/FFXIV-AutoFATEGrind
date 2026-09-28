@@ -110,7 +110,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
         Svc.ClientState.Login -= OnLogin;
 
-        Core.Ipc.BossModIPC.Instance.ClearFateHelperChocoboOverrides();
+        Core.Ipc.BossModFateHelper.ReleaseChocobo();
 
         WindowSystem.RemoveAllWindows();
         appWindow.Dispose();

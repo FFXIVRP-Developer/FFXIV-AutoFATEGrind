@@ -7,9 +7,6 @@ namespace AutoFateGrind.Core.Ipc;
 
 internal sealed class BossModIPC
 {
-    private const string FateHelperModule = "BossMod.Autorotation.MiscAI.FateUtils";
-    private const string FateHelperChocoboTrack = "Chocobo";
-
     private static BossModIPC? instance;
     public static BossModIPC Instance => instance ??= new BossModIPC();
 
@@ -28,7 +25,6 @@ internal sealed class BossModIPC
     private readonly ICallGateSubscriber<bool>                       obstacleHasTempMap;
     private readonly ICallGateSubscriber<bool>                       obstacleClearTempMap;
     private readonly ICallGateSubscriber<object?>                    obstacleEvaluateQuality;
-    private readonly HashSet<string> fateHelperChocoboOverrides = [];
 
     private BossModIPC()
     {
@@ -62,24 +58,6 @@ internal sealed class BossModIPC
 
     public bool AddTransientStrategy(string preset, string module, string track, string option)
         => IpcGate.Invoke(addTransient.HasFunction, () => addTransient.InvokeFunc(preset, module, track, option), false, "AddTransientStrategy failed");
-
-    public bool SetFateHelperChocobo(string preset, bool enabled)
-    {
-        if (!AddTransientStrategy(preset, FateHelperModule, FateHelperChocoboTrack, enabled ? "Enabled" : "Disabled"))
-            return false;
-
-        fateHelperChocoboOverrides.Add(preset);
-        return true;
-    }
-
-    public void ClearFateHelperChocoboOverrides()
-    {
-        foreach (var preset in fateHelperChocoboOverrides.ToArray())
-        {
-            if (ClearTransientStrategy(preset, FateHelperModule, FateHelperChocoboTrack))
-                fateHelperChocoboOverrides.Remove(preset);
-        }
-    }
 
     public bool CanClearTransientStrategy => clearTransient.HasFunction;
 
