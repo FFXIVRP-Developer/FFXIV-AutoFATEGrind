@@ -57,7 +57,8 @@ public sealed partial class AutoFate
             return;
 
         nextIdleMountRetryAtMs = now + MountRetryMs;
-        if (UseGeneralAction(MountRouletteActionId, out var actionStatus))
+        var actionStatus = GeneralActionStatus(MountRouletteActionId);
+        if (actionStatus == 0 && UseGeneralAction(MountRouletteActionId))
         {
             Diag("Idle mount requested while waiting for FATEs");
         }

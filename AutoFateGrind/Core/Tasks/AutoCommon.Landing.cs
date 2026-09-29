@@ -139,7 +139,7 @@ public abstract partial class AutoCommon
     {
         if (Svc.Condition[ConditionFlag.InFlight])
         {
-            UseGeneralAction(JumpGeneralActionId, out _);
+            UseGeneralAction(JumpGeneralActionId);
         }
     }
 
