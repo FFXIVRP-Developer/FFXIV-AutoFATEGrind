@@ -228,6 +228,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 Diag($"State {lastObservedState} -> {state}");
                 if (state != GrindState.WrongZone) consecutiveZoneTeleportFailures = 0;
                 if (lastObservedState == GrindState.WaitingForCollectReward) BossModIPC.Instance.ClearActive();
+                if (lastObservedState == GrindState.WaitingForFates) EndIdleMountPeriod();
                 lastObservedState = state;
                 lastStateChangedAtMs = Environment.TickCount64;
             }
@@ -574,6 +575,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         await EnsureConsumables();
         var keepingTwist = KeepingTwistOfFate();
         var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !keepingTwist;
+        TryIdleMount();
         var remainingSec = Math.Max(0L, zoneIdleWaitMs - (Environment.TickCount64 - zoneIdleSinceMs)) / 1000;
         Status = swapPending
             ? $"Waiting for FATEs in {zone.Name} (swapping in {remainingSec}s)"

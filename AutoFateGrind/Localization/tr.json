@@ -503,6 +503,8 @@
   "settings.general.swapWaitHelp": "Boş bir bölgede bir sonrakine geçmeden önce ne kadar beklenecek. Tempo açıkken gerçek bekleme bu değerin etrafında rastgele belirlenir, böylece AFG kullanıcılarıyla dolu bir bölge aynı anda ayrılmaz.",
   "settings.general.keepTwist": "Twist of Fate'i koru",
   "settings.general.keepTwistHelp": "Twist of Fate bonusu sürerken bölgede kal: bitene kadar bölge değişimi, ışınlanma kısayolu ve biten bölgeden ayrılma yok.",
+  "settings.general.mountWhileWaiting": "FATE beklerken bineğe bin",
+  "settings.general.mountWhileWaitingHelp": "FATE beklerken kısa bir gecikmeden sonra otomatik olarak bineğe biner. Yo-kai madalyası koşularında devre dışıdır.",
   "settings.general.autoPause": "İçerikte otomatik duraklat",
   "settings.general.autoPauseHelp": "Zindan, trial, raid ya da başka bir instance içeriğindeyken oturumu duraklatır, dışarı çıkınca sürdürür. Bölgeleriniz, hedefiniz ve oturum istatistikleri korunur; duraklatılan süre süre hedefine sayılmaz.",
   "settings.general.autoResume": "Hatadan sonra otomatik devam et",

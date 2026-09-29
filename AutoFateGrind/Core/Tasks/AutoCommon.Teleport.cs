@@ -209,11 +209,24 @@ public abstract partial class AutoCommon
         return false;
     }
 
-    private static unsafe void UseGeneralAction(uint generalActionId)
+    protected static unsafe bool UseGeneralAction(uint generalActionId)
     {
         var actionManager = ActionManager.Instance();
-        if (actionManager is null) return;
-        actionManager->UseAction(ActionType.GeneralAction, generalActionId);
+        if (actionManager is null)
+        {
+            return false;
+        }
+        return actionManager->UseAction(ActionType.GeneralAction, generalActionId);
+    }
+
+    protected static unsafe uint? GeneralActionStatus(uint generalActionId)
+    {
+        var actionManager = ActionManager.Instance();
+        if (actionManager is null)
+        {
+            return null;
+        }
+        return actionManager->GetActionStatus(ActionType.GeneralAction, generalActionId);
     }
 
     private const int MaxTeleportFaults = 2;

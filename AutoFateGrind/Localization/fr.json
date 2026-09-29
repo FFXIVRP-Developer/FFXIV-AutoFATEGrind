@@ -503,6 +503,8 @@
   "settings.general.swapWaitHelp": "Combien de temps attendre dans une zone vide avant de passer à la suivante. Avec le rythme activé, l'attente réelle est tirée autour de cette valeur pour qu'une zone pleine d'utilisateurs d'AFG ne parte pas en même temps.",
   "settings.general.keepTwist": "Conserver Twist of Fate",
   "settings.general.keepTwistHelp": "Tant que le bonus Twist of Fate est actif, rester dans la zone : pas de changement de zone, pas de raccourci par téléportation et pas de départ d'une zone terminée avant sa fin.",
+  "settings.general.mountWhileWaiting": "Monter en attendant les ALÉA",
+  "settings.general.mountWhileWaitingHelp": "Utilise automatiquement une monture après un court délai en attendant des ALÉA. Désactivé pour les sessions de médailles Yo-kai.",
   "settings.general.autoPause": "Pause automatique en instance",
   "settings.general.autoPauseHelp": "Met la session en pause tant que vous êtes dans un donjon, un défi, un raid ou tout autre contenu instancié, puis la reprend à la sortie. Vos zones, votre objectif et vos statistiques sont conservés, et le temps en pause ne compte pas pour un objectif de temps.",
   "settings.general.autoResume": "Reprise automatique après erreur",

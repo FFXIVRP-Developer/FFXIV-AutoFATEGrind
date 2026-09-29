@@ -573,6 +573,8 @@ internal static class L
         public static readonly LocString SwapWaitHelp = new("settings.general.swapWaitHelp", "How long to sit in an empty zone before jumping to the next one. With pacing on, the real wait is rolled around this value so a zone full of AFG users does not all leave at once.");
         public static readonly LocString KeepTwist = new("settings.general.keepTwist", "Keep Twist of Fate");
         public static readonly LocString KeepTwistHelp = new("settings.general.keepTwistHelp", "While the Twist of Fate bonus is up, stay in the zone: no zone swap, no teleport shortcut, and no rotating past a finished zone until it wears off.");
+        public static readonly LocString MountWhileWaiting = new("settings.general.mountWhileWaiting", "Mount while waiting for FATEs");
+        public static readonly LocString MountWhileWaitingHelp = new("settings.general.mountWhileWaitingHelp", "Mount after a short delay while idle and waiting for FATEs. Disabled for Yo-kai medal runs.");
         public static readonly LocString AutoPause = new("settings.general.autoPause", "Auto-pause in content");
         public static readonly LocString AutoPauseHelp = new("settings.general.autoPauseHelp", "Pause the run while you are inside a duty, trial, raid, or any other instanced content, then resume it once you are back outside. Your zones, goal, and session stats are kept, and paused time does not count toward a time-based goal.");
         public static readonly LocString AutoResume = new("settings.general.autoResume", "Auto-resume on fault");

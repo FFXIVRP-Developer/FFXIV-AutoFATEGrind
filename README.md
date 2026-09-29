@@ -44,6 +44,7 @@ Lists every FATE zone from A Realm Reborn through Dawntrail in one window. Tick 
 - **Auto-repair**: Dark Matter first, Grand Company mender as fallback.
 - **Auto-consume**: keeps food and medicine buffs up (Well Fed is a free +3% EXP), HQ first.
 - **Chocobo**: lets BossMod keep your chocobo summoned during FATEs, or stops it from spending Gysahl Greens.
+- **Idle mounting**: optionally mounts after a short delay while waiting for a FATE; disabled for Yo-kai medal runs.
 - **Humanizer**: takes random city breaks between FATEs so long sessions look less mechanical.
 - **Pause & resume**: park a run without losing your zones, goal, or session stats, and auto-pause while you're in a duty so you can queue for content mid-grind.
 - **Party invites**: auto-declines incoming invites during a run after a random delay, with an optional reply message.
