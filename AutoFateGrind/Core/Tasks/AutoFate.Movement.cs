@@ -44,6 +44,7 @@ public sealed partial class AutoFate
         await TryTeleportShortcut(fate.Position, targetId, fate.Name);
         if (CancelToken.IsCancellationRequested) return MoveStopReason.None;
 
+        // Keep the original fixed deadline for the whole move, including any flight re-plan.
         var deadline = Environment.TickCount64 + MoveToFateWatchdogMs;
         var lastRetargetAtMs = Environment.TickCount64;
         var nextProgressLogMs = Environment.TickCount64 + MoveProgressLogMs;
@@ -134,7 +135,8 @@ public sealed partial class AutoFate
             return true;
         }
 
-        var op = new MoveOp(o => o.MoveInZone(dest, config, StopCondition));
+        var op = new MoveOp(o => o.MoveInZoneWithFlightRecovery(dest, config, StopCondition,
+            flightReplanPolicy, message => Diag(message)));
 
         var completed = await RunCancellable(op, MoveToFateWatchdogMs + MoveOpUnwindSlackMs, label, AbortIfFrozen);
         if (CancelToken.IsCancellationRequested) return MoveStopReason.None;
