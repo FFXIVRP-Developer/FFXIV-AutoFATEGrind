@@ -419,9 +419,10 @@ internal static class L
 
         public static readonly LocString[] Release21800 =
         [
-            new("changelog.r21800.1", "Added the Mount option under Settings > General: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83"),
+            new("changelog.r21800.1", "Added the Mount option under Settings > Travel: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83"),
             new("changelog.r21800.2", "Fixed FATEs whose center lies below the ground, like the ones at The Imperious in Kozama'uka: the flight there no longer dives into the floor and stalls on arrival. Reported in issue #82"),
             new("changelog.r21800.3", "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82"),
+            new("changelog.r21800.4", "Split Settings > General in two: mount choice, economy mode, zone swaps, Twist of Fate and Collect hand-ins now live in the new Settings > Travel tab, while General keeps language, window and run options"),
         ];
 
         public static readonly LocString[] Release21700 =
@@ -555,7 +556,9 @@ internal static class L
         public static readonly LocString LanguageHelp = new("settings.languageHelp", "The language of this plugin's windows. FATE and zone names always follow the game client.");
 
         public static readonly LocString CatGeneral = new("settings.cat.general", "General");
-        public static readonly LocString CatGeneralSub = new("settings.cat.generalSub", "Window and behavior preferences.");
+        public static readonly LocString CatGeneralSub = new("settings.cat.generalSub", "Language, window and run preferences.");
+        public static readonly LocString CatTravel = new("settings.cat.travel", "Travel");
+        public static readonly LocString CatTravelSub = new("settings.cat.travelSub", "Mounts, teleports, zone swaps and how FATEs are played.");
         public static readonly LocString CatFilters = new("settings.cat.filters", "FATE filters");
         public static readonly LocString CatFiltersSub = new("settings.cat.filtersSub", "Keeps the plugin off dying or late FATEs.");
         public static readonly LocString CatClasses = new("settings.cat.classes", "Class queue");
@@ -580,7 +583,9 @@ internal static class L
         public static readonly LocString LivePopoutHelp = new("settings.general.livePopoutHelp", "Show the live FATE tracker as a small overlay window so you can keep it visible while the main window is closed.");
         public static readonly LocString NameFormat = new("settings.general.nameFormat", "FATE name format");
         public static readonly LocString NameFormatHelp = new("settings.general.nameFormatHelp", "How FATE names read in the running panel and the live tracker. Tokens: {Level}, {Name}, {Id}, {Progress}, {TimeRemaining}, {Distance}, {State}.");
-        public static readonly LocString GeneralBehavior = new("settings.general.behavior", "Behavior");
+        public static readonly LocString GeneralRun = new("settings.general.run", "Run");
+        public static readonly LocString TravelMount = new("settings.travel.mountGroup", "Mount and teleports");
+        public static readonly LocString TravelZoneSwap = new("settings.travel.zoneSwap", "Zone swaps");
         public static readonly LocString SwapZones = new("settings.general.swapZones", "Swap zones when empty");
         public static readonly LocString SwapZonesHelp = new("settings.general.swapZonesHelp", "When the current zone runs out of eligible FATEs, jump to the next zone in your priority order.");
         public static readonly LocString SwapWait = new("settings.general.swapWait", "Wait before swapping");
@@ -599,7 +604,7 @@ internal static class L
         public static readonly LocString AutoPauseHelp = new("settings.general.autoPauseHelp", "Pause the run while you are inside a duty, trial, raid, or any other instanced content, then resume it once you are back outside. Your zones, goal, and session stats are kept, and paused time does not count toward a time-based goal.");
         public static readonly LocString AutoResume = new("settings.general.autoResume", "Auto-resume on fault");
         public static readonly LocString AutoResumeHelp = new("settings.general.autoResumeHelp", "If the grind hits an unrecoverable error and stops, automatically restart it (up to 3 times in 5 minutes) instead of ending the run. Leave off if you want faults to surface.");
-        public static readonly LocString GeneralCollect = new("settings.general.collect", "Collect FATEs");
+        public static readonly LocString TravelFatePlay = new("settings.travel.fatePlay", "FATE play");
         public static readonly LocString CollectHandIn = new("settings.general.collectHandIn", "Hand in items yourself");
         public static readonly LocString CollectHandInHelp = new("settings.general.collectHandInHelp", "AFG walks to the hand-in NPC as soon as you hold a batch, and turns in any leftovers once the FATE hits 100%. Off leaves turn-ins to BossMod's FATE helper, which only hands in at 10 items.");
         public static readonly LocString CollectHandInBatch = new("settings.general.collectHandInBatch", "Hand in every");

@@ -11,13 +11,14 @@ namespace AutoFateGrind.Windows.Pages;
 
 internal sealed class SettingsPage
 {
-    private enum Tab { General, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert }
+    private enum Tab { General, Travel, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert }
 
     private readonly record struct Entry(Tab Tab, LocString Label, FontAwesomeIcon Icon, LocString Subtitle);
 
     private static readonly Entry[] entries =
     [
         new(Tab.General,      L.Settings.CatGeneral,      FontAwesomeIcon.Cog,        L.Settings.CatGeneralSub),
+        new(Tab.Travel,       L.Settings.CatTravel,       FontAwesomeIcon.Route,      L.Settings.CatTravelSub),
         new(Tab.Filters,      L.Settings.CatFilters,      FontAwesomeIcon.Filter,     L.Settings.CatFiltersSub),
         new(Tab.Classes,      L.Settings.CatClasses,      FontAwesomeIcon.UserShield, L.Settings.CatClassesSub),
         new(Tab.Gemstones,    L.Settings.CatGemstones,    FontAwesomeIcon.Gem,        L.Settings.CatGemstonesSub),
@@ -97,6 +98,7 @@ internal sealed class SettingsPage
         switch (activeTab)
         {
             case Tab.General: GeneralSettings.Draw(cfg); break;
+            case Tab.Travel: TravelSettings.Draw(cfg); break;
             case Tab.Filters: FilterSettings.Draw(cfg); break;
             case Tab.Classes: ClassSettings.Draw(cfg); break;
             case Tab.Gemstones: GemstoneSettings.Draw(cfg); break;
