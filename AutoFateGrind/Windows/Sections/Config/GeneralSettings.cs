@@ -1,4 +1,5 @@
 using AutoFateGrind.Core.Game.Fates;
+using AutoFateGrind.Core.Game.Player;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Windows.Components;
 using Dalamud.Bindings.ImGui;
@@ -100,6 +101,8 @@ internal static class GeneralSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.MountWhileWaitingForFates, v => cfg.MountWhileWaitingForFates = v, "##gen_mount_waiting"),
             SettingsRow.ToggleHeight);
 
+        DrawMountRow(cfg);
+
         SettingsRow.Draw(Loc.T(L.Settings.EconomyTravel),
             Loc.T(L.Settings.EconomyTravelHelp),
             SettingsControls.ToggleWidth,
@@ -117,6 +120,61 @@ internal static class GeneralSettings
             SettingsControls.ToggleWidth,
             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeOnFault, v => cfg.AutoResumeOnFault = v, "##gen_autoresume"),
             SettingsRow.ToggleHeight);
+    }
+
+    private const float MountComboWidth = 220f;
+    private const int MountListRefreshMs = 2000;
+    private static MountOption[] mountOptions = [];
+    private static string[] mountLabels = [];
+    private static long mountListBuiltAtMs = long.MinValue;
+
+    private static void DrawMountRow(Configuration cfg)
+    {
+        SettingsRow.Draw(Loc.T(L.Settings.Mount),
+            Loc.T(L.Settings.MountHelp),
+            MountComboWidth,
+            () =>
+            {
+                RefreshMountList();
+                var selected = 0;
+                for (var index = 0; index < mountOptions.Length; index++)
+                {
+                    if (mountOptions[index].Id == cfg.PreferredMountId)
+                    {
+                        selected = index + 1;
+                        break;
+                    }
+                }
+
+                if (SettingsControls.DrawSearchableCombo("##gen_mount", mountLabels, ref selected, MountComboWidth))
+                {
+                    cfg.PreferredMountId = selected == 0 ? MountOps.Roulette : mountOptions[selected - 1].Id;
+                    cfg.SaveDebounced();
+                }
+            });
+
+        if (cfg.PreferredMountId != MountOps.Roulette && !MountOps.IsUsable(cfg.PreferredMountId))
+        {
+            SettingsRow.Note(Loc.T(L.Settings.MountNotOwned, MountOps.NameOf(cfg.PreferredMountId)), Styling.AccentRose);
+        }
+    }
+
+    // Rebuilt on a timer so a mount unlocked or a language switched while the page is open shows up.
+    private static void RefreshMountList()
+    {
+        var now = Environment.TickCount64;
+        if (now - mountListBuiltAtMs < MountListRefreshMs)
+        {
+            return;
+        }
+        mountListBuiltAtMs = now;
+        mountOptions = MountOps.OwnedMounts();
+        mountLabels = new string[mountOptions.Length + 1];
+        mountLabels[0] = Loc.T(L.Settings.MountRandom);
+        for (var index = 0; index < mountOptions.Length; index++)
+        {
+            mountLabels[index + 1] = mountOptions[index].Name;
+        }
     }
 
     private const int SwapWaitMinSec = 0;

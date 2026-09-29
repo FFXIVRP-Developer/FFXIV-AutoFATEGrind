@@ -69,6 +69,7 @@ public sealed class Configuration : IPluginConfiguration
     // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
     public bool KeepTwistOfFate { get; set; } = true;
     public bool MountWhileWaitingForFates { get; set; } = false;
+    public uint PreferredMountId { get; set; } = 0;
     public bool EconomyTravel { get; set; } = false;
     public bool ShowLivePopout { get; set; } = false;
 

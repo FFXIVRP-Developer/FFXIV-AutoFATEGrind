@@ -1,4 +1,5 @@
 using AutoFateGrind.Core.Game.Ops;
+using AutoFateGrind.Core.Game.Player;
 using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Zones;
 using clib.Extensions;
@@ -42,11 +43,50 @@ internal sealed class MoveOp(System.Func<MoveOp, Task> body) : TaskBase
     public async Task Move(uint territoryId, Vector3 dest, MovementConfig config, System.Func<bool>? stopCondition)
     {
         await TeleportTo(territoryId, dest);
+        await MountPreferred(dest, config);
         await MoveTo(dest, config, allowTeleportIfFaster: false, stopCondition, null, allowAethernet: false);
     }
 
-    public Task MoveInZone(Vector3 dest, MovementConfig config, System.Func<bool>? stopCondition)
-        => MoveTo(dest, config, allowTeleportIfFaster: false, stopCondition, null, allowAethernet: false);
+    public async Task MoveInZone(Vector3 dest, MovementConfig config, System.Func<bool>? stopCondition)
+    {
+        await MountPreferred(dest, config);
+        await MoveTo(dest, config, allowTeleportIfFaster: false, stopCondition, null, allowAethernet: false);
+    }
+
+    private const int PreferredMountWaitMs = 5_000;
+    private const int PreferredMountRetryMs = 500;
+
+    // clib's MoveTo only summons Flying Mount Roulette while unmounted, so riding the chosen mount first keeps
+    // it; if the summon never lands the roulette still runs. Mirrors clib's own skip radius so a move it
+    // would not make never mounts.
+    private async Task MountPreferred(Vector3 dest, MovementConfig config)
+    {
+        if ((config.Movement & (MovementOptions.Mount | MovementOptions.Fly)) == 0
+         || !MountOps.HasPreferred || !MountOps.TerritoryAllowsMount())
+        {
+            return;
+        }
+        if (Svc.Objects.LocalPlayer is not { } player
+         || Vector3.Distance(player.Position, dest) < Math.Max(config.Tolerance ?? 0f, NavmeshIPC.Instance.GetTolerance()))
+        {
+            return;
+        }
+
+        var deadline = Environment.TickCount64 + PreferredMountWaitMs;
+        var nextAttemptAtMs = 0L;
+        while (!Svc.Condition[ConditionFlag.Mounted] && Environment.TickCount64 < deadline)
+        {
+            if (CancelToken.IsCancellationRequested || Svc.Condition[ConditionFlag.InCombat])
+            {
+                return;
+            }
+            if (Environment.TickCount64 >= nextAttemptAtMs && MountOps.TrySummonPreferred())
+            {
+                nextAttemptAtMs = Environment.TickCount64 + PreferredMountRetryMs;
+            }
+            await NextFrame();
+        }
+    }
 
     public async Task MoveInZoneWithFlightRecovery(Vector3 dest, MovementConfig config,
         System.Func<bool>? stopCondition, FlightReplanPolicy policy, System.Action<string> diag)

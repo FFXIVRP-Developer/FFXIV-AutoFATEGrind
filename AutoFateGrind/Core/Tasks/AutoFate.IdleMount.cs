@@ -1,3 +1,4 @@
+using AutoFateGrind.Core.Game.Player;
 using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Zones;
 using Dalamud.Game.ClientState.Conditions;
@@ -57,6 +58,12 @@ public sealed partial class AutoFate
             return;
 
         nextIdleMountRetryAtMs = now + MountRetryMs;
+        if (MountOps.TrySummonPreferred())
+        {
+            Diag($"Idle mount requested while waiting for FATEs ({MountOps.NameOf(Plugin.Cfg.PreferredMountId)})");
+            return;
+        }
+
         var actionStatus = GeneralActionStatus(MountRouletteActionId);
         if (actionStatus == 0 && UseGeneralAction(MountRouletteActionId))
         {

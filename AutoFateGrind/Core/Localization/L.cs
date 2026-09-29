@@ -417,6 +417,11 @@ internal static class L
         public static readonly LocString New = new("changelog.new", "New");
         public static readonly LocPlural Changes = new("changelog.changes", "{0} change", "{0} changes");
 
+        public static readonly LocString[] Release21800 =
+        [
+            new("changelog.r21800.1", "Added the Mount option under Settings > General: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83"),
+        ];
+
         public static readonly LocString[] Release21700 =
         [
             new("changelog.r21700.1", "Added the Mount while waiting for FATEs option under Settings > General: mounts after a short delay while you wait for a FATE to spawn, and stays off on Yo-kai medal runs. Contributed by lizvik"),
@@ -582,6 +587,10 @@ internal static class L
         public static readonly LocString KeepTwistHelp = new("settings.general.keepTwistHelp", "While the Twist of Fate bonus is up, stay in the zone: no zone swap, no teleport shortcut, and no rotating past a finished zone until it wears off.");
         public static readonly LocString MountWhileWaiting = new("settings.general.mountWhileWaiting", "Mount while waiting for FATEs");
         public static readonly LocString MountWhileWaitingHelp = new("settings.general.mountWhileWaitingHelp", "Mount after a short delay while idle and waiting for FATEs. Disabled for Yo-kai medal runs.");
+        public static readonly LocString Mount = new("settings.general.mount", "Mount");
+        public static readonly LocString MountHelp = new("settings.general.mountHelp", "The mount AFG summons when it travels or mounts up while waiting. Random uses the game's mount roulette. Only flying mounts this character owns are listed.");
+        public static readonly LocString MountRandom = new("settings.general.mountRandom", "Random (roulette)");
+        public static readonly LocString MountNotOwned = new("settings.general.mountNotOwned", "This character does not own {0}; AFG uses the mount roulette instead.");
         public static readonly LocString EconomyTravel = new("settings.general.economyTravel", "Economy mode");
         public static readonly LocString EconomyTravelHelp = new("settings.general.economyTravelHelp", "Save gil by never teleporting to an aetheryte closer to the next FATE in the same zone; AFG mounts up and flies there instead. Teleports to other zones, and the teleport used to recover from being stuck, still happen.");
         public static readonly LocString AutoPause = new("settings.general.autoPause", "Auto-pause in content");

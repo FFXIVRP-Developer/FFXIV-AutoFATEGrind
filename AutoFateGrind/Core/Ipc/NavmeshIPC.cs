@@ -27,6 +27,7 @@ internal sealed class NavmeshIPC
     private readonly ICallGateSubscriber<Vector3, bool, object> simpleMovePathfindAndMoveTo;
     private readonly ICallGateSubscriber<int> pathNumWaypoints;
     private readonly ICallGateSubscriber<List<Vector3>> pathListWaypoints;
+    private readonly ICallGateSubscriber<float> pathGetTolerance;
 
     public const int WaypointsUnavailable = -1;
 
@@ -45,7 +46,12 @@ internal sealed class NavmeshIPC
         simpleMovePathfindAndMoveTo = Svc.PluginInterface.GetIpcSubscriber<Vector3, bool, object>("vnavmesh.SimpleMove.PathfindAndMoveTo");
         pathNumWaypoints            = Svc.PluginInterface.GetIpcSubscriber<int>("vnavmesh.Path.NumWaypoints");
         pathListWaypoints           = Svc.PluginInterface.GetIpcSubscriber<List<Vector3>>("vnavmesh.Path.ListWaypoints");
+        pathGetTolerance            = Svc.PluginInterface.GetIpcSubscriber<float>("vnavmesh.Path.GetTolerance");
     }
+
+    // Arrival radius vnav applies on top of a MoveTo's own tolerance; clib skips a move inside the larger of the two.
+    public float GetTolerance()
+        => IpcGate.Invoke(pathGetTolerance.HasFunction, pathGetTolerance.InvokeFunc, 0f, "GetTolerance failed");
 
     // True once the current zone's navmesh is fully built and queryable; obstacle-map/pathfind IPC throw
     // "navmesh creation is in progress" while false. Older vnavmesh lacks the gate → assume ready, don't block.
