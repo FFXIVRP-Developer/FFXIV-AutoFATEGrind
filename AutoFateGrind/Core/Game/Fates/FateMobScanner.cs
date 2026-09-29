@@ -114,21 +114,57 @@ internal static unsafe class FateMobScanner
         for (var objectIndex = 0; objectIndex < objects.Length; objectIndex++)
         {
             var candidate = objects[objectIndex];
-            if (candidate is null || candidate.ObjectKind != DalamudObjectKind.EventObj || !candidate.IsTargetable)
+            if (!IsPickupOfFate(candidate, fateId))
             {
                 continue;
             }
-            if (((CSGameObject*)candidate.Address)->FateId != fateId)
-            {
-                continue;
-            }
-            if (Vector3.DistanceSquared(from, candidate.Position) <= maxSquared)
+            if (Vector3.DistanceSquared(from, candidate!.Position) <= maxSquared)
             {
                 return true;
             }
         }
         return false;
     }
+
+    // Same pick as BossMod's FATE helper: the pickup nearest by flat distance to its hitbox.
+    public static bool TryFindNearestPickup(uint fateId, Vector3 from, out IGameObject pickup, out float distanceToHitbox)
+    {
+        pickup = null!;
+        distanceToHitbox = float.MaxValue;
+        var objects = Svc.Objects;
+        for (var objectIndex = 0; objectIndex < objects.Length; objectIndex++)
+        {
+            var candidate = objects[objectIndex];
+            if (!IsPickupOfFate(candidate, fateId))
+            {
+                continue;
+            }
+            var distance = FlatDistanceToHitbox(from, candidate!);
+            if (distance >= distanceToHitbox)
+            {
+                continue;
+            }
+            distanceToHitbox = distance;
+            pickup = candidate!;
+        }
+        return distanceToHitbox < float.MaxValue;
+    }
+
+    public static bool TryGetPickup(uint fateId, ulong gameObjectId, out IGameObject pickup)
+    {
+        var candidate = Svc.Objects.SearchById(gameObjectId);
+        pickup = candidate!;
+        return IsPickupOfFate(candidate, fateId);
+    }
+
+    private static bool IsPickupOfFate(IGameObject? candidate, uint fateId)
+        => candidate is not null
+        && candidate.ObjectKind == DalamudObjectKind.EventObj
+        && candidate.IsTargetable
+        && ((CSGameObject*)candidate.Address)->FateId == fateId;
+
+    private static float FlatDistanceToHitbox(Vector3 from, IGameObject target)
+        => MathF.Max(0f, Vector2.Distance(new Vector2(from.X, from.Z), new Vector2(target.Position.X, target.Position.Z)) - target.HitboxRadius);
 
     private static bool IsLiveMobOfFate(IBattleNpc npc, uint fateId)
     {

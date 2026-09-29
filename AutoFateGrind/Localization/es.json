@@ -389,6 +389,8 @@
   "changelog.changes.one": "{0} cambio",
   "changelog.changes.other": "{0} cambios",
   "changelog.r21800.1": "Añadida la opción Montura en Ajustes > General: elige cuál de tus monturas voladoras usa AFG al viajar o al montar mientras espera, en lugar de la ruleta de monturas. Solicitado en la incidencia #83",
+  "changelog.r21800.2": "Corregidos los FATE cuyo centro está bajo el suelo, como los de The Imperious en Kozama'uka: el vuelo hasta allí ya no se hunde en el suelo ni se atasca al llegar. Reportado en la incidencia #82",
+  "changelog.r21800.3": "Corregido quedarse atascado contra muros en los FATE: en los FATE de recolección el personaje rodea el muro hasta un objeto hacia el que BossMod choca contra la pared, y los trabajos a distancia que tienen un enemigo al alcance pero no pueden golpearlo ahora se acercan. Reportado en la incidencia #82",
   "changelog.r21700.1": "Añadida la opción Usar montura mientras esperas FATEs en Ajustes > General: monta tras una breve espera mientras aguardas un FATE y se desactiva en las sesiones de medallas Yo-kai. Contribución de lizvik",
   "changelog.r21700.2": "Corregido que los trayectos a un FATE siguieran por tierra cuando el vuelo se habilitaba después de planificar la ruta: ahora la ruta se replanifica para volar, hasta dos veces. Contribución de lizvik",
   "changelog.r21700.3": "Añadido el Modo ahorro en Ajustes > General: omite el teletransporte al eterito más cercano al siguiente FATE en la misma zona y vuela hasta allí para ahorrar guiles. Los teletransportes a otras zonas y la recuperación de atascos se mantienen",

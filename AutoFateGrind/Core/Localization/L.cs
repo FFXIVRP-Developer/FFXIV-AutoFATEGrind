@@ -420,6 +420,8 @@ internal static class L
         public static readonly LocString[] Release21800 =
         [
             new("changelog.r21800.1", "Added the Mount option under Settings > General: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83"),
+            new("changelog.r21800.2", "Fixed FATEs whose center lies below the ground, like the ones at The Imperious in Kozama'uka: the flight there no longer dives into the floor and stalls on arrival. Reported in issue #82"),
+            new("changelog.r21800.3", "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82"),
         ];
 
         public static readonly LocString[] Release21700 =

@@ -313,7 +313,7 @@ public sealed class LiveFateWindow : Window, IDisposable
             return;
         }
 
-        var destination = nav.NearestPointReachable(fate.Position) ?? fate.Position;
+        var destination = FateGround.Project(fate.Position) ?? fate.Position;
         nav.PathfindAndMoveTo(destination, Svc.Condition[ConditionFlag.InFlight]);
     }
 

@@ -205,9 +205,14 @@ public sealed partial class AutoFate
         if (!BossModIPC.Instance.IsAvailable) return;
         if (!NavmeshIPC.Instance.IsReady()) return;
 
-        var safe = NavmeshIPC.Instance.NearestPointReachable(fate.Position, 5f, 5f);
-        var anchor = safe ?? fate.Position;
-        var margin = safe.HasValue ? Vector3.Distance(fate.Position, safe.Value) : 0f;
+        var safe = FateGround.Project(fate.Position);
+        if (safe is null)
+        {
+            Diag($"FATE {fate.Id} centre {fate.Position} has no navmesh nearby; BossMod keeps its own obstacle map");
+            return;
+        }
+        var anchor = safe.Value;
+        var margin = FateGround.HorizontalDistance(fate.Position, anchor);
         var radius = Math.Max(fate.Radius + margin, 10f);
 
         if (!BossModIPC.Instance.GenerateObstacleMap(anchor, radius, writeToFile: false))

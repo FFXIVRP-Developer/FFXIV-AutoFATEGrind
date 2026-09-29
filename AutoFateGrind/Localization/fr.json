@@ -389,6 +389,8 @@
   "changelog.changes.one": "{0} changement",
   "changelog.changes.other": "{0} changements",
   "changelog.r21800.1": "Ajout de l'option Monture dans Réglages > Général : choisissez laquelle de vos montures volantes AFG utilise pour se déplacer ou en attendant, au lieu de la monture aléatoire. Demandé dans le ticket #83",
+  "changelog.r21800.2": "Correction des ALÉA dont le centre se trouve sous le sol, comme ceux de The Imperious à Kozama'uka : le vol ne plonge plus dans le sol et ne se bloque plus à l'arrivée. Signalé dans le ticket #82",
+  "changelog.r21800.3": "Correction des blocages contre les murs pendant les ALÉA : dans les ALÉA de collecte, le personnage contourne le mur jusqu'à un objet vers lequel BossMod fonce dans un mur, et les jobs à distance qui ont un ennemi à portée sans pouvoir le toucher s'en approchent désormais. Signalé dans le ticket #82",
   "changelog.r21700.1": "Ajout de l'option Monter en attendant les ALÉA dans Réglages > Général : utilise une monture après un court délai pendant l'attente d'un ALÉA, désactivée pour les sessions de médailles Yo-kai. Contribution de lizvik",
   "changelog.r21700.2": "Correction des trajets vers un ALÉA qui restaient au sol quand le vol devenait possible après le calcul de l'itinéraire : l'itinéraire est désormais recalculé pour voler, jusqu'à deux fois. Contribution de lizvik",
   "changelog.r21700.3": "Ajout du Mode économie dans Paramètres > Général : ignore la téléportation vers l'éthérite le plus proche du prochain ALÉA dans la même zone et y vole à la place pour économiser des gils. Les téléportations vers d'autres zones et le déblocage restent actifs",

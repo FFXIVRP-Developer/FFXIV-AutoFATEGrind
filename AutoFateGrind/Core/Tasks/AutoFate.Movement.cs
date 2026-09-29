@@ -26,9 +26,10 @@ public sealed partial class AutoFate
         await GenerateObstacleMap(fate);
 
         var rnd = RandomPointInsideRadius(fate.Position, fate.Radius * 0.5f);
-        var dest = rnd.OnMesh();
-        if (dest == rnd)
-            Diag($"OnMesh did not project FATE {fate.Id} dest {rnd}; vnav may struggle");
+        var projected = FateGround.Project(rnd) ?? FateGround.Project(fate.Position);
+        var dest = projected ?? rnd;
+        if (projected is null)
+            Diag($"Could not project FATE {fate.Id} dest {rnd} or its centre onto the navmesh; vnav may struggle");
 
         var targetId = fate.Id;
         // Mounting is refused in combat and clib's Mount() retries until the idle abort, so aggro (e.g. from a
@@ -166,7 +167,7 @@ public sealed partial class AutoFate
 
         if (PublicEvent.GetFateById(targetId) is { } landed && Svc.Objects.LocalPlayer is { } arrivedPlayer)
         {
-            var distanceFromCenter = Vector3.Distance(arrivedPlayer.Position, landed.Position);
+            var distanceFromCenter = FateGround.HorizontalDistance(arrivedPlayer.Position, landed.Position);
             if (distanceFromCenter > landed.Radius)
             {
                 Diag($"Move to FATE {targetId} ({landed.Name}) ended {distanceFromCenter:F0}m from center (radius {landed.Radius:F0}); outside the ring, treating as stuck");

@@ -251,8 +251,8 @@ public sealed partial class AutoFate
                 if (isCollect)
                 {
                     UpdateCollectPullHold(fateId, preset);
-                    // A hand-in trip is progress in its own right; give the stall clocks a fresh window after one.
-                    if (await MaybeHandInCollectItems(fateId, fateName, preset))
+                    // A hand-in trip or pickup walk is progress in its own right; give the stall clocks a fresh window after one.
+                    if (await MaybeHandInCollectItems(fateId, fateName, preset) || await TickPickupWedge(fateId, fateName, preset))
                     {
                         lastProgressAtMs = Environment.TickCount64;
                         lastInCombatAtMs = Environment.TickCount64;
@@ -427,27 +427,30 @@ public sealed partial class AutoFate
         Diag($"Engagement idle on FATE {fateId} ({fateName}) for {EngageIdleStallMs / 1000}s with nothing in reach; walking to the nearest mob with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})");
 
         var dest = survey.NearestPosition.OnMesh();
-        var tolerance = survey.NearestHitboxRadius + (idle.Meters <= EngageMeleeReachMeters
+        // Already inside the ranged approach distance and still not fighting means the ground in between is the
+        // problem, so close in like a melee; clib ends a move that starts within its tolerance without moving.
+        var closeIn = idle.Meters <= EngageMeleeReachMeters || survey.NearestDistanceToHitbox <= EngageRangedApproachToleranceMeters;
+        var tolerance = survey.NearestHitboxRadius + (closeIn
             ? EngageMeleeApproachToleranceMeters
             : EngageRangedApproachToleranceMeters);
         var config = MovementConfig.Default.WithTolerance(tolerance);
         var reachMeters = idle.Meters;
 
-        bool InRangeOrGone()
+        // Reach alone ends nothing: a ranged job 8m from a mob on the far side of a wall is in reach but cannot hit it (issue #82).
+        bool EngagedOrGone()
         {
             if (PublicEvent.GetFateById(fateId) is not { State: FateState.Running })
             {
                 return true;
             }
-            if (Svc.Objects.LocalPlayer is not { } moving)
+            if (Svc.Objects.LocalPlayer is not { } moving || !FateMobScanner.Survey(fateId, moving.Position).Any)
             {
                 return true;
             }
-            var live = FateMobScanner.Survey(fateId, moving.Position);
-            return live.Any && live.NearestDistanceToHitbox <= reachMeters;
+            return Svc.Condition[ConditionFlag.InCombat] && HasTargetInReach(fateId, reachMeters);
         }
 
-        await WalkWithBossModParked(dest, config, InRangeOrGone, $"engage-reposition-{fateId}");
+        await WalkWithBossModParked(dest, config, EngagedOrGone, $"engage-reposition-{fateId}");
     }
 
     private async Task<bool> SeekFateCentre(uint fateId, string fateName, Vector3 centre, Vector3 from)
@@ -461,7 +464,7 @@ public sealed partial class AutoFate
         Status = $"Searching {fateName}";
         Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
 
-        var dest = centre.OnMesh();
+        var dest = FateGround.Project(centre) ?? centre;
         var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
 
         bool MobSeenOrGone()

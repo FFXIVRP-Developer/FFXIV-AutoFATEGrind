@@ -389,6 +389,8 @@
   "changelog.changes.one": "{0} change",
   "changelog.changes.other": "{0} changes",
   "changelog.r21800.1": "Added the Mount option under Settings > General: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83",
+  "changelog.r21800.2": "Fixed FATEs whose center lies below the ground, like the ones at The Imperious in Kozama'uka: the flight there no longer dives into the floor and stalls on arrival. Reported in issue #82",
+  "changelog.r21800.3": "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82",
   "changelog.r21700.1": "Added the Mount while waiting for FATEs option under Settings > General: mounts after a short delay while you wait for a FATE to spawn, and stays off on Yo-kai medal runs. Contributed by lizvik",
   "changelog.r21700.2": "Fixed trips to a FATE staying on the ground when flying became available only after the route was planned: travel now replans for flight, up to twice. Contributed by lizvik",
   "changelog.r21700.3": "Added Economy mode under Settings > General: skips the teleport to the aetheryte nearest the next FATE in the same zone and flies there instead to save gil. Teleports to other zones and stuck recovery still happen",

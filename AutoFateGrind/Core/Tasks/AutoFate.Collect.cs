@@ -38,6 +38,12 @@ public sealed partial class AutoFate
     private const float PickupHoldRangeMeters = 30f;
     private const int   PickupHoldTimeoutMs = 30_000;
     private const int   PickupHoldCooldownMs = 20_000;
+    // BossMod's FATE helper pushes straight at a pickup whose line crosses a wall (issue #82). Only a pickup whose
+    // flat distance stopped shrinking for this long counts as wedged; a helper that is walking to it keeps closing in.
+    private const int   PickupWedgeMs = 5_000;
+    private const float PickupWedgeProgressMeters = 1f;
+    private const int   MaxPickupWalksPerNode = 2;
+    private const int   FateHelperHandInItems = 10;
 
     private readonly record struct FateSpawnKey(uint FateId, int StartEpoch);
 
@@ -56,6 +62,11 @@ public sealed partial class AutoFate
     private long pickupHoldSinceMs;
     private int  pickupHoldHeldCount;
     private long pickupHoldSuppressedUntilMs;
+    private ulong pickupWedgeNodeId;
+    private float pickupWedgeBestMeters;
+    private long  pickupWedgeSinceMs;
+    private int   pickupWalks;
+    private ulong pickupGivenUpNodeId;
 
     private static int HandInBatch => Math.Max(1, Plugin.Cfg.CollectHandInBatch);
 
@@ -73,6 +84,8 @@ public sealed partial class AutoFate
         handInNpcMissingLogged = false;
         pickupHoldSinceMs = 0;
         pickupHoldSuppressedUntilMs = 0;
+        ResetPickupWedge();
+        pickupGivenUpNodeId = 0;
         afgHandInOwner = Plugin.Cfg.CollectHandInEnabled;
 
         Diag(afgHandInOwner
@@ -168,6 +181,100 @@ public sealed partial class AutoFate
         pickupHoldSuppressedUntilMs = now + PickupHoldCooldownMs;
         Diag($"Collect FATE {fateId}: BossMod picked nothing up in {PickupHoldTimeoutMs / 1000}s of holding pulls for a nearby item; pulling again for {PickupHoldCooldownMs / 1000}s");
         return false;
+    }
+
+    // Returns true when a walk was attempted so the caller can restart its stall clocks.
+    private async Task<bool> TickPickupWedge(uint fateId, string fateName, string preset)
+    {
+        if (!PickupWedged(fateId, out var pickupId, out var distance))
+        {
+            return false;
+        }
+
+        Status = $"Walking to a {fateName} item";
+        Diag($"Collect FATE {fateId} ({fateName}): pickup {pickupId:X} {distance:F0}m away has not come closer in {PickupWedgeMs / 1000}s (BossMod's FATE helper pushes straight at it through walls); walking there with vnav");
+        EndRingChase(preset);
+
+        var parkedPickup = BossModIPC.Instance.AddTransientStrategy(preset, BossModFateHelper.Module, BossModFateHelper.CollectTrack, BossModFateHelper.DisabledOption);
+        try
+        {
+            if (FateMobScanner.TryGetPickup(fateId, pickupId, out var pickup))
+            {
+                var dest = FateGround.Project(pickup.Position) ?? pickup.Position;
+                await WalkWithBossModParked(dest, MovementConfig.InteractRange, () => PickupWalkSettled(fateId, pickupId), $"collect-pickup-walk-{fateId}");
+            }
+        }
+        finally
+        {
+            if (parkedPickup)
+            {
+                BossModIPC.Instance.ClearTransientStrategy(preset, BossModFateHelper.Module, BossModFateHelper.CollectTrack);
+            }
+        }
+
+        var reached = !FateMobScanner.TryGetPickup(fateId, pickupId, out var left) || left.IsInInteractRange();
+        ResetPickupWedge();
+        if (reached)
+        {
+            pickupWalks = 0;
+            return true;
+        }
+
+        pickupWalks++;
+        if (pickupWalks >= MaxPickupWalksPerNode)
+        {
+            pickupGivenUpNodeId = pickupId;
+            pickupWalks = 0;
+            Diag($"Collect FATE {fateId}: could not reach pickup {pickupId:X} after {MaxPickupWalksPerNode} walks; leaving it to BossMod");
+        }
+        return true;
+    }
+
+    private bool PickupWedged(uint fateId, out ulong pickupId, out float distance)
+    {
+        pickupId = 0;
+        distance = 0f;
+        if (!presetHasFateHelper
+         || Svc.Condition[ConditionFlag.InCombat]
+         || Svc.Condition[ConditionFlag.Mounted]
+         || StuckDetector.IsPositionFrozenLegit()
+         || Svc.Objects.LocalPlayer is not { } player
+         || FateItems.HeldCount(FateItems.TurnInItemId(fateId)) >= FateHelperHandInItems
+         || !FateMobScanner.TryFindNearestPickup(fateId, player.Position, out var pickup, out distance)
+         || pickup.IsInInteractRange())
+        {
+            ResetPickupWedge();
+            return false;
+        }
+
+        pickupId = pickup.GameObjectId;
+        if (pickupId == pickupGivenUpNodeId)
+        {
+            return false;
+        }
+
+        var now = Environment.TickCount64;
+        if (pickupId != pickupWedgeNodeId || distance < pickupWedgeBestMeters - PickupWedgeProgressMeters)
+        {
+            pickupWedgeNodeId = pickupId;
+            pickupWedgeBestMeters = distance;
+            pickupWedgeSinceMs = now;
+            return false;
+        }
+        return now - pickupWedgeSinceMs >= PickupWedgeMs;
+    }
+
+    private static bool PickupWalkSettled(uint fateId, ulong pickupId)
+        => !FateAlive(fateId)
+        || Svc.Condition[ConditionFlag.InCombat]
+        || !FateMobScanner.TryGetPickup(fateId, pickupId, out var pickup)
+        || pickup.IsInInteractRange();
+
+    private void ResetPickupWedge()
+    {
+        pickupWedgeNodeId = 0;
+        pickupWedgeSinceMs = 0;
+        pickupWedgeBestMeters = float.MaxValue;
     }
 
     private static bool FateAlive(uint fateId)
