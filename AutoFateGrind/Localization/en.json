@@ -507,6 +507,8 @@
   "settings.general.keepTwistHelp": "While the Twist of Fate bonus is up, stay in the zone: no zone swap, no teleport shortcut, and no rotating past a finished zone until it wears off.",
   "settings.general.mountWhileWaiting": "Mount while waiting for FATEs",
   "settings.general.mountWhileWaitingHelp": "Mount after a short delay while idle and waiting for FATEs. Disabled for Yo-kai medal runs.",
+  "settings.general.economyTravel": "Economy mode",
+  "settings.general.economyTravelHelp": "Save gil by never teleporting to an aetheryte closer to the next FATE in the same zone; AFG mounts up and flies there instead. Teleports to other zones, and the teleport used to recover from being stuck, still happen.",
   "settings.general.autoPause": "Auto-pause in content",
   "settings.general.autoPauseHelp": "Pause the run while you are inside a duty, trial, raid, or any other instanced content, then resume it once you are back outside. Your zones, goal, and session stats are kept, and paused time does not count toward a time-based goal.",
   "settings.general.autoResume": "Auto-resume on fault",

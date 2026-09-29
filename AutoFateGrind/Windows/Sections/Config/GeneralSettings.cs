@@ -100,6 +100,12 @@ internal static class GeneralSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.MountWhileWaitingForFates, v => cfg.MountWhileWaitingForFates = v, "##gen_mount_waiting"),
             SettingsRow.ToggleHeight);
 
+        SettingsRow.Draw(Loc.T(L.Settings.EconomyTravel),
+            Loc.T(L.Settings.EconomyTravelHelp),
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.EconomyTravel, v => cfg.EconomyTravel = v, "##gen_economy"),
+            SettingsRow.ToggleHeight);
+
         SettingsRow.Draw(Loc.T(L.Settings.AutoPause),
             Loc.T(L.Settings.AutoPauseHelp),
             SettingsControls.ToggleWidth,

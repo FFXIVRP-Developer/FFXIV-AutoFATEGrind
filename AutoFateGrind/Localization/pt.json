@@ -507,6 +507,8 @@
   "settings.general.keepTwistHelp": "Enquanto o bônus Twist of Fate estiver ativo, ficar na zona: sem troca de zona, sem atalho de teleporte e sem sair de uma zona concluída até ele acabar.",
   "settings.general.mountWhileWaiting": "Montar enquanto espera FATEs",
   "settings.general.mountWhileWaitingHelp": "Monta automaticamente após um breve atraso enquanto espera por FATEs. Desativado nas sessões de medalhas Yo-kai.",
+  "settings.general.economyTravel": "Modo econômico",
+  "settings.general.economyTravelHelp": "Economiza gil ao nunca se teleportar para um etérito mais próximo da próxima FATE na mesma zona; o AFG monta e voa até lá. Teleportes para outras zonas e o teleporte usado para sair de um travamento continuam acontecendo.",
   "settings.general.autoPause": "Pausar automaticamente em conteúdo",
   "settings.general.autoPauseHelp": "Pausa a sessão enquanto você está em uma masmorra, provação, raid ou qualquer outro conteúdo instanciado e retoma ao sair. Suas zonas, meta e estatísticas são mantidas, e o tempo em pausa não conta para uma meta de tempo.",
   "settings.general.autoResume": "Retomar automaticamente após falha",

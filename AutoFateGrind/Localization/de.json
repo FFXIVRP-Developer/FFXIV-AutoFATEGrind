@@ -507,6 +507,8 @@
   "settings.general.keepTwistHelp": "Solange der Twist-of-Fate-Bonus aktiv ist, im Gebiet bleiben: kein Gebietswechsel, keine Teleport-Abkürzung und kein Weiterziehen aus einem fertigen Gebiet, bis er abläuft.",
   "settings.general.mountWhileWaiting": "Beim Warten auf FATEs aufsitzen",
   "settings.general.mountWhileWaitingHelp": "Nach einer kurzen Verzögerung beim Warten auf FATEs automatisch aufsitzen. Bei Yo-kai-Medaillenläufen deaktiviert.",
+  "settings.general.economyTravel": "Sparmodus",
+  "settings.general.economyTravelHelp": "Spart Gil, indem nie zu einem Ätheryten näher am nächsten FATE in derselben Zone teleportiert wird; AFG sitzt stattdessen auf und fliegt hin. Teleports in andere Zonen und der Teleport zur Befreiung aus einer festgefahrenen Lage finden weiterhin statt.",
   "settings.general.autoPause": "Im Inhalt automatisch pausieren",
   "settings.general.autoPauseHelp": "Pausiert den Durchlauf, während du in einem Dungeon, einer Prüfung, einem Raid oder anderem Instanzinhalt bist, und setzt ihn draußen fort. Gebiete, Ziel und Sitzungsstatistik bleiben erhalten, und pausierte Zeit zählt nicht für ein Zeitziel.",
   "settings.general.autoResume": "Nach Fehler automatisch fortsetzen",

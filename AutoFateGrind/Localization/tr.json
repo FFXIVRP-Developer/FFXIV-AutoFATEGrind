@@ -507,6 +507,8 @@
   "settings.general.keepTwistHelp": "Twist of Fate bonusu sürerken bölgede kal: bitene kadar bölge değişimi, ışınlanma kısayolu ve biten bölgeden ayrılma yok.",
   "settings.general.mountWhileWaiting": "FATE beklerken bineğe bin",
   "settings.general.mountWhileWaitingHelp": "FATE beklerken kısa bir gecikmeden sonra otomatik olarak bineğe biner. Yo-kai madalyası koşularında devre dışıdır.",
+  "settings.general.economyTravel": "Ekonomi modu",
+  "settings.general.economyTravelHelp": "Aynı bölgedeki bir sonraki FATE'e daha yakın bir aetheryte'a asla ışınlanmayarak gil tasarrufu sağlar; AFG bunun yerine bineğe binip oraya uçar. Diğer bölgelere ışınlanmalar ve takılı kalmaktan kurtulmak için yapılan ışınlanma yine de gerçekleşir.",
   "settings.general.autoPause": "İçerikte otomatik duraklat",
   "settings.general.autoPauseHelp": "Zindan, trial, raid ya da başka bir instance içeriğindeyken oturumu duraklatır, dışarı çıkınca sürdürür. Bölgeleriniz, hedefiniz ve oturum istatistikleri korunur; duraklatılan süre süre hedefine sayılmaz.",
   "settings.general.autoResume": "Hatadan sonra otomatik devam et",

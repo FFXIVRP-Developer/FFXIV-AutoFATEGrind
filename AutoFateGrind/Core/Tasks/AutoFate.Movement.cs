@@ -182,6 +182,7 @@ public sealed partial class AutoFate
 
     private async Task TryTeleportShortcut(Vector3 fatePos, uint fateId, string fateName)
     {
+        if (Plugin.Cfg.EconomyTravel) return;
         if (KeepingTwistOfFate()) return;
         if (Svc.Condition[ConditionFlag.InCombat]) return;
         if (Svc.Objects.LocalPlayer is not { } player) return;

@@ -507,6 +507,8 @@
   "settings.general.keepTwistHelp": "Mientras el bono Twist of Fate esté activo, quedarse en la zona: sin cambio de zona, sin atajo de teletransporte y sin dejar una zona terminada hasta que expire.",
   "settings.general.mountWhileWaiting": "Usar montura mientras esperas FATEs",
   "settings.general.mountWhileWaitingHelp": "Monta automáticamente tras una breve espera mientras aguardas FATE. Desactivado en las sesiones de medallas Yo-kai.",
+  "settings.general.economyTravel": "Modo ahorro",
+  "settings.general.economyTravelHelp": "Ahorra guiles al no teletransportarse nunca a un eterito más cercano al siguiente FATE dentro de la misma zona; AFG usa la montura y vuela hasta allí. Los teletransportes a otras zonas y el que se usa para salir de un atasco siguen ocurriendo.",
   "settings.general.autoPause": "Pausa automática en contenido",
   "settings.general.autoPauseHelp": "Pausa la sesión mientras estás en una mazmorra, una prueba, un raid o cualquier otro contenido instanciado, y la reanuda al salir. Se conservan tus zonas, objetivo y estadísticas, y el tiempo en pausa no cuenta para un objetivo de tiempo.",
   "settings.general.autoResume": "Reanudar automáticamente tras un fallo",

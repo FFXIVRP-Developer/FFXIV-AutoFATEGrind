@@ -507,6 +507,8 @@
   "settings.general.keepTwistHelp": "Tant que le bonus Twist of Fate est actif, rester dans la zone : pas de changement de zone, pas de raccourci par téléportation et pas de départ d'une zone terminée avant sa fin.",
   "settings.general.mountWhileWaiting": "Monter en attendant les ALÉA",
   "settings.general.mountWhileWaitingHelp": "Utilise automatiquement une monture après un court délai en attendant des ALÉA. Désactivé pour les sessions de médailles Yo-kai.",
+  "settings.general.economyTravel": "Mode économie",
+  "settings.general.economyTravelHelp": "Économise des gils en ne se téléportant jamais vers un éthérite plus proche du prochain ALÉA dans la même zone ; AFG monte et y vole à la place. Les téléportations vers d'autres zones, ainsi que celle utilisée pour se débloquer, restent actives.",
   "settings.general.autoPause": "Pause automatique en instance",
   "settings.general.autoPauseHelp": "Met la session en pause tant que vous êtes dans un donjon, un défi, un raid ou tout autre contenu instancié, puis la reprend à la sortie. Vos zones, votre objectif et vos statistiques sont conservés, et le temps en pause ne compte pas pour un objectif de temps.",
   "settings.general.autoResume": "Reprise automatique après erreur",
