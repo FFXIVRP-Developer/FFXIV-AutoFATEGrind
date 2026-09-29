@@ -421,6 +421,7 @@ internal static class L
         [
             new("changelog.r21700.1", "Added the Mount while waiting for FATEs option under Settings > General: mounts after a short delay while you wait for a FATE to spawn, and stays off on Yo-kai medal runs. Contributed by lizvik"),
             new("changelog.r21700.2", "Fixed trips to a FATE staying on the ground when flying became available only after the route was planned: travel now replans for flight, up to twice. Contributed by lizvik"),
+            new("changelog.r21700.3", "Added Economy mode under Settings > General: skips the teleport to the aetheryte nearest the next FATE in the same zone and flies there instead to save gil. Teleports to other zones and stuck recovery still happen"),
         ];
 
         public static readonly LocString[] Release21600 =

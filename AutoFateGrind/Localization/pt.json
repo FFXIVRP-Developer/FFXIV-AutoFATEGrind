@@ -390,6 +390,7 @@
   "changelog.changes.other": "{0} mudanças",
   "changelog.r21700.1": "Adicionada a opção Montar enquanto espera FATEs em Configurações > Geral: monta após um breve atraso enquanto você espera um FATE e fica desativada nas sessões de medalhas Yo-kai. Contribuição de lizvik",
   "changelog.r21700.2": "Corrigido o trajeto até um FATE continuar por terra quando o voo ficava disponível só depois de planejar a rota: agora a rota é replanejada para voar, até duas vezes. Contribuição de lizvik",
+  "changelog.r21700.3": "Adicionado o Modo econômico em Configurações > Geral: pula o teleporte para o etérito mais próximo da próxima FATE na mesma zona e voa até lá para economizar gil. Teleportes para outras zonas e a recuperação de travamentos continuam acontecendo",
   "changelog.r21600.1": "Adicionada sua quantidade de gemas bicolores à barra de título e ao rastreador ao vivo, em âmbar no limite de troca automática e em rosa no teto de 1500",
   "changelog.r21600.2": "Adicionada a opção Invocar chocobo em Configurações > Consumíveis: desative para o assistente de FATE do BossMod não usar Gysahl Greens durante as sessões, sem alterar seu preset do BossMod. Contribuição de lizvik",
   "changelog.r21600.3": "Adicionado um botão do Buy Me a Coffee abaixo do Patreon na página Sobre",

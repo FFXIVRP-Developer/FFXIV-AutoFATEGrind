@@ -390,6 +390,7 @@
   "changelog.changes.other": "{0} changements",
   "changelog.r21700.1": "Ajout de l'option Monter en attendant les ALÉA dans Réglages > Général : utilise une monture après un court délai pendant l'attente d'un ALÉA, désactivée pour les sessions de médailles Yo-kai. Contribution de lizvik",
   "changelog.r21700.2": "Correction des trajets vers un ALÉA qui restaient au sol quand le vol devenait possible après le calcul de l'itinéraire : l'itinéraire est désormais recalculé pour voler, jusqu'à deux fois. Contribution de lizvik",
+  "changelog.r21700.3": "Ajout du Mode économie dans Paramètres > Général : ignore la téléportation vers l'éthérite le plus proche du prochain ALÉA dans la même zone et y vole à la place pour économiser des gils. Les téléportations vers d'autres zones et le déblocage restent actifs",
   "changelog.r21600.1": "Ajout de votre nombre de gemmes bicolores dans la barre de titre et le suivi en direct, en ambre au seuil d'échange automatique et en rose au plafond de 1500",
   "changelog.r21600.2": "Ajout de l'option Invoquer le chocobo dans Réglages > Consommables : désactivez-la pour que l'assistant d'ALÉA de BossMod n'utilise pas de légumes de Gysahl pendant les sessions, sans modifier votre preset BossMod. Contribution de lizvik",
   "changelog.r21600.3": "Ajout d'un bouton Buy Me a Coffee sous Patreon sur la page À propos",
