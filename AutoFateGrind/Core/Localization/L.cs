@@ -417,6 +417,13 @@ internal static class L
         public static readonly LocString New = new("changelog.new", "New");
         public static readonly LocPlural Changes = new("changelog.changes", "{0} change", "{0} changes");
 
+        public static readonly LocString[] Release21600 =
+        [
+            new("changelog.r21600.1", "Added your Bicolor Gemstone count to the title strip and the live tracker, turning amber at your auto-trade threshold and rose at the 1500 cap"),
+            new("changelog.r21600.2", "Added the Summon chocobo toggle under Settings > Consumables: turn it off to keep BossMod's FATE helper from using Gysahl Greens during runs, without changing your BossMod preset"),
+            new("changelog.r21600.3", "Added a Buy Me a Coffee button under Patreon on the About page"),
+        ];
+
         public static readonly LocString[] Release21500 =
         [
             new("changelog.r21500.1", "Fixed the Relic goals asking for the Yo-kai Watch before they would start"),
