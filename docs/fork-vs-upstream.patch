@@ -438,10 +438,10 @@ index 0878ae6..76a3103 100644
          Diag($"Humanize done in {label} after {hops} hop(s).");
 diff --git a/AutoFateGrind/Core/Tasks/AutoResume.cs b/AutoFateGrind/Core/Tasks/AutoResume.cs
 new file mode 100644
-index 0000000..36fb89a
+index 0000000..fee28f4
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoResume.cs
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,57 @@
 +using Dalamud.Game.ClientState.Conditions;
 +using Dalamud.Plugin.Services;
 +using ECommons.DalamudServices;
@@ -453,12 +453,8 @@ index 0000000..36fb89a
 +// the run-end callbacks of an unloading instance still fire after Dispose, so Plugin.Dispose raises Unloading first.
 +internal sealed class AutoResume : IDisposable
 +{
-+    // Lets the previous load's game, plugins and navmesh settle before the run starts.
-+    private const int SettleMs = 15_000;
-+
 +    public static bool Unloading;
 +
-+    private long readySinceMs;
 +    private bool finished;
 +
 +    public AutoResume() => Svc.Framework.Update += Tick;
@@ -488,15 +484,13 @@ index 0000000..36fb89a
 +            return;
 +        }
 +
-+        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null || Svc.Condition[ConditionFlag.BetweenAreas])
++        // Starts the moment the character is in game and every required plugin is loaded (after a game launch
++        // vnavmesh/BossMod may load after AFG); the run itself waits for the navmesh.
++        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null || Svc.Condition[ConditionFlag.BetweenAreas]
++         || !External.ExternalPlugins.AllRequiredInstalled())
 +        {
-+            readySinceMs = 0;
 +            return;
 +        }
-+
-+        var now = Environment.TickCount64;
-+        if (readySinceMs == 0) readySinceMs = now;
-+        if (now - readySinceMs < SettleMs) return;
 +
 +        finished = true;
 +        if (Plugin.Instance.Controller.Running) return;
