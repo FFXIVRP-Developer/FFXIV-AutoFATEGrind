@@ -93,17 +93,20 @@ internal sealed partial class AutoFateController
 
     private bool PlanYokaiZones(AutoFateSession owningSession)
     {
-        var targetIndex = YokaiProgress.ResolveTargetIndex(Plugin.Cfg, owningSession.YokaiTargetMinionId);
-        var zones = YokaiProgress.ZonesFor(targetIndex);
+        // Fork: every zone an unfinished minion drops in; the minion is picked per zone (AutoFate.YokaiTargetChanged).
+        var zones = YokaiProgress.ZonesForAll(Plugin.Cfg);
         Diag($"Yo-kai roster: {YokaiProgress.DescribeRoster(Plugin.Cfg)}");
         if (zones.Count == 0)
         {
             return false;
         }
 
-        owningSession.YokaiTargetMinionId = YokaiCatalog.Entries[targetIndex].MinionId;
         activeZones = zones;
-        Diag($"Yo-kai target: {YokaiProgress.MinionName(targetIndex)} ({YokaiProgress.Statuses[targetIndex].Medals}/{YokaiProgress.MedalTarget(Plugin.Cfg)} medals), {zones.Count} zone(s).");
+        var startTerritory = zones[CurrentTerritoryIndex()].TerritoryId;
+        var targetIndex = YokaiProgress.ResolveTargetIndexForZone(Plugin.Cfg, startTerritory, owningSession.YokaiTargetMinionId);
+        if (targetIndex < 0) targetIndex = YokaiProgress.ResolveTargetIndex(Plugin.Cfg, owningSession.YokaiTargetMinionId);
+        owningSession.YokaiTargetMinionId = targetIndex < 0 ? 0 : YokaiCatalog.Entries[targetIndex].MinionId;
+        Diag($"Yo-kai: {zones.Count} zone(s) where a minion still needs medals; starting with {(targetIndex < 0 ? "none" : YokaiProgress.MinionName(targetIndex))}, picked per zone from here.");
         return true;
     }
 

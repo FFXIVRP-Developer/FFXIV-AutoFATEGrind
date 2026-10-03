@@ -17,6 +17,8 @@ public sealed partial class AutoFate
 
     private long yokaiParkWarnedAtMs;
 
+    // Fork: the minion is picked per zone and switched in place (the companion check before each FATE summons it); no
+    // hand-off or replan, so this never reports a change. A zone with no minion left is GoalZoneDone's to rotate past.
     private bool YokaiTargetChanged()
     {
         if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
@@ -24,8 +26,19 @@ public sealed partial class AutoFate
             return false;
         }
 
-        var target = YokaiProgress.ResolveTargetMinionId(Plugin.Cfg, session.YokaiTargetMinionId);
-        return target != 0 && target != session.YokaiTargetMinionId;
+        var index = YokaiProgress.ResolveTargetIndexForZone(Plugin.Cfg, zone.TerritoryId, session.YokaiTargetMinionId);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var minionId = YokaiCatalog.Entries[index].MinionId;
+        if (minionId != session.YokaiTargetMinionId)
+        {
+            Diag($"Yo-kai in {zone.Name}: farming {YokaiProgress.MinionName(index)} ({YokaiProgress.Statuses[index].Medals}/{YokaiProgress.MedalTarget(Plugin.Cfg)} medals) instead of {YokaiTargetName()}");
+            session.YokaiTargetMinionId = minionId;
+        }
+        return false;
     }
 
     private void ReportYokaiGoalMet()

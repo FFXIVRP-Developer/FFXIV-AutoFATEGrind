@@ -99,6 +99,15 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 | `Core/Tasks/AutoFate.cs` `GoToZone` | `await ClearBlockingCombat();` + cancel check before the first `Status` line; `await ClearBlockingCombat();` after `FaultIfCharacterStaysBlocked();` | Every zone teleport is preceded by a fight-free when in combat. If upstream moves the teleport, keep the call in front of it. |
 | `Core/Tasks/AutoFate.Movement.cs` `ClearBlockingCombat` | the running-FATE `break` also needs `Svc.ClientState.TerritoryType == zone.TerritoryId`; the "still in combat" Diag names target and FATE | Off-zone, never hand combat to a FATE the state machine will not engage. |
 
+### 10. Yo-kai minion per zone (README-FORK item 10)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Game/Yokai/YokaiProgress.cs` | fork block after `ResolveTargetMinionId`: `DropsIn`, `ResolveTargetIndexForZone`, `ZonesForAll`, `IsZoneDone` | Pure addition. Uses upstream's `IsFarmable`, `ZonesFor`, `UnlockedZoneMask`. |
+| `Core/Modes/BuiltInModes.cs` `YokaiMedalsMode` | `PlanZones` → `ZonesForAll`; adds `IsZoneDone` / `ZoneDoneReason` | The mode must report zone-done, or a zone with nothing left keeps the run there. |
+| `Core/Tasks/AutoFateController.cs` `PlanYokaiZones` | zones from `ZonesForAll`, first target from `ResolveTargetIndexForZone` at the start zone | If upstream changes the Yo-kai planning, keep "all zones, minion per zone". |
+| `Core/Tasks/AutoFate.Yokai.cs` `YokaiTargetChanged` | switches `session.YokaiTargetMinionId` in place and always returns false | Returning true would hand off and replan for every zone change. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

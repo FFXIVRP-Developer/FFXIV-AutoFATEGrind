@@ -94,6 +94,57 @@ internal static unsafe class YokaiProgress
         return index < 0 ? 0 : YokaiCatalog.Entries[index].MinionId;
     }
 
+    // ---- Fork: minion per zone (README-FORK item 10) ------------------------------------------------------------
+    // Every zone pays for two minions. The run plans every zone some unfinished minion uses and, in each zone, farms a
+    // minion that still needs medals and drops there: the one out, else the last target, else the first in the list.
+
+    /// <summary>Fork: the zone is one of the minion's three and its aetheryte is attuned.</summary>
+    public static bool DropsIn(int entryIndex, uint territoryId)
+    {
+        var zoneIds = YokaiCatalog.Entries[entryIndex].ZoneIds;
+        var slot = Array.IndexOf(zoneIds, territoryId);
+        return slot >= 0 && (Statuses[entryIndex].UnlockedZoneMask & (1 << slot)) != 0;
+    }
+
+    /// <summary>Fork: the minion to farm in this zone, -1 when no unfinished minion drops here.</summary>
+    public static int ResolveTargetIndexForZone(Configuration configuration, uint territoryId, uint preferredMinionId)
+    {
+        bool Fits(int index) => index >= 0 && IsFarmable(configuration, index) && DropsIn(index, territoryId);
+
+        var summonedIndex = YokaiCatalog.IndexOfMinion(YokaiOps.SummonedMinionId());
+        if (Fits(summonedIndex)) return summonedIndex;
+        var preferredIndex = YokaiCatalog.IndexOfMinion(preferredMinionId);
+        if (Fits(preferredIndex)) return preferredIndex;
+        for (var index = 0; index < statuses.Length; index++)
+        {
+            if (Fits(index)) return index;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    ///     Fork: every zone some unfinished minion drops in, once each, by territory id: that groups La Noscea, Thanalan
+    ///     and the Shroud (and each later expansion), so rotating to the next zone is mostly a short hop.
+    /// </summary>
+    public static IReadOnlyList<ZoneInfo> ZonesForAll(Configuration configuration)
+    {
+        var zones = new List<ZoneInfo>();
+        var seen = new HashSet<uint>();
+        for (var index = 0; index < statuses.Length; index++)
+        {
+            if (!IsFarmable(configuration, index)) continue;
+            foreach (var zone in ZonesFor(index))
+            {
+                if (seen.Add(zone.TerritoryId)) zones.Add(zone);
+            }
+        }
+        return zones.OrderBy(zone => zone.TerritoryId).ToList();
+    }
+
+    /// <summary>Fork: nothing in this zone still needs medals.</summary>
+    public static bool IsZoneDone(Configuration configuration, uint territoryId)
+        => Ready && ResolveTargetIndexForZone(configuration, territoryId, 0) < 0;
+
     public static bool IsComplete(Configuration configuration)
         => Ready && ResolveTargetIndex(configuration, 0) < 0;
 

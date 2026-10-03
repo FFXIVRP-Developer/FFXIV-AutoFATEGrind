@@ -96,5 +96,11 @@ public sealed class YokaiMedalsMode : IFateGrindMode
 
     public bool PlansZones => true;
 
-    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => YokaiProgress.ZonesFor(YokaiProgress.ResolveTargetIndex(cfg, 0));
+    // Fork: every zone an unfinished minion drops in (was the first target's three); the minion is picked per zone.
+    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => YokaiProgress.ZonesForAll(cfg);
+
+    // Fork: a zone is done once no unfinished minion drops there; the run rotates past it.
+    public bool IsZoneDone(uint territoryId) => YokaiProgress.IsZoneDone(Plugin.Cfg, territoryId);
+
+    public string ZoneDoneReason(uint territoryId) => "no yo-kai that still needs medals drops here";
 }

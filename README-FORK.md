@@ -76,6 +76,16 @@ Every change in the code is marked with a `// Fork:` comment.
    own zone (off-zone the state machine is in WrongZone and never engages that FATE). The "still in combat" line now
    names the target and the FATE.
 
+10. **Yo-kai minion per zone** (`YokaiProgress.cs` fork block, `BuiltInModes.cs` `YokaiMedalsMode`,
+    `AutoFateController.PlanYokaiZones`, `AutoFate.Yokai.cs` `YokaiTargetChanged`). Upstream farmed one minion at a time
+    and planned only its three zones, handing off and replanning when it reached the goal. Every ARR zone pays for two
+    minions, so now the run plans every zone some unfinished minion drops in (sorted by territory id, which groups the
+    regions) and, in each zone, farms a minion that still needs medals there: the one out, else the last target, else
+    the first in the roster. The switch happens in place (`Yo-kai in <zone>: farming X instead of Y`); the existing
+    companion check before each FATE summons it. A zone where no unfinished minion drops is "done"
+    (`IsZoneDone`) and rotated past; the run ends when the roster is done, as before. The Yo-kai hand-off
+    (`PendingYokaiAdvance`) no longer fires.
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -89,6 +99,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 6 Resume run after reload | Removed. |
 | 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 | 8 IPC | Works: BoatRunner starts and soft-stops runs. |
+| 10 Yo-kai minion per zone | Not yet observed. Look for `Yo-kai in <zone>: farming`. |
 | 9 Fight free before a zone teleport | Not yet observed. Look for `In combat outside a FATE; enabling rotation to fight free` before `Off-zone ... teleporting`. |
 
 ## Using the humanizer rest
