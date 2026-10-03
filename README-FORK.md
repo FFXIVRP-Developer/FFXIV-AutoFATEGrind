@@ -49,6 +49,27 @@ Every change in the code is marked with a `// Fork:` comment.
 
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
+## Verified in game
+
+| Item | Status (2026-10-03) |
+|---|---|
+| 1-2 Line of sight | Not yet observed. Look for `(no LoS)` / "out of line of sight" lines in `dalamud.log`. |
+| 3 Progress resets repositions | Not yet observed. |
+| 4 Break location | Not yet observed. Look for `Humanize retreat ...: arrived in territory` in `dalamud.log`. |
+| 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
+| 6 Resume run after reload | Works: run restarted about 1 s after a hot reload. |
+
+## Using the humanizer rest
+
+Settings → Humanizer:
+1. Turn the humanizer on and set "FATEs between breaks" and "Break length".
+2. "Break location" (under Cities): Inn room, Apartment, Private house or Free Company house. No city
+   needs to be ticked. Ticked cities only serve as the fallback when Lifestream can't get there.
+3. "Pause between hops": set both ends to 999 minutes (double-click a field to type). The character
+   then stands still for the whole break.
+
+For a private or FC house, register it in Lifestream with the enter mode "Enter house" first.
+
 Not changed: BossMod Reborn still drives in-ring movement (it dodges AoEs; vnav would not).
 
 ## Submodule
@@ -77,3 +98,7 @@ expected and harmless.
 Add `AutoFateGrind\bin\Release\AutoFateGrind.dll` as a dev plugin location and disable the
 repository-installed Auto FATE Grind (both share the internal name). Settings are shared with the
 installed plugin (`pluginConfigs\AutoFateGrind.json`).
+
+Currently loaded in the `Me` profile only (since 2026-10-03). Slaves still get the store build through
+`SLAVE_PLUGINS`. Dalamud hot-reloads the dev plugin on every build into `bin\Release`. That stops a
+running run, and item 6 then restarts it.

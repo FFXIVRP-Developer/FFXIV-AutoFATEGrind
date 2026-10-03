@@ -20,7 +20,7 @@ dotnet build ... -p:OutDir=<scratch>  # compile check (README-FORK "Rebuild")
 
 If a rebase gets messy, abort it (`git rebase --abort`), start a fresh branch from `origin/master`, and
 re-apply the items one by one from this file. Every item is small and self-contained. The new files
-(`AutoHumanize.Retreat.cs`) can be copied as-is.
+(`AutoHumanize.Retreat.cs`, `AutoResume.cs`) can be copied as-is.
 
 ## Footprint per item
 
@@ -54,7 +54,6 @@ re-apply the items one by one from this file. Every item is small and self-conta
 | same, wander loop | territory check and `o.Move(territory, ...)` use `territory`; **the pause moved from after the walk to before it** | The point of the change: the first thing after arriving is the pause, so a 999-minute pause means no movement at all. If upstream restructures the loop, keep pause-first. |
 | `Configuration.cs` | `HumanizerRetreat` property after `HumanizerWanderMaxMeters` | The saved JSON is shared with the store build. The store build ignores the extra key. |
 | `Windows/Sections/Config/HumanizerSettings.cs` | `MaxPauseSec = 999 * 60` used as the pause range max (upstream: `60`); "Break location" row at the top of `DrawCitiesGroup` | The UI text is literal English, not localised, on purpose: no `L.cs` / `Localization/*.json` changes to conflict. |
-
 | `Core/Tasks/AutoFate.Engage.cs` `QueueHandoffIfDue` | `HumanizerCities.Count > 0` → `AutoHumanize.HasBreakPlace(Plugin.Cfg)` | A retreat alone must be enough to queue a break. |
 | `Core/Tasks/AutoFateController.Handoffs.cs` `ResumeGrindOrHumanize` | the `Count == 0` skip uses `!HasBreakPlace(cfg)`; the "no catalog city" skip only applies with `HumanizerRetreat.City`; `cityId` is `0` when no city is ticked | `0` means "no city fallback". `AutoHumanize.Execute` aborts the break (BreakTaken stays false) when the retreat fails and the city is `0`. Never teleport to territory 0. |
 | `Windows/Sections/Config/HumanizerSettings.cs` | the "No cities selected" warning only shows with `HumanizerRetreat.City` | Cosmetic. |
@@ -78,6 +77,7 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 | same, `Stop()` | `AutoResume.MarkEnded();` at the top | Every user stop goes through `Stop()`. |
 | `Core/Tasks/AutoFateController.RunLifecycle.cs` `EndRun` | `AutoResume.MarkEnded();` after `FinalizeRun` | `EndRun` is the choke point for runs ending on their own. If upstream adds an end path that skips `EndRun`, hook it too. |
 | `Plugin.cs` | ctor end: `autoResume = new AutoResume();` + field; `Dispose` first lines: `AutoResume.Unloading = true; autoResume.Dispose();`; `StartFromCommand` `private` → `internal` | **`Unloading` must be set before anything else in `Dispose`.** The grind task's completion callback fires *after* unload and calls `EndRun`, which would otherwise clear the memory on every reload (seen in the log: "FATE grind ended ... Run ends" after "Finished unloading"). |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line
@@ -95,6 +95,8 @@ Signs that re-applying beats rebasing:
 - upstream split or renamed `AutoFate.Engage.cs` / `AutoHumanize.cs`
 - `EngageIdleTracker` was replaced
 - the humanizer stopped using a wander loop
+- the controller no longer ends runs through `Stop()` / `EndRun()` (auto-resume hooks)
+- `AutoCommon.Landing.cs` no longer has the `FindLandingSpots` ring
 
 In that case, start from upstream and re-implement the "Must stay true" lines above in the new shape.
 Each item is under ~40 lines of real code.
