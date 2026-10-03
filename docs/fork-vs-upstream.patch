@@ -1,5 +1,5 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..4d12824 100644
+index efc08bd..97689a2 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -11,6 +11,8 @@ public sealed class Configuration : IPluginConfiguration
@@ -11,7 +11,16 @@ index efc08bd..4d12824 100644
  
      public string Language { get; set; } = "";
  
-@@ -144,6 +146,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +70,8 @@ public sealed class Configuration : IPluginConfiguration
+     public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
+     // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
+     public bool KeepTwistOfFate { get; set; } = true;
++    // Fork: inside a FATE, fight a non-FATE mob unsynced and sync again for the FATE (AutoFate.TargetSync).
++    public bool UnsyncForNonFateMobs { get; set; } = true;
+     public bool MountWhileWaitingForFates { get; set; } = false;
+     public uint PreferredMountId { get; set; } = 0;
+     public bool EconomyTravel { get; set; } = false;
+@@ -144,6 +148,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -82,10 +91,18 @@ index 840facc..19ee843 100644
          {
              Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; descending where the flight ended");
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..217bb6a 100644
+index 35e0b04..1856f98 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-@@ -211,6 +211,7 @@ public sealed partial class AutoFate
+@@ -153,6 +153,7 @@ public sealed partial class AutoFate
+ 
+         var preset = Plugin.Cfg.CombatPresetName;
+         EnsureCombatPreset(preset);
++        ResetTargetSync(); // Fork: non-FATE unsync state is per FATE
+         SyncToFate(fateId);
+         AssertPresetActive(preset);
+         ResetEngageOverrides(preset);
+@@ -211,6 +212,7 @@ public sealed partial class AutoFate
                      lastProgress = fate.Progress;
                      lastProgressAtMs = Environment.TickCount64;
                      combatStallBounces = 0;
@@ -93,7 +110,35 @@ index 35e0b04..217bb6a 100644
                  }
                  else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                        && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
-@@ -331,7 +332,7 @@ public sealed partial class AutoFate
+@@ -246,13 +248,14 @@ public sealed partial class AutoFate
+                     AssertPresetActive(preset);
+                 }
+ 
+-                SyncToFate(fateId);
++                TickTargetSync(fateId); // Fork: was SyncToFate(fateId); unsyncs for a non-FATE foe
+ 
+                 if (isCollect)
+                 {
+                     UpdateCollectPullHold(fateId, preset);
+                     // A hand-in trip or pickup walk is progress in its own right; give the stall clocks a fresh window after one.
+-                    if (await MaybeHandInCollectItems(fateId, fateName, preset) || await TickPickupWedge(fateId, fateName, preset))
++                    // Fork: neither starts while the non-FATE unsync is still on; items need the sync.
++                    if (!targetUnsynced && (await MaybeHandInCollectItems(fateId, fateName, preset) || await TickPickupWedge(fateId, fateName, preset)))
+                     {
+                         lastProgressAtMs = Environment.TickCount64;
+                         lastInCombatAtMs = Environment.TickCount64;
+@@ -269,7 +272,10 @@ public sealed partial class AutoFate
+             }
+ 
+             if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
++            {
++                await WaitForFateSync(fateId); // Fork: leftovers are handed in synced
+                 await WrapUpCollectFate(fateId, fateName, preset);
++            }
+         }
+         finally
+         {
+@@ -331,7 +337,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -102,7 +147,7 @@ index 35e0b04..217bb6a 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +386,9 @@ public sealed partial class AutoFate
+@@ -385,7 +391,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -113,7 +158,7 @@ index 35e0b04..217bb6a 100644
          {
              return false;
          }
-@@ -409,28 +412,43 @@ public sealed partial class AutoFate
+@@ -409,28 +417,43 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -132,14 +177,14 @@ index 35e0b04..217bb6a 100644
 +        && FateMobScanner.TryGetTarget(fateId, player.Position, out var target)
 +        && target.DistanceToHitbox <= reachMeters
 +        && FateMobScanner.HasLineOfSight(player.Position, target.Position);
- 
--    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle)
++
 +    // Fork: the targeted FATE mob is close enough to hit but level geometry blocks the line of sight.
 +    private static bool TryGetSightBlockedTarget(uint fateId, Vector3 from, float reachMeters, out FateMobTarget target)
 +        => FateMobScanner.TryGetTarget(fateId, from, out target)
 +        && target.DistanceToHitbox <= reachMeters
 +        && !FateMobScanner.HasLineOfSight(from, target.Position);
-+
+ 
+-    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle)
 +    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle, FateMobTarget? sightBlocked)
      {
          idle.CountReposition();
@@ -166,7 +211,7 @@ index 35e0b04..217bb6a 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -741,7 +759,7 @@ public sealed partial class AutoFate
+@@ -741,7 +764,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -175,7 +220,7 @@ index 35e0b04..217bb6a 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -792,7 +810,7 @@ public sealed partial class AutoFate
+@@ -792,7 +815,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -184,7 +229,7 @@ index 35e0b04..217bb6a 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +820,15 @@ public sealed partial class AutoFate
+@@ -802,11 +825,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -201,6 +246,201 @@ index 35e0b04..217bb6a 100644
          public void MarkInReach()
          {
              var now = Environment.TickCount64;
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
+new file mode 100644
+index 0000000..4277e13
+--- /dev/null
++++ b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
+@@ -0,0 +1,189 @@
++using Dalamud.Game.ClientState.Conditions;
++using Dalamud.Game.ClientState.Objects.Types;
++using ECommons.Automation;
++using ECommons.DalamudServices;
++using FFXIVClientStructs.FFXIV.Client.Game.Object;
++using System.Threading.Tasks;
++using AutoFateGrind.Core.Game.Fates;
++using CSFateManager = FFXIVClientStructs.FFXIV.Client.Game.Fate.FateManager;
++using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
++using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
++
++namespace AutoFateGrind.Core.Tasks;
++
++// Fork: inside a FATE, a fight with a mob that is not part of any FATE is fought unsynced, and the sync comes
++// back for the FATE's own mobs (BossMod never casts at a FATE mob while unsynced), Collect pickups and hand-ins.
++// Unsync goes through the game's "/levelsync off"; sync through FateManager.LevelSync() as upstream does.
++public sealed partial class AutoFate
++{
++    // A non-FATE fight has to last this long before the unsync, so a target that flickers past does not toggle it.
++    private const int TargetUnsyncDelayMs = 1_500;
++    // Between two non-FATE kills the target is briefly empty; still in combat, the sync waits this long for the next one.
++    private const int TargetResyncGraceMs = 1_500;
++    // A sync command gets this long to land before it is sent again.
++    private const int TargetSyncRetryMs = 3_000;
++    // Unsync requests the game ignored (e.g. refused in combat) before giving up on unsyncing in this FATE.
++    private const int MaxTargetUnsyncAttempts = 3;
++    private const int TargetSyncWaitMs = 5_000;
++
++    private bool targetUnsynced;
++    private long targetUnsyncWantSinceMs;
++    private long targetResyncWantSinceMs;
++    private long targetSyncCommandAtMs;
++    private int  targetUnsyncAttempts;
++
++    private void ResetTargetSync()
++    {
++        targetUnsynced = false;
++        targetUnsyncWantSinceMs = 0;
++        targetResyncWantSinceMs = 0;
++        targetSyncCommandAtMs = 0;
++        targetUnsyncAttempts = 0;
++    }
++
++    /// <summary>Replaces the engage loop's per-tick SyncToFate.</summary>
++    private void TickTargetSync(uint fateId)
++    {
++        var now = Environment.TickCount64;
++        if (Plugin.Cfg.UnsyncForNonFateMobs && TryGetNonFateFoe(out var foe))
++        {
++            targetResyncWantSinceMs = 0;
++            if (!IsSyncedTo(fateId))
++            {
++                if (targetUnsynced)
++                {
++                    targetUnsyncAttempts = 0;
++                }
++                return;
++            }
++            if (targetUnsyncAttempts >= MaxTargetUnsyncAttempts)
++            {
++                return;
++            }
++            if (targetUnsyncWantSinceMs == 0)
++            {
++                targetUnsyncWantSinceMs = now;
++            }
++            if (now - targetUnsyncWantSinceMs < TargetUnsyncDelayMs || now - targetSyncCommandAtMs < TargetSyncRetryMs)
++            {
++                return;
++            }
++
++            targetUnsyncAttempts++;
++            targetSyncCommandAtMs = now;
++            targetUnsynced = true;
++            Diag(targetUnsyncAttempts >= MaxTargetUnsyncAttempts
++                ? $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off (last try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}, the earlier ones did not unsync)"
++                : $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off to kill it unsynced (try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts})");
++            Chat.ExecuteCommand("/levelsync off");
++            return;
++        }
++
++        targetUnsyncWantSinceMs = 0;
++        if (!targetUnsynced)
++        {
++            SyncToFate(fateId);
++            return;
++        }
++
++        // A FATE mob or the end of the fight needs the sync now; an empty target mid-fight is likely the next non-FATE kill.
++        if (Svc.Condition[ConditionFlag.InCombat] && !FateMobScanner.IsTargetingMobOf(fateId))
++        {
++            if (targetResyncWantSinceMs == 0)
++            {
++                targetResyncWantSinceMs = now;
++            }
++            if (now - targetResyncWantSinceMs < TargetResyncGraceMs)
++            {
++                return;
++            }
++        }
++        RestoreFateSync(fateId);
++    }
++
++    private void RestoreFateSync(uint fateId)
++    {
++        var now = Environment.TickCount64;
++        if (IsSyncedTo(fateId))
++        {
++            Diag($"Synced to FATE {fateId} (non-FATE fight over)");
++            targetUnsynced = false;
++            targetResyncWantSinceMs = 0;
++            return;
++        }
++        if (!IsUnsyncedLevelAbove(fateId))
++        {
++            // Never synced in the first place (the unsync request did not take), or the level no longer needs it.
++            targetUnsynced = false;
++            targetResyncWantSinceMs = 0;
++            return;
++        }
++        if (now - targetSyncCommandAtMs < TargetSyncRetryMs)
++        {
++            return;
++        }
++        targetSyncCommandAtMs = now;
++        SyncToFate(fateId);
++    }
++
++    /// <summary>Before a Collect wrap-up (leftover hand-in) that starts while the non-FATE unsync is still on.</summary>
++    private async Task WaitForFateSync(uint fateId)
++    {
++        if (!targetUnsynced)
++        {
++            return;
++        }
++        var deadline = Environment.TickCount64 + TargetSyncWaitMs;
++        while (targetUnsynced && Environment.TickCount64 < deadline && !CancelToken.IsCancellationRequested)
++        {
++            RestoreFateSync(fateId);
++            await NextFrame(10);
++        }
++        if (targetUnsynced)
++        {
++            Diag($"Still not synced to FATE {fateId} {TargetSyncWaitMs / 1000}s after the non-FATE fight; handing in anyway");
++            targetUnsynced = false;
++        }
++    }
++
++    private static unsafe bool IsSyncedTo(uint fateId)
++    {
++        var mgr = CSFateManager.Instance();
++        return mgr is not null && mgr->SyncedFateId == fateId;
++    }
++
++    private static unsafe bool IsUnsyncedLevelAbove(uint fateId)
++    {
++        var mgr = CSFateManager.Instance();
++        return mgr is not null
++            && mgr->CurrentFate is not null
++            && mgr->CurrentFate->FateId == fateId
++            && Svc.Objects.LocalPlayer is { } player
++            && player.Level > mgr->CurrentFate->MaxLevel;
++    }
++
++    // The hard target is a live enemy that belongs to no FATE and is already fighting.
++    private static unsafe bool TryGetNonFateFoe(out IBattleNpc foe)
++    {
++        foe = null!;
++        if (!Svc.Condition[ConditionFlag.InCombat] || Svc.Condition[ConditionFlag.Mounted])
++        {
++            return false;
++        }
++        if (Svc.Targets.Target is not IBattleNpc npc || !npc.IsTargetable || npc.CurrentHp == 0)
++        {
++            return false;
++        }
++        if ((npc.StatusFlags & DalamudStatusFlags.InCombat) == 0)
++        {
++            return false;
++        }
++        var native = (CSGameObject*)npc.Address;
++        if (native->FateId != 0 || native->BattleNpcSubKind != BattleNpcSubKind.Combatant)
++        {
++            return false;
++        }
++        foe = npc;
++        return true;
++    }
++}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
 index 1f98ff8..acdd821 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
@@ -583,6 +823,24 @@ index da8719c..5092dbe 100644
              using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentRose))
                  ImGui.TextWrapped(Loc.T(L.Settings.NoCities));
      }
+diff --git a/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs b/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
+index 4a2b0bb..508007f 100644
+--- a/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
++++ b/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
+@@ -126,6 +126,13 @@ internal static class TravelSettings
+             () => SettingsControls.DrawToggle(cfg, () => cfg.KeepTwistOfFate, v => cfg.KeepTwistOfFate = v, "##travel_keeptwist"),
+             SettingsRow.ToggleHeight);
+ 
++        // Fork: literal English like the other fork rows, so no localisation files change.
++        SettingsRow.Draw("Unsync for non-FATE mobs",
++            "Inside a FATE, a fight with a mob that is not part of the FATE is fought unsynced (/levelsync off). The sync comes back as soon as a FATE mob is targeted or the fight ends, and always before a Collect pickup or hand-in.",
++            SettingsControls.ToggleWidth,
++            () => SettingsControls.DrawToggle(cfg, () => cfg.UnsyncForNonFateMobs, v => cfg.UnsyncForNonFateMobs = v, "##travel_unsync_nonfate"),
++            SettingsRow.ToggleHeight);
++
+         SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
+             Loc.T(L.Settings.CollectHandInHelp),
+             SettingsControls.ToggleWidth,
 diff --git a/ECommons b/ECommons
 index f1656e8..62cd604 160000
 --- a/ECommons
