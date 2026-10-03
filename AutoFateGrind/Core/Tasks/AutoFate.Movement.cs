@@ -268,7 +268,10 @@ public sealed partial class AutoFate
                 if (IsPlayerKO()) break;
                 // A real FATE may have started on top of us; let the state machine take over. A ring it
                 // left (blacklisted or abandoned) is not one, so the aggro from it still gets cleared.
-                if (PublicEvent.CurrentFate is { State: FateState.Running } current && current.Id != abandonedFateId) break;
+                // Fork: only in the run's zone; off-zone the state machine is in WrongZone and never engages that FATE, so
+                // bailing here left the character standing in combat (2026-10-03, South Shroud while bound for Upper La Noscea).
+                if (PublicEvent.CurrentFate is { State: FateState.Running } current && current.Id != abandonedFateId
+                 && Svc.ClientState.TerritoryType == zone.TerritoryId) break;
                 if (Svc.Condition[ConditionFlag.Mounted]) { BossModIPC.Instance.ClearActive(); await SafeDismount("dismount-clearcombat"); }
                 AssertPresetActive(preset);
                 await NextFrame(30);
@@ -280,7 +283,7 @@ public sealed partial class AutoFate
         }
 
         if (Svc.Condition[ConditionFlag.InCombat])
-            Diag($"Still in combat after {CombatClearTimeoutMs / 1000}s of fighting; will retry travel");
+            Diag($"Still in combat after {CombatClearTimeoutMs / 1000}s of fighting (target {Svc.Targets.Target?.Name.TextValue ?? "none"}, fate {PublicEvent.CurrentFate?.Id.ToString() ?? "none"}); will retry travel"); // Fork: say what held it
     }
 
     private void EnsureCombatPreset(string preset)

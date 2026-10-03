@@ -68,6 +68,14 @@ Every change in the code is marked with a `// Fork:` comment.
    is going after), `AutoFateGrind.StopWhenSafe()` (like `/afg stop soft`), `AutoFateGrind.Stop()`,
    `AutoFateGrind.Phase() → string`.
 
+9. **Fight free before a zone teleport** (`AutoFate.cs` `GoToZone`, `AutoFate.Movement.cs` `ClearBlockingCombat`).
+   Upstream's zone teleport only waited for combat to drop while nothing fought back: 2026-10-03 the character stood
+   6+ minutes in South Shroud, in combat, bound for Upper La Noscea, every try "combat/casting (combat)". Now
+   `GoToZone` runs `ClearBlockingCombat` (rotation on, up to 30 s) before every attempt and after a blocked one, and
+   `ClearBlockingCombat`'s "a FATE started on top of us, let the state machine take it" exit only applies in the run's
+   own zone (off-zone the state machine is in WrongZone and never engages that FATE). The "still in combat" line now
+   names the target and the FATE.
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -80,7 +88,8 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
 | 6 Resume run after reload | Removed. |
 | 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
-| 8 IPC | Not yet observed. |
+| 8 IPC | Works: BoatRunner starts and soft-stops runs. |
+| 9 Fight free before a zone teleport | Not yet observed. Look for `In combat outside a FATE; enabling rotation to fight free` before `Off-zone ... teleporting`. |
 
 ## Using the humanizer rest
 

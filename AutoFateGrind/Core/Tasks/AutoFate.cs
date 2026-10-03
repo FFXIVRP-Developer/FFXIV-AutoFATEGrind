@@ -503,6 +503,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
     private async Task GoToZone()
     {
+        // Fork: a teleport is refused in combat, and the zone teleport only waited for combat to drop while nothing fought
+        // back (2026-10-03: 6+ minutes standing in South Shroud, "teleport-to-zone: combat/casting (combat)" on every try).
+        // Fight free first, with the rotation on; ClearBlockingCombat gives up after CombatClearTimeoutMs and the next
+        // WrongZone round tries again.
+        await ClearBlockingCombat();
+        if (CancelToken.IsCancellationRequested) return;
+
         Status = $"Teleporting to {zone.Name}";
         Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
         var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
@@ -518,6 +525,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         if (result == TerritoryTeleportResult.Blocked)
         {
             FaultIfCharacterStaysBlocked();
+            // Fork: combat that started during the attempts is fought off before the next round.
+            await ClearBlockingCombat();
             return;
         }
 

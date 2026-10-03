@@ -92,6 +92,13 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 | `Core/Ipc/AfgIpcProvider.cs` | **new file** | Copy as-is. Calls `Plugin.StartFromCommand` (`private` → `internal`, `// Fork` on that line), `Controller.Running/StopWhenSafe/Stop/Phase`. The IPC names are the contract with the boat orchestrator: keep them. |
 | `Plugin.cs` | ctor end: `ipcProvider = new Core.Ipc.AfgIpcProvider(this);` + field; `Dispose`: `ipcProvider.Dispose();` after `autoResume.Dispose();` | Unregister on dispose, or a reload throws "already registered". |
 
+### 9. Fight free before a zone teleport (README-FORK item 9)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoFate.cs` `GoToZone` | `await ClearBlockingCombat();` + cancel check before the first `Status` line; `await ClearBlockingCombat();` after `FaultIfCharacterStaysBlocked();` | Every zone teleport is preceded by a fight-free when in combat. If upstream moves the teleport, keep the call in front of it. |
+| `Core/Tasks/AutoFate.Movement.cs` `ClearBlockingCombat` | the running-FATE `break` also needs `Svc.ClientState.TerritoryType == zone.TerritoryId`; the "still in combat" Diag names target and FATE | Off-zone, never hand combat to a FATE the state machine will not engage. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line
