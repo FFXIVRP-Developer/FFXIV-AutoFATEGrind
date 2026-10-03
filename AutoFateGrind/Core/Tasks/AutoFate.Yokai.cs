@@ -250,7 +250,14 @@ public sealed partial class AutoFate
         {
             targets.Add((near, "the nearest reachable point"));
         }
-        if (territory == zone.TerritoryId)
+        // The nearest aetheryte stands on land; Upper La Noscea's central landing is in Bronze Lake (the character floated
+        // 4 m from it, 2026-10-03), so the landing only comes last.
+        if (ZoneAetherytes.TryFindNearest(territory, player.Position, out var aetheryte))
+        {
+            var dry = NavmeshIPC.Instance.NearestPointReachable(aetheryte.Position, 10f, 10f) ?? aetheryte.Position;
+            targets.Add((dry, $"the {aetheryte.Name} aetheryte"));
+        }
+        if (territory == zone.TerritoryId && Vector3.Distance(player.Position, zone.CentralLanding) >= 10f)
         {
             targets.Add((zone.CentralLanding, $"{zone.Name}'s central landing"));
         }
