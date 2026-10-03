@@ -5,6 +5,7 @@ using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System.Threading.Tasks;
 using AutoFateGrind.Core.Game.Fates;
+using AutoFateGrind.Core.Ipc;
 using CSFateManager = FFXIVClientStructs.FFXIV.Client.Game.Fate.FateManager;
 using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
@@ -26,19 +27,49 @@ public sealed partial class AutoFate
     private const int MaxTargetUnsyncAttempts = 3;
     private const int TargetSyncWaitMs = 5_000;
 
+    // BossMod's FATE helper track; the bundled preset sets it to "Enable" (always sync), which undoes "/levelsync off"
+    // within a second (seen 2026-10-03: unsync every 3 s, re-synced in between). "None" leaves the sync alone.
+    private const string FateHelperSyncTrack = "Sync";
+    private const string FateHelperSyncNoneOption = "None";
+
     private bool targetUnsynced;
+    private bool targetUnsyncTook;
     private long targetUnsyncWantSinceMs;
     private long targetResyncWantSinceMs;
     private long targetSyncCommandAtMs;
     private int  targetUnsyncAttempts;
+    private string? bossModSyncHeldPreset;
 
     private void ResetTargetSync()
     {
+        ReleaseBossModSync();
         targetUnsynced = false;
+        targetUnsyncTook = false;
         targetUnsyncWantSinceMs = 0;
         targetResyncWantSinceMs = 0;
         targetSyncCommandAtMs = 0;
         targetUnsyncAttempts = 0;
+    }
+
+    // Keeps BossMod's FATE helper from re-syncing while the non-FATE fight runs. False only when the override could
+    // not be undone later; a preset without the FATE helper needs no override (nothing in BossMod re-syncs then).
+    private bool HoldBossModSync()
+    {
+        if (bossModSyncHeldPreset is not null) return true;
+        if (!BossModIPC.Instance.CanClearTransientStrategy) return false;
+        var preset = Plugin.Cfg.CombatPresetName;
+        if (BossModIPC.Instance.AddTransientStrategy(preset, BossModFateHelper.Module, FateHelperSyncTrack, FateHelperSyncNoneOption))
+        {
+            bossModSyncHeldPreset = preset;
+        }
+        return true;
+    }
+
+    private void ReleaseBossModSync()
+    {
+        if (bossModSyncHeldPreset is null) return;
+        BossModIPC.Instance.ClearTransientStrategy(bossModSyncHeldPreset, BossModFateHelper.Module, FateHelperSyncTrack);
+        bossModSyncHeldPreset = null;
     }
 
     /// <summary>Replaces the engage loop's per-tick SyncToFate.</summary>
@@ -50,12 +81,10 @@ public sealed partial class AutoFate
             targetResyncWantSinceMs = 0;
             if (!IsSyncedTo(fateId))
             {
-                if (targetUnsynced)
-                {
-                    targetUnsyncAttempts = 0;
-                }
+                targetUnsyncTook |= targetUnsynced;
                 return;
             }
+            // Synced again mid-fight after an unsync that took: something else re-synced. Counts as a failed try.
             if (targetUnsyncAttempts >= MaxTargetUnsyncAttempts)
             {
                 return;
@@ -69,12 +98,19 @@ public sealed partial class AutoFate
                 return;
             }
 
+            if (!HoldBossModSync())
+            {
+                targetUnsyncAttempts = MaxTargetUnsyncAttempts;
+                Diag($"Fighting non-FATE {foe.Name} inside FATE {fateId}; not unsyncing: BossMod's FATE-helper sync could not be paused (no transient strategies), it would re-sync at once");
+                return;
+            }
+
             targetUnsyncAttempts++;
             targetSyncCommandAtMs = now;
-            targetUnsynced = true;
             Diag(targetUnsyncAttempts >= MaxTargetUnsyncAttempts
-                ? $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off (last try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}, the earlier ones did not unsync)"
-                : $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off to kill it unsynced (try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts})");
+                ? $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off (last try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}; {(targetUnsyncTook ? "something re-synced after the earlier ones" : "the earlier ones did not unsync")})"
+                : $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off to kill it unsynced (try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}{(targetUnsyncTook ? ", re-synced by something else since the last one" : "")})");
+            targetUnsynced = true;
             Chat.ExecuteCommand("/levelsync off");
             return;
         }
@@ -104,18 +140,18 @@ public sealed partial class AutoFate
     private void RestoreFateSync(uint fateId)
     {
         var now = Environment.TickCount64;
+        // BossMod's own FATE sync may help from here on.
+        ReleaseBossModSync();
         if (IsSyncedTo(fateId))
         {
             Diag($"Synced to FATE {fateId} (non-FATE fight over)");
-            targetUnsynced = false;
-            targetResyncWantSinceMs = 0;
+            EndNonFateFight();
             return;
         }
         if (!IsUnsyncedLevelAbove(fateId))
         {
             // Never synced in the first place (the unsync request did not take), or the level no longer needs it.
-            targetUnsynced = false;
-            targetResyncWantSinceMs = 0;
+            EndNonFateFight();
             return;
         }
         if (now - targetSyncCommandAtMs < TargetSyncRetryMs)
@@ -124,6 +160,18 @@ public sealed partial class AutoFate
         }
         targetSyncCommandAtMs = now;
         SyncToFate(fateId);
+    }
+
+    // A fight whose unsync took starts the next one with fresh tries; one the game refused keeps its count for this FATE.
+    private void EndNonFateFight()
+    {
+        if (targetUnsyncTook)
+        {
+            targetUnsyncAttempts = 0;
+        }
+        targetUnsynced = false;
+        targetUnsyncTook = false;
+        targetResyncWantSinceMs = 0;
     }
 
     /// <summary>Before a Collect wrap-up (leftover hand-in) that starts while the non-FATE unsync is still on.</summary>

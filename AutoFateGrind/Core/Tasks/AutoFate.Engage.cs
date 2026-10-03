@@ -281,6 +281,7 @@ public sealed partial class AutoFate
         {
             EndRingChase(preset);
             ReleaseCollectPullHold(preset);
+            ReleaseBossModSync(); // Fork: BossMod's FATE sync override never outlives the FATE
             BossModIPC.Instance.ClearActive();
             if (isCollect) DisableTextAdvance();
         }

@@ -54,6 +54,9 @@ Every change in the code is marked with a `// Fork:` comment.
    comes back through `FateManager.LevelSync()` (upstream's call) right away when a FATE mob is targeted
    or combat ends, and after 1.5 s of no target mid-fight (so chaining two world mobs doesn't flicker).
    - FATE mobs need the sync: BossMod never casts at a FATE mob while unsynced.
+   - BossMod's FATE helper (`MiscAI.FateUtils`, track `Sync`) is set to `Enable` in the bundled preset
+     and re-syncs within a second. While unsynced, AFG overrides that track to `None` (a transient
+     strategy, like the chocobo override) and clears it when it syncs again or the FATE ends.
    - Collect FATEs: AFG's pickup walk and hand-in trip don't start while the unsync is on, and the
      leftover hand-in at 100 % waits up to 5 s for the sync first.
    - Never toggles while mounted. If the game ignores `/levelsync off` three times in one FATE (e.g.

@@ -87,6 +87,7 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 | same, engage loop | per-tick `SyncToFate(fateId);` → `TickTargetSync(fateId);` | **Nothing else in the loop may call `SyncToFate` every tick**, or it undoes the unsync. If upstream moves the per-tick sync, move `TickTargetSync` with it. |
 | same, Collect block | `!targetUnsynced && (` around the hand-in / pickup-walk call | Items need the sync. Any new upstream item step in the loop gets the same guard. |
 | same, Collect wrap-up | `await WaitForFateSync(fateId);` before `WrapUpCollectFate` (the `if` got braces) | Leftovers are handed in synced. |
+| same, engage `finally` | `ReleaseBossModSync();` after `ReleaseCollectPullHold(preset);` | The FateUtils `Sync` override must never outlive the FATE. If upstream changes the bundled preset's FateUtils track or option names, update `FateHelperSyncTrack` / `FateHelperSyncNoneOption`. |
 | `Configuration.cs` | `UnsyncForNonFateMobs` after `KeepTwistOfFate` | Pure addition; the store build ignores the key. |
 | `Windows/Sections/Config/TravelSettings.cs` `DrawFatePlayGroup` | literal-English toggle row after "Keep Twist of Fate" | Cosmetic. No `L.cs` changes. |
 
