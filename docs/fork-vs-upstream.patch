@@ -298,6 +298,31 @@ index 35e0b04..d249394 100644
          public void MarkInReach()
          {
              var now = Environment.TickCount64;
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
+index d79e384..ce80568 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
+@@ -268,7 +268,10 @@ public sealed partial class AutoFate
+                 if (IsPlayerKO()) break;
+                 // A real FATE may have started on top of us; let the state machine take over. A ring it
+                 // left (blacklisted or abandoned) is not one, so the aggro from it still gets cleared.
+-                if (PublicEvent.CurrentFate is { State: FateState.Running } current && current.Id != abandonedFateId) break;
++                // Fork: only in the run's zone; off-zone the state machine is in WrongZone and never engages that FATE, so
++                // bailing here left the character standing in combat (2026-10-03, South Shroud while bound for Upper La Noscea).
++                if (PublicEvent.CurrentFate is { State: FateState.Running } current && current.Id != abandonedFateId
++                 && Svc.ClientState.TerritoryType == zone.TerritoryId) break;
+                 if (Svc.Condition[ConditionFlag.Mounted]) { BossModIPC.Instance.ClearActive(); await SafeDismount("dismount-clearcombat"); }
+                 AssertPresetActive(preset);
+                 await NextFrame(30);
+@@ -280,7 +283,7 @@ public sealed partial class AutoFate
+         }
+ 
+         if (Svc.Condition[ConditionFlag.InCombat])
+-            Diag($"Still in combat after {CombatClearTimeoutMs / 1000}s of fighting; will retry travel");
++            Diag($"Still in combat after {CombatClearTimeoutMs / 1000}s of fighting (target {Svc.Targets.Target?.Name.TextValue ?? "none"}, fate {PublicEvent.CurrentFate?.Id.ToString() ?? "none"}); will retry travel"); // Fork: say what held it
+     }
+ 
+     private void EnsureCombatPreset(string preset)
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
 new file mode 100644
 index 0000000..9c097da
@@ -542,7 +567,7 @@ index 0000000..9c097da
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..acdd821 100644
+index 1f98ff8..16ad1e4 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -554,6 +579,29 @@ index 1f98ff8..acdd821 100644
      private const int   EngageRepositionWatchdogMs = 40_000;
      private const float EngageMeleeApproachToleranceMeters  = 2.5f;
      private const float EngageRangedApproachToleranceMeters = 15f;
+@@ -501,6 +503,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+ 
+     private async Task GoToZone()
+     {
++        // Fork: a teleport is refused in combat, and the zone teleport only waited for combat to drop while nothing fought
++        // back (2026-10-03: 6+ minutes standing in South Shroud, "teleport-to-zone: combat/casting (combat)" on every try).
++        // Fight free first, with the rotation on; ClearBlockingCombat gives up after CombatClearTimeoutMs and the next
++        // WrongZone round tries again.
++        await ClearBlockingCombat();
++        if (CancelToken.IsCancellationRequested) return;
++
+         Status = $"Teleporting to {zone.Name}";
+         Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
+         var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
+@@ -516,6 +525,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+         if (result == TerritoryTeleportResult.Blocked)
+         {
+             FaultIfCharacterStaysBlocked();
++            // Fork: combat that started during the attempts is fought off before the next round.
++            await ClearBlockingCombat();
+             return;
+         }
+ 
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs b/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
 index 924cdf3..97580da 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
