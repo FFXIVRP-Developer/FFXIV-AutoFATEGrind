@@ -126,6 +126,13 @@ internal static class TravelSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.KeepTwistOfFate, v => cfg.KeepTwistOfFate = v, "##travel_keeptwist"),
             SettingsRow.ToggleHeight);
 
+        // Fork: literal English like the other fork rows, so no localisation files change.
+        SettingsRow.Draw("Unsync for non-FATE mobs",
+            "Inside a FATE, a fight with a mob that is not part of the FATE is fought unsynced (/levelsync off). The sync comes back as soon as a FATE mob is targeted or the fight ends, and always before a Collect pickup or hand-in.",
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.UnsyncForNonFateMobs, v => cfg.UnsyncForNonFateMobs = v, "##travel_unsync_nonfate"),
+            SettingsRow.ToggleHeight);
+
         SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
             Loc.T(L.Settings.CollectHandInHelp),
             SettingsControls.ToggleWidth,

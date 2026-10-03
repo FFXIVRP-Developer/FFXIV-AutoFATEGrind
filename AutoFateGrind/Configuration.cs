@@ -70,6 +70,8 @@ public sealed class Configuration : IPluginConfiguration
     public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
     // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
     public bool KeepTwistOfFate { get; set; } = true;
+    // Fork: inside a FATE, fight a non-FATE mob unsynced and sync again for the FATE (AutoFate.TargetSync).
+    public bool UnsyncForNonFateMobs { get; set; } = true;
     public bool MountWhileWaitingForFates { get; set; } = false;
     public uint PreferredMountId { get; set; } = 0;
     public bool EconomyTravel { get; set; } = false;

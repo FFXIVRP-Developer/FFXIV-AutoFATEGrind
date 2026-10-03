@@ -78,6 +78,18 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 | `Core/Tasks/AutoFateController.RunLifecycle.cs` `EndRun` | `AutoResume.MarkEnded();` after `FinalizeRun` | `EndRun` is the choke point for runs ending on their own. If upstream adds an end path that skips `EndRun`, hook it too. |
 | `Plugin.cs` | ctor end: `autoResume = new AutoResume();` + field; `Dispose` first lines: `AutoResume.Unloading = true; autoResume.Dispose();`; `StartFromCommand` `private` → `internal` | **`Unloading` must be set before anything else in `Dispose`.** The grind task's completion callback fires *after* unload and calls `EndRun`, which would otherwise clear the memory on every reload (seen in the log: "FATE grind ended ... Run ends" after "Finished unloading"). |
 
+### 7. Unsync for non-FATE mobs (README-FORK item 7)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoFate.TargetSync.cs` | **new file**: `TickTargetSync`, `RestoreFateSync`, `WaitForFateSync`, `ResetTargetSync`, `TryGetNonFateFoe` | Copy as-is. Uses upstream's `SyncToFate` for the sync back; breaks only if that is renamed. |
+| `Core/Tasks/AutoFate.Engage.cs` `EngageCurrentFate` | `ResetTargetSync();` before the first `SyncToFate(fateId);` | State is per FATE. |
+| same, engage loop | per-tick `SyncToFate(fateId);` → `TickTargetSync(fateId);` | **Nothing else in the loop may call `SyncToFate` every tick**, or it undoes the unsync. If upstream moves the per-tick sync, move `TickTargetSync` with it. |
+| same, Collect block | `!targetUnsynced && (` around the hand-in / pickup-walk call | Items need the sync. Any new upstream item step in the loop gets the same guard. |
+| same, Collect wrap-up | `await WaitForFateSync(fateId);` before `WrapUpCollectFate` (the `if` got braces) | Leftovers are handed in synced. |
+| `Configuration.cs` | `UnsyncForNonFateMobs` after `KeepTwistOfFate` | Pure addition; the store build ignores the key. |
+| `Windows/Sections/Config/TravelSettings.cs` `DrawFatePlayGroup` | literal-English toggle row after "Keep Twist of Fate" | Cosmetic. No `L.cs` changes. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

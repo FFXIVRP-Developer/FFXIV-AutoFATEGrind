@@ -47,6 +47,20 @@ Every change in the code is marked with a `// Fork:` comment.
    game launch vnavmesh/BossMod can load after AFG); no fixed delay. A paused run
    counts as going, so it restarts too.
 
+7. **Unsync for non-FATE mobs** (`AutoFate.TargetSync.cs`, Settings → Travel → "Unsync for non-FATE
+   mobs", on by default). Upstream re-synced every engage tick, so a world mob that aggroed inside a
+   FATE ring was fought at the FATE's level. Now, when the hard target is a live combatant with no FATE
+   id that is already fighting, and that has lasted 1.5 s, the plugin sends `/levelsync off`. The sync
+   comes back through `FateManager.LevelSync()` (upstream's call) right away when a FATE mob is targeted
+   or combat ends, and after 1.5 s of no target mid-fight (so chaining two world mobs doesn't flicker).
+   - FATE mobs need the sync: BossMod never casts at a FATE mob while unsynced.
+   - Collect FATEs: AFG's pickup walk and hand-in trip don't start while the unsync is on, and the
+     leftover hand-in at 100 % waits up to 5 s for the sync first.
+   - Never toggles while mounted. If the game ignores `/levelsync off` three times in one FATE (e.g.
+     refused in combat), it stops trying for that FATE. Every switch is a `Diag` line in `dalamud.log`.
+   - No other plugin does this (checked 2026-10-03: Pandora's Box, Automaton, TwistOfFayte, Moirai,
+     AutoFateSync, FrenRider, Henchman, autofate only sync on arrival).
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -58,6 +72,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 4 Break location | Not yet observed. Look for `Humanize retreat ...: arrived in territory` in `dalamud.log`. |
 | 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
 | 6 Resume run after reload | Works: run restarted about 1 s after a hot reload. |
+| 7 Unsync for non-FATE mobs | Not yet observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 
 ## Using the humanizer rest
 

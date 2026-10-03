@@ -153,6 +153,7 @@ public sealed partial class AutoFate
 
         var preset = Plugin.Cfg.CombatPresetName;
         EnsureCombatPreset(preset);
+        ResetTargetSync(); // Fork: non-FATE unsync state is per FATE
         SyncToFate(fateId);
         AssertPresetActive(preset);
         ResetEngageOverrides(preset);
@@ -247,13 +248,14 @@ public sealed partial class AutoFate
                     AssertPresetActive(preset);
                 }
 
-                SyncToFate(fateId);
+                TickTargetSync(fateId); // Fork: was SyncToFate(fateId); unsyncs for a non-FATE foe
 
                 if (isCollect)
                 {
                     UpdateCollectPullHold(fateId, preset);
                     // A hand-in trip or pickup walk is progress in its own right; give the stall clocks a fresh window after one.
-                    if (await MaybeHandInCollectItems(fateId, fateName, preset) || await TickPickupWedge(fateId, fateName, preset))
+                    // Fork: neither starts while the non-FATE unsync is still on; items need the sync.
+                    if (!targetUnsynced && (await MaybeHandInCollectItems(fateId, fateName, preset) || await TickPickupWedge(fateId, fateName, preset)))
                     {
                         lastProgressAtMs = Environment.TickCount64;
                         lastInCombatAtMs = Environment.TickCount64;
@@ -270,7 +272,10 @@ public sealed partial class AutoFate
             }
 
             if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
+            {
+                await WaitForFateSync(fateId); // Fork: leftovers are handed in synced
                 await WrapUpCollectFate(fateId, fateName, preset);
+            }
         }
         finally
         {
