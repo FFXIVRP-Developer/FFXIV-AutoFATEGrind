@@ -714,7 +714,7 @@ index 0000000..9c097da
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs b/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
-index 67b55f1..e88626c 100644
+index 67b55f1..7113638 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
 @@ -1,7 +1,10 @@
@@ -767,7 +767,7 @@ index 67b55f1..e88626c 100644
  
          var deadline = Environment.TickCount64 + YokaiSummonWindowMs;
          var attempts = 0;
-@@ -213,6 +230,49 @@ public sealed partial class AutoFate
+@@ -213,6 +230,52 @@ public sealed partial class AutoFate
          Warn($"Could not summon {minionName} within {YokaiSummonWindowMs / 1000}s ({attempts} attempts, {ConditionTag()})");
      }
  
@@ -803,7 +803,10 @@ index 67b55f1..e88626c 100644
 +                break;
 +            }
 +            Diag($"In the water ({ConditionTag()}), where {minionName} cannot be summoned; moving toward {what} ~{Vector3.Distance(Svc.Objects.LocalPlayer?.Position ?? point, point):F0}m away until on land");
-+            var move = new MoveOp(o => o.Move(territory, point, MovementConfig.Everything.WithTolerance(3f), stopCondition: () => !InWater()));
++            // On foot (swimming to the shore): with a mount clib flew off, "out of the water" was true in the air, the walk
++            // stopped mid-flight, and the summon's dismount dropped the character back into the lake.
++            var move = new MoveOp(o => o.Move(territory, point, MovementConfig.Default.WithTolerance(3f),
++                stopCondition: () => !InWater() && !Svc.Condition[ConditionFlag.Mounted]));
 +            await RunCancellable(move, YokaiLeaveWaterMs, "yokai-leave-water", StuckDetector.MoveStallAbort("yokai-leave-water"));
 +        }
 +
