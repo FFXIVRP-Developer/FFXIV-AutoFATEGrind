@@ -116,6 +116,13 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 | same, fields | `ringChaseActiveSinceMs`, `ringChaseProgress`, `ringChaseCooldownUntilMs`, `RingChaseMaxMs`, `RingChaseCooldownMs` | Pure addition. |
 | same, `ResetEngageOverrides` | resets `ringChaseActiveSinceMs` and `ringChaseCooldownUntilMs` | Per FATE. |
 
+### 12. Leave the water to summon a Yo-kai (README-FORK item 12)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoFate.Yokai.cs` `SummonYokaiMinion` | `await LeaveWaterForSummon(minionName);` after `StowFashionAccessory()`; the method below it; usings `Core.Ipc`, `clib.TaskSystem`, `System.Numerics` | Runs before the summon attempts. |
+| `Core/Tasks/AutoCommon.Teleport.cs` | `InWater()` `private` → `private protected` | Needed by the subclass. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

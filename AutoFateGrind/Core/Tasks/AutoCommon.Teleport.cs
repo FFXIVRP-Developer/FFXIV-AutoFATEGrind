@@ -100,7 +100,7 @@ public abstract partial class AutoCommon
     }
 
     // Swimming or diving may block the cast; the 2026-05-30 creek wedge left clib spinning on one that never started.
-    private static bool InWater()
+    private protected static bool InWater() // Fork: was private; the Yo-kai summon leaves the water too
         => Svc.Condition[ConditionFlag.Diving]
         || Svc.Condition[ConditionFlag.Swimming];
 

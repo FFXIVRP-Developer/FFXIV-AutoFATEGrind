@@ -1,7 +1,10 @@
 using AutoFateGrind.Core.Game.Yokai;
+using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Zones;
+using clib.TaskSystem;
 using Dalamud.Game.ClientState.Conditions;
 using ECommons.DalamudServices;
+using System.Numerics;
 using System.Threading.Tasks;
 
 namespace AutoFateGrind.Core.Tasks;
@@ -181,6 +184,7 @@ public sealed partial class AutoFate
         }
 
         await StowFashionAccessory();
+        await LeaveWaterForSummon(minionName); // Fork
 
         var deadline = Environment.TickCount64 + YokaiSummonWindowMs;
         var attempts = 0;
@@ -224,6 +228,49 @@ public sealed partial class AutoFate
         }
 
         Warn($"Could not summon {minionName} within {YokaiSummonWindowMs / 1000}s ({attempts} attempts, {ConditionTag()})");
+    }
+
+    // Fork (README-FORK item 12): no minion can be summoned while swimming or diving, and the minion wait only retried the
+    // summon, so a character left in a lake stayed parked there for good (2026-10-03, Upper La Noscea, "4 attempts, swim").
+    // Out of the water first: toward the nearest navmesh point (in a lake that can be the bed under the character), then
+    // toward the zone's central landing, which is on land; each walk stops as soon as the character is out.
+    private const int YokaiLeaveWaterMs = 60_000;
+
+    private async Task LeaveWaterForSummon(string minionName)
+    {
+        if (!InWater() || Svc.Objects.LocalPlayer is not { } player)
+        {
+            return;
+        }
+
+        Status = $"Leaving the water to summon {minionName}";
+        var territory = Svc.ClientState.TerritoryType;
+        var targets = new List<(Vector3 Point, string What)>();
+        if (NavmeshIPC.Instance.NearestPointReachable(player.Position, 30f, 30f) is { } near && Vector3.Distance(player.Position, near) >= 2f)
+        {
+            targets.Add((near, "the nearest reachable point"));
+        }
+        if (territory == zone.TerritoryId)
+        {
+            targets.Add((zone.CentralLanding, $"{zone.Name}'s central landing"));
+        }
+
+        foreach (var (point, what) in targets)
+        {
+            if (!InWater() || CancelToken.IsCancellationRequested)
+            {
+                break;
+            }
+            Diag($"In the water ({ConditionTag()}), where {minionName} cannot be summoned; moving toward {what} ~{Vector3.Distance(Svc.Objects.LocalPlayer?.Position ?? point, point):F0}m away until on land");
+            var move = new MoveOp(o => o.Move(territory, point, MovementConfig.Everything.WithTolerance(3f), stopCondition: () => !InWater()));
+            await RunCancellable(move, YokaiLeaveWaterMs, "yokai-leave-water", StuckDetector.MoveStallAbort("yokai-leave-water"));
+        }
+
+        NavmeshIPC.Instance.Stop();
+        if (InWater())
+        {
+            Warn($"Still in the water ({ConditionTag()}) after trying to get out; {minionName} cannot be summoned here");
+        }
     }
 
     // A deployed fashion accessory blocks minion summoning, so it is put away first rather than reported.
