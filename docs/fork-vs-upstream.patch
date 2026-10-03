@@ -215,6 +215,19 @@ index 840facc..19ee843 100644
          if (found == 0)
          {
              Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; descending where the flight ended");
+diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs
+index 045adb0..7e3dede 100644
+--- a/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs
++++ b/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs
+@@ -100,7 +100,7 @@ public abstract partial class AutoCommon
+     }
+ 
+     // Swimming or diving may block the cast; the 2026-05-30 creek wedge left clib spinning on one that never started.
+-    private static bool InWater()
++    private protected static bool InWater() // Fork: was private; the Yo-kai summon leaves the water too
+         => Svc.Condition[ConditionFlag.Diving]
+         || Svc.Condition[ConditionFlag.Swimming];
+ 
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 index 35e0b04..913093a 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
@@ -701,10 +714,21 @@ index 0000000..9c097da
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs b/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
-index 67b55f1..71f9e76 100644
+index 67b55f1..e88626c 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
-@@ -17,6 +17,8 @@ public sealed partial class AutoFate
+@@ -1,7 +1,10 @@
+ using AutoFateGrind.Core.Game.Yokai;
++using AutoFateGrind.Core.Ipc;
+ using AutoFateGrind.Core.Zones;
++using clib.TaskSystem;
+ using Dalamud.Game.ClientState.Conditions;
+ using ECommons.DalamudServices;
++using System.Numerics;
+ using System.Threading.Tasks;
+ 
+ namespace AutoFateGrind.Core.Tasks;
+@@ -17,6 +20,8 @@ public sealed partial class AutoFate
  
      private long yokaiParkWarnedAtMs;
  
@@ -713,7 +737,7 @@ index 67b55f1..71f9e76 100644
      private bool YokaiTargetChanged()
      {
          if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
-@@ -24,8 +26,19 @@ public sealed partial class AutoFate
+@@ -24,8 +29,19 @@ public sealed partial class AutoFate
              return false;
          }
  
@@ -735,6 +759,64 @@ index 67b55f1..71f9e76 100644
      }
  
      private void ReportYokaiGoalMet()
+@@ -168,6 +184,7 @@ public sealed partial class AutoFate
+         }
+ 
+         await StowFashionAccessory();
++        await LeaveWaterForSummon(minionName); // Fork
+ 
+         var deadline = Environment.TickCount64 + YokaiSummonWindowMs;
+         var attempts = 0;
+@@ -213,6 +230,49 @@ public sealed partial class AutoFate
+         Warn($"Could not summon {minionName} within {YokaiSummonWindowMs / 1000}s ({attempts} attempts, {ConditionTag()})");
+     }
+ 
++    // Fork (README-FORK item 12): no minion can be summoned while swimming or diving, and the minion wait only retried the
++    // summon, so a character left in a lake stayed parked there for good (2026-10-03, Upper La Noscea, "4 attempts, swim").
++    // Out of the water first: toward the nearest navmesh point (in a lake that can be the bed under the character), then
++    // toward the zone's central landing, which is on land; each walk stops as soon as the character is out.
++    private const int YokaiLeaveWaterMs = 60_000;
++
++    private async Task LeaveWaterForSummon(string minionName)
++    {
++        if (!InWater() || Svc.Objects.LocalPlayer is not { } player)
++        {
++            return;
++        }
++
++        Status = $"Leaving the water to summon {minionName}";
++        var territory = Svc.ClientState.TerritoryType;
++        var targets = new List<(Vector3 Point, string What)>();
++        if (NavmeshIPC.Instance.NearestPointReachable(player.Position, 30f, 30f) is { } near && Vector3.Distance(player.Position, near) >= 2f)
++        {
++            targets.Add((near, "the nearest reachable point"));
++        }
++        if (territory == zone.TerritoryId)
++        {
++            targets.Add((zone.CentralLanding, $"{zone.Name}'s central landing"));
++        }
++
++        foreach (var (point, what) in targets)
++        {
++            if (!InWater() || CancelToken.IsCancellationRequested)
++            {
++                break;
++            }
++            Diag($"In the water ({ConditionTag()}), where {minionName} cannot be summoned; moving toward {what} ~{Vector3.Distance(Svc.Objects.LocalPlayer?.Position ?? point, point):F0}m away until on land");
++            var move = new MoveOp(o => o.Move(territory, point, MovementConfig.Everything.WithTolerance(3f), stopCondition: () => !InWater()));
++            await RunCancellable(move, YokaiLeaveWaterMs, "yokai-leave-water", StuckDetector.MoveStallAbort("yokai-leave-water"));
++        }
++
++        NavmeshIPC.Instance.Stop();
++        if (InWater())
++        {
++            Warn($"Still in the water ({ConditionTag()}) after trying to get out; {minionName} cannot be summoned here");
++        }
++    }
++
+     // A deployed fashion accessory blocks minion summoning, so it is put away first rather than reported.
+     private async Task StowFashionAccessory()
+     {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
 index 1f98ff8..16ad1e4 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
