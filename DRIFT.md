@@ -91,6 +91,13 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 | `Configuration.cs` | `UnsyncForNonFateMobs` after `KeepTwistOfFate` | Pure addition; the store build ignores the key. |
 | `Windows/Sections/Config/TravelSettings.cs` `DrawFatePlayGroup` | literal-English toggle row after "Keep Twist of Fate" | Cosmetic. No `L.cs` changes. |
 
+### 8. IPC (README-FORK item 8)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Ipc/AfgIpcProvider.cs` | **new file** | Copy as-is. Calls `Plugin.StartFromCommand` (internal since item 6), `Controller.Running/StopWhenSafe/Stop/Phase`. The IPC names are the contract with the boat orchestrator: keep them. |
+| `Plugin.cs` | ctor end: `ipcProvider = new Core.Ipc.AfgIpcProvider(this);` + field; `Dispose`: `ipcProvider.Dispose();` after `autoResume.Dispose();` | Unregister on dispose, or a reload throws "already registered". |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

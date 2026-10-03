@@ -64,6 +64,12 @@ Every change in the code is marked with a `// Fork:` comment.
    - No other plugin does this (checked 2026-10-03: Pandora's Box, Automaton, TwistOfFayte, Moirai,
      AutoFateSync, FrenRider, Henchman, autofate only sync on arrival).
 
+8. **IPC for other local plugins** (`Core/Ipc/AfgIpcProvider.cs`). Upstream has none. Used by the local
+   boat orchestrator to run AFG while it waits for an ocean fishing voyage:
+   `AutoFateGrind.IsRunning() → bool`, `AutoFateGrind.Start() → bool` (like `/afg start`, true when a run
+   is going after), `AutoFateGrind.StopWhenSafe()` (like `/afg stop soft`), `AutoFateGrind.Stop()`,
+   `AutoFateGrind.Phase() → string`. A stop through IPC clears the auto-resume memory like any stop.
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -75,6 +81,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 4 Break location | Not yet observed. Look for `Humanize retreat ...: arrived in territory` in `dalamud.log`. |
 | 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
 | 6 Resume run after reload | Works: run restarted about 1 s after a hot reload. |
+| 8 IPC | Not yet observed. |
 | 7 Unsync for non-FATE mobs | Not yet observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 
 ## Using the humanizer rest
