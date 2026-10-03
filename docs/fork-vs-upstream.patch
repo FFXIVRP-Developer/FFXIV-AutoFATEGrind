@@ -91,7 +91,7 @@ index 840facc..19ee843 100644
          {
              Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; descending where the flight ended");
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..1856f98 100644
+index 35e0b04..d249394 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 @@ -153,6 +153,7 @@ public sealed partial class AutoFate
@@ -127,7 +127,7 @@ index 35e0b04..1856f98 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -269,7 +272,10 @@ public sealed partial class AutoFate
+@@ -269,12 +272,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -138,7 +138,13 @@ index 35e0b04..1856f98 100644
          }
          finally
          {
-@@ -331,7 +337,7 @@ public sealed partial class AutoFate
+             EndRingChase(preset);
+             ReleaseCollectPullHold(preset);
++            ReleaseBossModSync(); // Fork: BossMod's FATE sync override never outlives the FATE
+             BossModIPC.Instance.ClearActive();
+             if (isCollect) DisableTextAdvance();
+         }
+@@ -331,7 +338,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -147,7 +153,7 @@ index 35e0b04..1856f98 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +391,9 @@ public sealed partial class AutoFate
+@@ -385,7 +392,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -158,7 +164,7 @@ index 35e0b04..1856f98 100644
          {
              return false;
          }
-@@ -409,28 +417,43 @@ public sealed partial class AutoFate
+@@ -409,28 +418,43 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -211,7 +217,7 @@ index 35e0b04..1856f98 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -741,7 +764,7 @@ public sealed partial class AutoFate
+@@ -741,7 +765,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -220,7 +226,7 @@ index 35e0b04..1856f98 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -792,7 +815,7 @@ public sealed partial class AutoFate
+@@ -792,7 +816,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -229,7 +235,7 @@ index 35e0b04..1856f98 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +825,15 @@ public sealed partial class AutoFate
+@@ -802,11 +826,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -248,10 +254,10 @@ index 35e0b04..1856f98 100644
              var now = Environment.TickCount64;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
 new file mode 100644
-index 0000000..4277e13
+index 0000000..9c097da
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,237 @@
 +using Dalamud.Game.ClientState.Conditions;
 +using Dalamud.Game.ClientState.Objects.Types;
 +using ECommons.Automation;
@@ -259,6 +265,7 @@ index 0000000..4277e13
 +using FFXIVClientStructs.FFXIV.Client.Game.Object;
 +using System.Threading.Tasks;
 +using AutoFateGrind.Core.Game.Fates;
++using AutoFateGrind.Core.Ipc;
 +using CSFateManager = FFXIVClientStructs.FFXIV.Client.Game.Fate.FateManager;
 +using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 +using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
@@ -280,19 +287,49 @@ index 0000000..4277e13
 +    private const int MaxTargetUnsyncAttempts = 3;
 +    private const int TargetSyncWaitMs = 5_000;
 +
++    // BossMod's FATE helper track; the bundled preset sets it to "Enable" (always sync), which undoes "/levelsync off"
++    // within a second (seen 2026-10-03: unsync every 3 s, re-synced in between). "None" leaves the sync alone.
++    private const string FateHelperSyncTrack = "Sync";
++    private const string FateHelperSyncNoneOption = "None";
++
 +    private bool targetUnsynced;
++    private bool targetUnsyncTook;
 +    private long targetUnsyncWantSinceMs;
 +    private long targetResyncWantSinceMs;
 +    private long targetSyncCommandAtMs;
 +    private int  targetUnsyncAttempts;
++    private string? bossModSyncHeldPreset;
 +
 +    private void ResetTargetSync()
 +    {
++        ReleaseBossModSync();
 +        targetUnsynced = false;
++        targetUnsyncTook = false;
 +        targetUnsyncWantSinceMs = 0;
 +        targetResyncWantSinceMs = 0;
 +        targetSyncCommandAtMs = 0;
 +        targetUnsyncAttempts = 0;
++    }
++
++    // Keeps BossMod's FATE helper from re-syncing while the non-FATE fight runs. False only when the override could
++    // not be undone later; a preset without the FATE helper needs no override (nothing in BossMod re-syncs then).
++    private bool HoldBossModSync()
++    {
++        if (bossModSyncHeldPreset is not null) return true;
++        if (!BossModIPC.Instance.CanClearTransientStrategy) return false;
++        var preset = Plugin.Cfg.CombatPresetName;
++        if (BossModIPC.Instance.AddTransientStrategy(preset, BossModFateHelper.Module, FateHelperSyncTrack, FateHelperSyncNoneOption))
++        {
++            bossModSyncHeldPreset = preset;
++        }
++        return true;
++    }
++
++    private void ReleaseBossModSync()
++    {
++        if (bossModSyncHeldPreset is null) return;
++        BossModIPC.Instance.ClearTransientStrategy(bossModSyncHeldPreset, BossModFateHelper.Module, FateHelperSyncTrack);
++        bossModSyncHeldPreset = null;
 +    }
 +
 +    /// <summary>Replaces the engage loop's per-tick SyncToFate.</summary>
@@ -304,12 +341,10 @@ index 0000000..4277e13
 +            targetResyncWantSinceMs = 0;
 +            if (!IsSyncedTo(fateId))
 +            {
-+                if (targetUnsynced)
-+                {
-+                    targetUnsyncAttempts = 0;
-+                }
++                targetUnsyncTook |= targetUnsynced;
 +                return;
 +            }
++            // Synced again mid-fight after an unsync that took: something else re-synced. Counts as a failed try.
 +            if (targetUnsyncAttempts >= MaxTargetUnsyncAttempts)
 +            {
 +                return;
@@ -323,12 +358,19 @@ index 0000000..4277e13
 +                return;
 +            }
 +
++            if (!HoldBossModSync())
++            {
++                targetUnsyncAttempts = MaxTargetUnsyncAttempts;
++                Diag($"Fighting non-FATE {foe.Name} inside FATE {fateId}; not unsyncing: BossMod's FATE-helper sync could not be paused (no transient strategies), it would re-sync at once");
++                return;
++            }
++
 +            targetUnsyncAttempts++;
 +            targetSyncCommandAtMs = now;
-+            targetUnsynced = true;
 +            Diag(targetUnsyncAttempts >= MaxTargetUnsyncAttempts
-+                ? $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off (last try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}, the earlier ones did not unsync)"
-+                : $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off to kill it unsynced (try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts})");
++                ? $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off (last try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}; {(targetUnsyncTook ? "something re-synced after the earlier ones" : "the earlier ones did not unsync")})"
++                : $"Fighting non-FATE {foe.Name} inside FATE {fateId}; /levelsync off to kill it unsynced (try {targetUnsyncAttempts}/{MaxTargetUnsyncAttempts}{(targetUnsyncTook ? ", re-synced by something else since the last one" : "")})");
++            targetUnsynced = true;
 +            Chat.ExecuteCommand("/levelsync off");
 +            return;
 +        }
@@ -358,18 +400,18 @@ index 0000000..4277e13
 +    private void RestoreFateSync(uint fateId)
 +    {
 +        var now = Environment.TickCount64;
++        // BossMod's own FATE sync may help from here on.
++        ReleaseBossModSync();
 +        if (IsSyncedTo(fateId))
 +        {
 +            Diag($"Synced to FATE {fateId} (non-FATE fight over)");
-+            targetUnsynced = false;
-+            targetResyncWantSinceMs = 0;
++            EndNonFateFight();
 +            return;
 +        }
 +        if (!IsUnsyncedLevelAbove(fateId))
 +        {
 +            // Never synced in the first place (the unsync request did not take), or the level no longer needs it.
-+            targetUnsynced = false;
-+            targetResyncWantSinceMs = 0;
++            EndNonFateFight();
 +            return;
 +        }
 +        if (now - targetSyncCommandAtMs < TargetSyncRetryMs)
@@ -378,6 +420,18 @@ index 0000000..4277e13
 +        }
 +        targetSyncCommandAtMs = now;
 +        SyncToFate(fateId);
++    }
++
++    // A fight whose unsync took starts the next one with fresh tries; one the game refused keeps its count for this FATE.
++    private void EndNonFateFight()
++    {
++        if (targetUnsyncTook)
++        {
++            targetUnsyncAttempts = 0;
++        }
++        targetUnsynced = false;
++        targetUnsyncTook = false;
++        targetResyncWantSinceMs = 0;
 +    }
 +
 +    /// <summary>Before a Collect wrap-up (leftover hand-in) that starts while the non-FATE unsync is still on.</summary>
