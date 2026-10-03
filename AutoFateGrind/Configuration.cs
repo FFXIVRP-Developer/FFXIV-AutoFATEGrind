@@ -72,6 +72,13 @@ public sealed class Configuration : IPluginConfiguration
     public bool KeepTwistOfFate { get; set; } = true;
     // Fork: inside a FATE, fight a non-FATE mob unsynced and sync again for the FATE (AutoFate.TargetSync).
     public bool UnsyncForNonFateMobs { get; set; } = true;
+    // Fork: ocean fishing voyages through Henchman in the middle of a run (AutoOceanTrip).
+    public bool OceanTripEnabled { get; set; } = false;
+    // 2 = every voyage; registration opens every 2 hours (even UTC hours).
+    public int OceanTripEveryHours { get; set; } = 2;
+    // Null until first use (OceanTripSteps): the JSON loader appends to an existing list instead of replacing it.
+    public List<Core.Tasks.OceanTripStep>? OceanTripBefore { get; set; }
+    public List<Core.Tasks.OceanTripStep>? OceanTripAfter { get; set; }
     public bool MountWhileWaitingForFates { get; set; } = false;
     public uint PreferredMountId { get; set; } = 0;
     public bool EconomyTravel { get; set; } = false;

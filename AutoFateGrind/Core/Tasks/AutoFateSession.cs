@@ -97,6 +97,9 @@ public sealed class AutoFateSession
     public uint YokaiTargetMinionId;
     public bool PendingYokaiAdvance;
     public bool StopWhenSafe;
+    // Fork: the grind stopped for an ocean fishing voyage (AutoOceanTrip) and resumes in this zone afterwards.
+    public bool PendingOceanTrip;
+    public ZoneInfo? PendingOceanTripFromZone;
 
     public int FatesBeforeNextBreak(int configured)
     {

@@ -145,6 +145,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         SwapZone,             // Rotate to next selected zone when the current one stays empty.
         AllDone,              // Stop condition met; return cleanly.
         SoftStop,             // The user asked to stop once the current FATE is over; wrap up and return.
+        OceanTrip,            // Fork: an ocean fishing voyage is due; wrap up like a soft stop and hand off (AutoOceanTrip).
         YokaiAdvance,         // The yo-kai being farmed is done; hand off so the controller plans the next one.
         GoalZoneDone,         // The goal has nothing left to earn in this zone; rotate to the next zone that still has some.
         Unconscious,          // Player KO'd, run revive.
@@ -257,6 +258,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
                 case GrindState.SoftStop:
                     await FinishSoftStop();
+                    return;
+
+                case GrindState.OceanTrip: // Fork
+                    await HandOffToOceanTrip();
                     return;
 
                 case GrindState.YokaiAdvance:
@@ -400,6 +405,9 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
         if (session.StopWhenSafe && SoftStopReady())
             return GrindState.SoftStop;
+
+        if (OceanTripReady()) // Fork
+            return GrindState.OceanTrip;
 
         if (StopConditionMet())
             return GrindState.AllDone;

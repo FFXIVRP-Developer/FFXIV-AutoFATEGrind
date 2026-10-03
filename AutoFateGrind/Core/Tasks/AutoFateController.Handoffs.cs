@@ -50,6 +50,29 @@ internal sealed partial class AutoFateController
             return;
         }
 
+        // Fork: an ocean fishing voyage, then straight back to the grind (pending repair/trade/break wait for the next FATE).
+        if (owningSession.PendingOceanTrip)
+        {
+            owningSession.PendingOceanTrip = false;
+            var tripOrigin = owningSession.PendingOceanTripFromZone;
+            owningSession.PendingOceanTripFromZone = null;
+            Phase = AutoPhase.OceanTrip;
+            Diag("Ocean trip phase entering.");
+            RunTask(new AutoOceanTrip(), () =>
+            {
+                if (owningSession != session || activeZones.Count == 0)
+                {
+                    Diag("Ocean trip finished: owning session is stale or has no zones; not resuming.");
+                    EndRun(owningSession);
+                    return;
+                }
+                var resumeIndex = ResumeIndexFor(tripOrigin);
+                Diag($"Ocean trip finished: resuming FATE grind at {activeZones[resumeIndex].Name}.");
+                ResumeGrindOrHumanize(owningSession, resumeIndex);
+            });
+            return;
+        }
+
         if (owningSession.PendingYokaiAdvance)
         {
             owningSession.PendingYokaiAdvance = false;
