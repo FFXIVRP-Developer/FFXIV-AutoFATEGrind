@@ -1,17 +1,8 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..97689a2 100644
+index efc08bd..785f656 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
-@@ -11,6 +11,8 @@ public sealed class Configuration : IPluginConfiguration
-     public int Version { get; set; }
- 
-     public bool AutoShowOnLogin { get; set; } = false;
-+    // Fork: a run was going when the plugin last unloaded, so the next load starts it again (AutoResume).
-+    public bool ResumeRunPending { get; set; } = false;
- 
-     public string Language { get; set; } = "";
- 
-@@ -68,6 +70,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +68,8 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -20,7 +11,7 @@ index efc08bd..97689a2 100644
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +148,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +146,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -593,38 +584,6 @@ index 924cdf3..97580da 100644
          var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
          var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
          var minutes = rng.Next(minMin, maxMin + 1);
-diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
-index 48ea1e8..890db38 100644
---- a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
-+++ b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
-@@ -10,6 +10,7 @@ internal sealed partial class AutoFateController
-     private void EndRun(AutoFateSession? s)
-     {
-         FinalizeRun(s);
-+        AutoResume.MarkEnded(); // Fork
-         Phase = AutoPhase.Idle;
-         MaybeRunAfterAction(s);
-     }
-diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.cs b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-index 481f303..acac99e 100644
---- a/AutoFateGrind/Core/Tasks/AutoFateController.cs
-+++ b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-@@ -85,6 +85,7 @@ internal sealed partial class AutoFateController
-         }
- 
-         session = s;
-+        AutoResume.MarkStarted(); // Fork
-         Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
- 
-         ApplyStartingClass();
-@@ -165,6 +166,7 @@ internal sealed partial class AutoFateController
-     public void Stop()
-     {
-         var ending = session;
-+        AutoResume.MarkEnded(); // Fork
-         currentTask = null;
-         grindTask = null;
-         PauseReason = PauseReason.None;
 diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
 new file mode 100644
 index 0000000..59d36f9
@@ -785,103 +744,36 @@ index 0878ae6..76a3103 100644
          }
  
          Diag($"Humanize done in {label} after {hops} hop(s).");
-diff --git a/AutoFateGrind/Core/Tasks/AutoResume.cs b/AutoFateGrind/Core/Tasks/AutoResume.cs
-new file mode 100644
-index 0000000..fee28f4
---- /dev/null
-+++ b/AutoFateGrind/Core/Tasks/AutoResume.cs
-@@ -0,0 +1,57 @@
-+using Dalamud.Game.ClientState.Conditions;
-+using Dalamud.Plugin.Services;
-+using ECommons.DalamudServices;
-+
-+namespace AutoFateGrind.Core.Tasks;
-+
-+// Fork: restarts a run that was going when the plugin last unloaded (reload, game exit, crash). Starting a run
-+// remembers it in the config; Stop or a run that ends on its own forgets it. An unload must not forget it, and
-+// the run-end callbacks of an unloading instance still fire after Dispose, so Plugin.Dispose raises Unloading first.
-+internal sealed class AutoResume : IDisposable
-+{
-+    public static bool Unloading;
-+
-+    private bool finished;
-+
-+    public AutoResume() => Svc.Framework.Update += Tick;
-+
-+    public void Dispose() => Svc.Framework.Update -= Tick;
-+
-+    public static void MarkStarted()
-+    {
-+        if (Plugin.Cfg.ResumeRunPending) return;
-+        Plugin.Cfg.ResumeRunPending = true;
-+        Plugin.Cfg.Save();
-+    }
-+
-+    public static void MarkEnded()
-+    {
-+        if (Unloading || !Plugin.Cfg.ResumeRunPending) return;
-+        Plugin.Cfg.ResumeRunPending = false;
-+        Plugin.Cfg.Save();
-+    }
-+
-+    private void Tick(IFramework framework)
-+    {
-+        if (finished) return;
-+        if (!Plugin.Cfg.ResumeRunPending)
-+        {
-+            finished = true;
-+            return;
-+        }
-+
-+        // Starts the moment the character is in game and every required plugin is loaded (after a game launch
-+        // vnavmesh/BossMod may load after AFG); the run itself waits for the navmesh.
-+        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null || Svc.Condition[ConditionFlag.BetweenAreas]
-+         || !External.ExternalPlugins.AllRequiredInstalled())
-+        {
-+            return;
-+        }
-+
-+        finished = true;
-+        if (Plugin.Instance.Controller.Running) return;
-+        RunLog.Info("Auto-resume: a run was going when the plugin last unloaded; starting it again.");
-+        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload. Press Stop to keep it stopped next time.");
-+        Plugin.Instance.StartFromCommand();
-+    }
-+}
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..47ce016 100644
+index 7ff8682..47e9b9d 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,13 @@ public sealed class Plugin : IDalamudPlugin
+@@ -85,8 +85,11 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
-+        autoResume = new AutoResume(); // Fork
 +        ipcProvider = new Core.Ipc.AfgIpcProvider(this); // Fork
      }
  
-+    private readonly AutoResume autoResume; // Fork
 +    private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
 +
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +108,9 @@ public sealed class Plugin : IDalamudPlugin
+@@ -103,6 +106,7 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
-+        AutoResume.Unloading = true; // Fork: keep the resume memory through this instance's run-end callbacks
-+        autoResume.Dispose(); // Fork
 +        ipcProvider.Dispose(); // Fork
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +161,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -153,7 +157,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
 -    private void StartFromCommand()
-+    internal void StartFromCommand() // Fork: was private; AutoResume starts runs through it
++    internal void StartFromCommand() // Fork: was private; the IPC Start goes through it
      {
          if (Controller.Running)
          {
