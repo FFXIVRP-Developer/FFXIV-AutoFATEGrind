@@ -63,6 +63,61 @@ index 08faec6..1776ca3 100644
 +        return !BGCollisionModule.RaycastMaterialFilter(origin, offset / distance, out _, distance);
 +    }
  }
+diff --git a/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
+new file mode 100644
+index 0000000..a76a3e8
+--- /dev/null
++++ b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
+@@ -0,0 +1,49 @@
++using Dalamud.Plugin.Ipc;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Ipc;
++
++// Fork: lets another local plugin (the boat orchestrator) drive a run like /afg start, /afg stop soft and /afg stop.
++//   AutoFateGrind.IsRunning    () -> bool    a run is going (paused counts)
++//   AutoFateGrind.Start        () -> bool    starts the selected zones like /afg start; true when a run is going after
++//   AutoFateGrind.StopWhenSafe ()            ends the run once the current FATE is over and combat is clear
++//   AutoFateGrind.Stop         ()            ends the run now
++//   AutoFateGrind.Phase        () -> string  Idle, Grinding, Repairing, Trading, Humanizing, Finishing, Paused
++internal sealed class AfgIpcProvider : IDisposable
++{
++    private const string Prefix = "AutoFateGrind";
++
++    private readonly ICallGateProvider<bool> isRunning;
++    private readonly ICallGateProvider<bool> start;
++    private readonly ICallGateProvider<object> stopWhenSafe;
++    private readonly ICallGateProvider<object> stop;
++    private readonly ICallGateProvider<string> phase;
++
++    public AfgIpcProvider(Plugin plugin)
++    {
++        isRunning    = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsRunning");
++        start        = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.Start");
++        stopWhenSafe = Svc.PluginInterface.GetIpcProvider<object>($"{Prefix}.StopWhenSafe");
++        stop         = Svc.PluginInterface.GetIpcProvider<object>($"{Prefix}.Stop");
++        phase        = Svc.PluginInterface.GetIpcProvider<string>($"{Prefix}.Phase");
++
++        isRunning.RegisterFunc(() => plugin.Controller.Running);
++        start.RegisterFunc(() =>
++        {
++            plugin.StartFromCommand();
++            return plugin.Controller.Running;
++        });
++        stopWhenSafe.RegisterAction(() => plugin.Controller.StopWhenSafe());
++        stop.RegisterAction(() => plugin.Controller.Stop());
++        phase.RegisterFunc(() => plugin.Controller.Phase.ToString());
++    }
++
++    public void Dispose()
++    {
++        isRunning.UnregisterFunc();
++        start.UnregisterFunc();
++        stopWhenSafe.UnregisterAction();
++        stop.UnregisterAction();
++        phase.UnregisterFunc();
++    }
++}
 diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
 index 840facc..19ee843 100644
 --- a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
@@ -794,31 +849,34 @@ index 0000000..fee28f4
 +    }
 +}
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..c7b3f9c 100644
+index 7ff8682..47ce016 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,11 @@ public sealed class Plugin : IDalamudPlugin
+@@ -85,8 +85,13 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
 +        autoResume = new AutoResume(); // Fork
++        ipcProvider = new Core.Ipc.AfgIpcProvider(this); // Fork
      }
  
 +    private readonly AutoResume autoResume; // Fork
++    private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
 +
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +106,8 @@ public sealed class Plugin : IDalamudPlugin
+@@ -103,6 +108,9 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
 +        AutoResume.Unloading = true; // Fork: keep the resume memory through this instance's run-end callbacks
 +        autoResume.Dispose(); // Fork
++        ipcProvider.Dispose(); // Fork
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +158,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -153,7 +161,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
