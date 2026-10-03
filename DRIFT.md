@@ -1,0 +1,89 @@
+# Drift and conflict recovery
+
+How to bring this fork back onto upstream (`origin/master`) when ForkWatch says it is behind, and how
+to re-apply each change by hand when a rebase conflicts. README-FORK.md says *what* each item does;
+this file says *where it hooks into upstream* and *what must stay true* after a merge.
+
+The full diff against upstream is kept in `docs/fork-vs-upstream.patch` (regenerate it after every fork
+commit, see the end). Every fork line in the code carries a `// Fork:` comment, so
+`git grep -n "Fork:"` lists every hook point.
+
+## Rebase procedure
+
+```
+git fetch origin
+git rebase origin/master            # fork/vnav-engage onto upstream
+# conflicts: resolve with the per-item notes below, then: git add <file>; git rebase --continue
+git submodule update                # if upstream moved the ECommons pin, see "ECommons" below
+dotnet build ... -p:OutDir=<scratch>  # compile check (README-FORK "Rebuild")
+```
+
+If a rebase gets messy, abort it (`git rebase --abort`), start a fresh branch from `origin/master`, and
+re-apply the items one by one from this file. Every item is small and self-contained. The new files
+(`AutoHumanize.Retreat.cs`) can be copied as-is.
+
+## Footprint per item
+
+### 1-2. Line of sight in engage (README-FORK items 1, 2)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Game/Fates/FateMobScanner.cs` | `using ...BGCollision;` + `HasLineOfSight()` + `SightHeightMeters` appended at the end of the class | Pure addition. Only conflicts if upstream adds its own LoS helper: then delete ours and call theirs. |
+| `Core/Tasks/AutoFate.Engage.cs` `HasTargetInReach` | body uses `TryGetTarget` and adds `&& HasLineOfSight(...)` | Every caller of "target in reach" must also require sight. Upstream callers: the combat-stall bounce, `TickEngagementWatchdog`, `RepositionToFateMob.EngagedOrGone`. |
+| same, `TryGetSightBlockedTarget` | new helper next to `HasTargetInReach` | Pure addition. |
+| same, `TickEngagementWatchdog` | after `idle.MarkOutOfReach();`: compute `sightBlocked`, pass the stall time to `idle.Stalled(pos, ms)` and `sightBlocked` to `RepositionToFateMob` | If upstream rewrites the watchdog, re-insert "sight-blocked → shorter stall → walk to that target". |
+| same, `RepositionToFateMob` | extra parameter `FateMobTarget? sightBlocked`; goal/hitbox/distance come from it when set; `closeIn` is true when set; separate Diag text | If upstream changes the tolerance maths, keep: blocked → walk to the target itself with the melee tolerance. |
+| same, `EngageIdleTracker.Stalled` | takes `int stallMs` instead of reading `EngageIdleStallMs` | Callers pass `EngageIdleStallMs` for the normal case. |
+| same, `DescribeEngageSituation` | appends `(no LoS)` to the target text | Cosmetic. Drop it if it conflicts. |
+| `Core/Tasks/AutoFate.cs` | `EngageSightStallMs = 3_000` after `EngageIdleStallMs` | Pure addition. |
+
+### 3. Progress resets repositions (README-FORK item 3)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoFate.Engage.cs` engage loop | `idle.ForgetRepositions();` inside `if (fate.Progress != lastProgress)` | Has to run wherever upstream notices progress. |
+| same, `EngageIdleTracker` | `ForgetRepositions()` method | Pure addition. |
+
+### 4. Humanizer break location (README-FORK item 4)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoHumanize.Retreat.cs` | **new file**: `HumanizerRetreat` enum, `RetreatLabels`, `ReachRetreat()` (Lifestream IPC `ExecuteCommand`, `IsBusy`, `Abort`) | Copy as-is. Only breaks if Lifestream renames its IPC or its `/li` keywords (`inn`, `apartment`, `home`, `fc`). |
+| `Core/Tasks/AutoHumanize.cs` class line | `sealed class` → `sealed partial class` | Needed for the new file. |
+| same, `Execute()` top | `var territory = await ReachRetreat() ?? cityTerritoryId;` then the cancel check and label swap; the teleport `if` compares with `territory` | Upstream teleports to `cityTerritoryId`. Keep that call as it is: the teleport only runs when no retreat was reached, so `territory == cityTerritoryId` there. |
+| same, wander loop | territory check and `o.Move(territory, ...)` use `territory`; **the pause moved from after the walk to before it** | The point of the change: the first thing after arriving is the pause, so a 999-minute pause means no movement at all. If upstream restructures the loop, keep pause-first. |
+| `Configuration.cs` | `HumanizerRetreat` property after `HumanizerWanderMaxMeters` | The saved JSON is shared with the store build. The store build ignores the extra key. |
+| `Windows/Sections/Config/HumanizerSettings.cs` | `MaxPauseSec = 999 * 60` used as the pause range max (upstream: `60`); "Break location" row at the top of `DrawCitiesGroup` | The UI text is literal English, not localised, on purpose: no `L.cs` / `Localization/*.json` changes to conflict. |
+
+The controller (`AutoFateController.Handoffs.cs`) is **not** touched. It still picks a city and passes it in.
+That city is the fallback when Lifestream can't reach the location. It is also why at least one city has
+to stay ticked: upstream skips the break when the list is empty.
+
+### ECommons submodule
+
+The local commit on `ECommons` branch `fork/excelpage-alias` adds one line
+(`using ExcelPage = Lumina.Excel.ExcelPage;` in `ExcelServices/Sheets/QuestDialogueText.cs`).
+
+- Upstream bumps the ECommons pin: `cd ECommons; git fetch; git checkout <new pin>`. Build. If the
+  `ExcelPage` ambiguity error is back, `git cherry-pick fork/excelpage-alias`. If it builds clean,
+  ECommons fixed it and the local commit is obsolete. Then commit the new pointer in the fork.
+- If `git submodule update` complains that the local commit is unreachable, it lives only in this
+  clone's `ECommons/.git`. Re-create it from the one-line description above.
+
+## What "too far" looks like
+
+Signs that re-applying beats rebasing:
+- upstream split or renamed `AutoFate.Engage.cs` / `AutoHumanize.cs`
+- `EngageIdleTracker` was replaced
+- the humanizer stopped using a wander loop
+
+In that case, start from upstream and re-implement the "Must stay true" lines above in the new shape.
+Each item is under ~40 lines of real code.
+
+## Regenerate the patch
+
+```
+git diff origin/master -- . ":(exclude)*.md" ":(exclude)docs/**" > docs/fork-vs-upstream.patch
+```
+
+Commit it separately ("Regenerate fork-vs-upstream.patch"), as in the AutoDuty fork.

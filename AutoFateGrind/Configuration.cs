@@ -144,6 +144,8 @@ public sealed class Configuration : IPluginConfiguration
     public int HumanizerPauseMaxSec { get; set; } = 8;
     public int HumanizerWanderMinMeters { get; set; } = 25;
     public int HumanizerWanderMaxMeters { get; set; } = 80;
+    // Fork: where breaks are taken; anything but City travels with Lifestream and falls back to a city.
+    public Core.Tasks.HumanizerRetreat HumanizerRetreat { get; set; } = Core.Tasks.HumanizerRetreat.City;
     // TerritoryIds from Core.Zones.CityCatalog; defaults to every expansion's main hub.
     public HashSet<uint> HumanizerCities { get; set; } = [129, 132, 1185, Core.Zones.CityCatalog.SolutionNineTerritoryId];
 

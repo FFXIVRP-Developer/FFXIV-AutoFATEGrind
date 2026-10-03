@@ -11,7 +11,7 @@ namespace AutoFateGrind.Core.Tasks;
 // Idle-break task: teleports to a city aetheryte and wanders between random reachable points until the
 // configured break window elapses. The grind loop calls this through AutoFateController; on return the
 // controller resumes the FATE grind in the origin zone, so this task only owns the in-city portion.
-public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
+public sealed partial class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
 {
     private readonly uint cityTerritoryId = cityTerritoryId;
     private readonly int durationMs = durationMs;
@@ -58,11 +58,15 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
     {
         var city = CityCatalog.Find(cityTerritoryId);
         var label = city?.Name ?? $"city {cityTerritoryId}";
+        // Fork: break at the configured retreat (inn, housing) when Lifestream gets there; the city is the fallback.
+        var territory = await ReachRetreat() ?? cityTerritoryId;
+        if (CancelToken.IsCancellationRequested) return;
+        if (territory != cityTerritoryId) label = RetreatLabels[(int)Plugin.Cfg.HumanizerRetreat];
         var breakMin = Math.Max(1, durationMs / 60_000);
         Diag($"Humanize start: {label}, break {durationMs / 1000}s");
         Svc.Chat.Print($"[AFG] Humanize: taking a ~{breakMin}m break in {label}.");
 
-        if (Svc.ClientState.TerritoryType != cityTerritoryId)
+        if (Svc.ClientState.TerritoryType != territory)
         {
             var reached = false;
             await RunWithStatusPinned($"Teleporting to {label}",
@@ -85,11 +89,19 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
         while (Environment.TickCount64 < deadline)
         {
             if (CancelToken.IsCancellationRequested) return;
-            if (Svc.ClientState.TerritoryType != cityTerritoryId)
+            if (Svc.ClientState.TerritoryType != territory)
             {
-                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {cityTerritoryId}); ending early.");
+                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {territory}); ending early.");
                 return;
             }
+
+            // Fork: pause before each hop (upstream paused after it), so a long pause means no movement from arrival on.
+            var (pauseLo, pauseHi) = PauseRangeMs();
+            var pauseMs = pauseLo == pauseHi ? pauseLo : rng.Next(pauseLo, pauseHi + 1);
+            Status = $"Idling in {label}";
+            if (pauseMs > 0) await IdleFor(pauseMs, deadline);
+            if (CancelToken.IsCancellationRequested) return;
+            if (Environment.TickCount64 >= deadline) break;
 
             var player = Svc.Objects.LocalPlayer;
             if (player is null) { await DelayMs(PlayerWaitPollMs); continue; }
@@ -111,17 +123,10 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
             var perHopBudget = (int)Math.Min(WalkWatchdogMs, deadline - Environment.TickCount64);
             if (perHopBudget < 4_000) break;
 
-            var move = new MoveOp(o => o.Move(cityTerritoryId, dest.Value,
+            var move = new MoveOp(o => o.Move(territory, dest.Value,
                 MovementConfig.Default.WithTolerance(ArrivalTolerance),
                 stopCondition: () => Environment.TickCount64 >= deadline || CancelToken.IsCancellationRequested));
             await RunCancellable(move, perHopBudget, $"humanize-walk-{hops}", StuckDetector.MoveStallAbort($"humanize-walk-{hops}"));
-
-            if (CancelToken.IsCancellationRequested) return;
-            if (Environment.TickCount64 >= deadline) break;
-
-            var (pauseLo, pauseHi) = PauseRangeMs();
-            var pauseMs = pauseLo == pauseHi ? pauseLo : rng.Next(pauseLo, pauseHi + 1);
-            if (pauseMs > 0) await IdleFor(pauseMs, deadline);
         }
 
         Diag($"Humanize done in {label} after {hops} hop(s).");

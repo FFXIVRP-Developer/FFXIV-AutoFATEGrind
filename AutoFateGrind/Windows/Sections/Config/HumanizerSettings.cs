@@ -94,7 +94,7 @@ internal static class HumanizerSettings
             SettingsControls.RangeInlineWidth(),
             () => SettingsControls.DrawRangeInline(cfg, "##hum_pause_min", "##hum_pause_max",
                 () => cfg.HumanizerPauseMinSec, v => cfg.HumanizerPauseMinSec = v,
-                () => cfg.HumanizerPauseMaxSec, v => cfg.HumanizerPauseMaxSec = v, 60, 0, Loc.T(L.Settings.SecondsFormat)));
+                () => cfg.HumanizerPauseMaxSec, v => cfg.HumanizerPauseMaxSec = v, MaxPauseSec, 0, Loc.T(L.Settings.SecondsFormat)));
 
         SettingsRow.Draw(Loc.T(L.Settings.WalkDistance),
             Loc.T(L.Settings.WalkDistanceHelp),
@@ -104,9 +104,26 @@ internal static class HumanizerSettings
                 () => cfg.HumanizerWanderMaxMeters, v => cfg.HumanizerWanderMaxMeters = v, 200, 5, Loc.T(L.Settings.MetersFormat)));
     }
 
+    // Fork: up to 999 minutes (double-click the field to type), so a break can be spent standing still.
+    private const int MaxPauseSec = 999 * 60;
+
     private static void DrawCitiesGroup(Configuration cfg)
     {
         using var group = SettingsGroup.Begin(Loc.T(L.Settings.HumanizerCities));
+
+        // Fork: break location; the cities below stay the fallback when Lifestream cannot get there.
+        SettingsRow.Draw("Break location",
+            "City wanders as upstream. Inn and housing are reached with Lifestream (/li inn, apartment, home, fc); a private or FC house is only entered when Lifestream's house registration says \"Enter house\". If Lifestream can't get there, the break falls back to a city below.",
+            SettingsControls.RowComboWidth,
+            () =>
+            {
+                var selected = (int)cfg.HumanizerRetreat;
+                if (SettingsControls.DrawPlainCombo("##hum_retreat", ref selected, Core.Tasks.AutoHumanize.RetreatLabels, SettingsControls.RowComboWidth))
+                {
+                    cfg.HumanizerRetreat = (Core.Tasks.HumanizerRetreat)selected;
+                    cfg.SaveDebounced();
+                }
+            });
 
         SettingsRow.DrawBlock(Loc.T(L.Settings.AllowedCities),
             Loc.T(L.Settings.AllowedCitiesHelp),
