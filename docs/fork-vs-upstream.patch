@@ -1,0 +1,370 @@
+diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
+index efc08bd..9efa7b7 100644
+--- a/AutoFateGrind/Configuration.cs
++++ b/AutoFateGrind/Configuration.cs
+@@ -144,6 +144,8 @@ public sealed class Configuration : IPluginConfiguration
+     public int HumanizerPauseMaxSec { get; set; } = 8;
+     public int HumanizerWanderMinMeters { get; set; } = 25;
+     public int HumanizerWanderMaxMeters { get; set; } = 80;
++    // Fork: where breaks are taken; anything but City travels with Lifestream and falls back to a city.
++    public Core.Tasks.HumanizerRetreat HumanizerRetreat { get; set; } = Core.Tasks.HumanizerRetreat.City;
+     // TerritoryIds from Core.Zones.CityCatalog; defaults to every expansion's main hub.
+     public HashSet<uint> HumanizerCities { get; set; } = [129, 132, 1185, Core.Zones.CityCatalog.SolutionNineTerritoryId];
+ 
+diff --git a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
+index 08faec6..1776ca3 100644
+--- a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
++++ b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
+@@ -3,6 +3,7 @@ using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
+ using Dalamud.Game.ClientState.Objects.Types;
+ using ECommons.DalamudServices;
+ using FFXIVClientStructs.FFXIV.Client.Game.Object;
++using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
+ using System;
+ using System.Numerics;
+ using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
+@@ -187,4 +188,21 @@ internal static unsafe class FateMobScanner
+ 
+     private static float DistanceToHitbox(Vector3 from, IBattleNpc npc)
+         => MathF.Max(0f, Vector3.Distance(from, npc.Position) - npc.HitboxRadius);
++
++    // Fork: positions are at the feet; the ray runs between chest heights so ground bumps don't count as walls.
++    private const float SightHeightMeters = 2f;
++
++    // Fork: true when no level collision lies between the two points; the game refuses casts ("Target not in line of sight") otherwise.
++    public static bool HasLineOfSight(Vector3 from, Vector3 to)
++    {
++        var lift = new Vector3(0f, SightHeightMeters, 0f);
++        var origin = from + lift;
++        var offset = to + lift - origin;
++        var distance = offset.Length();
++        if (distance < 0.01f)
++        {
++            return true;
++        }
++        return !BGCollisionModule.RaycastMaterialFilter(origin, offset / distance, out _, distance);
++    }
+ }
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
+index 35e0b04..1b9866a 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
+@@ -211,6 +211,7 @@ public sealed partial class AutoFate
+                     lastProgress = fate.Progress;
+                     lastProgressAtMs = Environment.TickCount64;
+                     combatStallBounces = 0;
++                    idle.ForgetRepositions();
+                 }
+                 else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
+                       && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
+@@ -385,7 +386,9 @@ public sealed partial class AutoFate
+         }
+         idle.MarkOutOfReach();
+ 
+-        if (!idle.Stalled(player.Position))
++        // Fork: standing still facing a sight-blocked target never fixes itself, so it gets the shorter wait.
++        FateMobTarget? sightBlocked = TryGetSightBlockedTarget(fateId, player.Position, idle.Meters, out var blocked) ? blocked : null;
++        if (!idle.Stalled(player.Position, sightBlocked is null ? EngageIdleStallMs : EngageSightStallMs))
+         {
+             return false;
+         }
+@@ -409,28 +412,43 @@ public sealed partial class AutoFate
+             return true;
+         }
+ 
+-        await RepositionToFateMob(fateId, fateName, survey, idle);
++        await RepositionToFateMob(fateId, fateName, survey, idle, sightBlocked);
+         idle.Restart();
+         Status = $"Engaging {fateName}";
+         return false;
+     }
+ 
++    // Fork: a target behind a wall or ledge is not in reach; distance alone kept the watchdogs quiet while every cast failed.
+     private static bool HasTargetInReach(uint fateId, float reachMeters)
+         => Svc.Objects.LocalPlayer is { } player
+-        && FateMobScanner.TryGetTargetedMob(fateId, player.Position, out var distance)
+-        && distance <= reachMeters;
++        && FateMobScanner.TryGetTarget(fateId, player.Position, out var target)
++        && target.DistanceToHitbox <= reachMeters
++        && FateMobScanner.HasLineOfSight(player.Position, target.Position);
+ 
+-    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle)
++    // Fork: the targeted FATE mob is close enough to hit but level geometry blocks the line of sight.
++    private static bool TryGetSightBlockedTarget(uint fateId, Vector3 from, float reachMeters, out FateMobTarget target)
++        => FateMobScanner.TryGetTarget(fateId, from, out target)
++        && target.DistanceToHitbox <= reachMeters
++        && !FateMobScanner.HasLineOfSight(from, target.Position);
++
++    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle, FateMobTarget? sightBlocked)
+     {
+         idle.CountReposition();
+         Status = $"Closing on {fateName}";
+-        Diag($"Engagement idle on FATE {fateId} ({fateName}) for {EngageIdleStallMs / 1000}s with nothing in reach; walking to the nearest mob with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})");
+-
+-        var dest = survey.NearestPosition.OnMesh();
++        Diag(sightBlocked is null
++            ? $"Engagement idle on FATE {fateId} ({fateName}) for {EngageIdleStallMs / 1000}s with nothing in reach; walking to the nearest mob with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})"
++            : $"Target of FATE {fateId} ({fateName}) is out of line of sight for {EngageSightStallMs / 1000}s; walking to it with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})");
++
++        // Fork: a sight-blocked target is walked to directly, not whichever mob happens to be nearest.
++        var goal = sightBlocked?.Position ?? survey.NearestPosition;
++        var goalHitbox = sightBlocked?.HitboxRadius ?? survey.NearestHitboxRadius;
++        var goalDistance = sightBlocked?.DistanceToHitbox ?? survey.NearestDistanceToHitbox;
++        var dest = goal.OnMesh();
+         // Already inside the ranged approach distance and still not fighting means the ground in between is the
+         // problem, so close in like a melee; clib ends a move that starts within its tolerance without moving.
+-        var closeIn = idle.Meters <= EngageMeleeReachMeters || survey.NearestDistanceToHitbox <= EngageRangedApproachToleranceMeters;
+-        var tolerance = survey.NearestHitboxRadius + (closeIn
++        // Fork: a blocked line of sight is the same problem at any distance.
++        var closeIn = sightBlocked is not null || idle.Meters <= EngageMeleeReachMeters || goalDistance <= EngageRangedApproachToleranceMeters;
++        var tolerance = goalHitbox + (closeIn
+             ? EngageMeleeApproachToleranceMeters
+             : EngageRangedApproachToleranceMeters);
+         var config = MovementConfig.Default.WithTolerance(tolerance);
+@@ -741,7 +759,7 @@ public sealed partial class AutoFate
+         var targetDescription = target is null
+             ? "none"
+             : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
+-                ? $"{target.Name}@{targetDistance:F0}m"
++                ? $"{target.Name}@{targetDistance:F0}m{(FateMobScanner.HasLineOfSight(position, target.Position) ? "" : "(no LoS)")}"
+                 : $"{target.Name}(not this FATE)";
+         var nearest = survey.Any
+             ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
+@@ -792,7 +810,7 @@ public sealed partial class AutoFate
+         public float Meters { get; } = reachMeters;
+         public int Repositions { get; private set; }
+ 
+-        public bool Stalled(Vector3 position)
++        public bool Stalled(Vector3 position, int stallMs)
+         {
+             var now = Environment.TickCount64;
+             if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
+@@ -802,11 +820,15 @@ public sealed partial class AutoFate
+                 idleSinceMs = now;
+                 return false;
+             }
+-            return now - idleSinceMs >= EngageIdleStallMs;
++            return now - idleSinceMs >= stallMs;
+         }
+ 
+         public void CountReposition() => Repositions++;
+ 
++        // Fork: a FATE whose progress moves is being worked (an escort walking on, other players fighting),
++        // so earlier repositions that missed a moving pack must not add up to abandoning it.
++        public void ForgetRepositions() => Repositions = 0;
++
+         public void MarkInReach()
+         {
+             var now = Environment.TickCount64;
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
+index 1f98ff8..acdd821 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFate.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
+@@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+     // Idle = the character has not displaced while nothing in reach is being fought; BossMod never moves
+     // toward a mob outside its FATE-circle pathfind map, so AFG walks in with vnav after this long.
+     private const int   EngageIdleStallMs = 8_000;
++    // Fork: same idle rule while the target is in reach but out of line of sight.
++    private const int   EngageSightStallMs = 3_000;
+     private const int   EngageRepositionWatchdogMs = 40_000;
+     private const float EngageMeleeApproachToleranceMeters  = 2.5f;
+     private const float EngageRangedApproachToleranceMeters = 15f;
+diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
+new file mode 100644
+index 0000000..5dd1b92
+--- /dev/null
++++ b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
+@@ -0,0 +1,73 @@
++using Dalamud.Game.ClientState.Conditions;
++using Dalamud.Plugin.Ipc;
++using ECommons.DalamudServices;
++using System.Threading.Tasks;
++
++namespace AutoFateGrind.Core.Tasks;
++
++// Fork: where a humanizer break is taken. City is upstream's behaviour; the rest are reached with Lifestream.
++public enum HumanizerRetreat { City, Inn, Apartment, PrivateHouse, FreeCompanyHouse }
++
++// Fork: takes the break at an inn room or housing instead of a city. Lifestream does the travel (its /li
++// shortcuts); the wander loop then runs unchanged in whatever territory Lifestream ended in, so a long
++// "pause between hops" keeps the character standing still for the whole break.
++public sealed partial class AutoHumanize
++{
++    public static readonly string[] RetreatLabels = ["City (wander)", "Inn room", "Apartment", "Private house", "Free Company house"];
++
++    private const int RetreatWatchdogMs   = 180_000;
++    private const int RetreatStartGraceMs = 1_500;
++    private const int RetreatPollMs       = 500;
++
++    private static string? RetreatCommand(HumanizerRetreat retreat) => retreat switch
++    {
++        HumanizerRetreat.Inn              => "inn",
++        HumanizerRetreat.Apartment        => "apartment",
++        HumanizerRetreat.PrivateHouse     => "home",
++        HumanizerRetreat.FreeCompanyHouse => "fc",
++        _                                 => null,
++    };
++
++    // Territory the break runs in, or null when no retreat is configured or Lifestream did not get anywhere
++    // (no such property, Lifestream missing, timeout); the caller then falls back to the city break.
++    private async Task<uint?> ReachRetreat()
++    {
++        var retreat = Plugin.Cfg.HumanizerRetreat;
++        if (RetreatCommand(retreat) is not { } command) return null;
++
++        var execute = Svc.PluginInterface.GetIpcSubscriber<string, object>("Lifestream.ExecuteCommand");
++        var isBusy  = Svc.PluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
++        if (!execute.HasAction || !isBusy.HasFunction)
++        {
++            Diag($"Humanize retreat {retreat}: Lifestream IPC unavailable; falling back to a city break.");
++            return null;
++        }
++
++        var start = Svc.ClientState.TerritoryType;
++        Status = $"Travelling to {RetreatLabels[(int)retreat]}";
++        Diag($"Humanize retreat {retreat}: /li {command} from territory {start}.");
++        execute.InvokeAction(command);
++        await DelayMs(RetreatStartGraceMs);
++
++        var deadline = Environment.TickCount64 + RetreatWatchdogMs;
++        while (isBusy.InvokeFunc() || Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Objects.LocalPlayer is null)
++        {
++            if (CancelToken.IsCancellationRequested || Environment.TickCount64 >= deadline)
++            {
++                Svc.PluginInterface.GetIpcSubscriber<object>("Lifestream.Abort").InvokeAction();
++                Diag($"Humanize retreat {retreat}: {(CancelToken.IsCancellationRequested ? "cancelled" : "timed out")}; Lifestream aborted.");
++                return null;
++            }
++            await DelayMs(RetreatPollMs);
++        }
++
++        var here = Svc.ClientState.TerritoryType;
++        if (here == start)
++        {
++            Diag($"Humanize retreat {retreat}: Lifestream finished without changing territory; falling back to a city break.");
++            return null;
++        }
++        Diag($"Humanize retreat {retreat}: arrived in territory {here}.");
++        return here;
++    }
++}
+diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.cs
+index 0878ae6..a319ad5 100644
+--- a/AutoFateGrind/Core/Tasks/AutoHumanize.cs
++++ b/AutoFateGrind/Core/Tasks/AutoHumanize.cs
+@@ -11,7 +11,7 @@ namespace AutoFateGrind.Core.Tasks;
+ // Idle-break task: teleports to a city aetheryte and wanders between random reachable points until the
+ // configured break window elapses. The grind loop calls this through AutoFateController; on return the
+ // controller resumes the FATE grind in the origin zone, so this task only owns the in-city portion.
+-public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
++public sealed partial class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
+ {
+     private readonly uint cityTerritoryId = cityTerritoryId;
+     private readonly int durationMs = durationMs;
+@@ -58,11 +58,15 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
+     {
+         var city = CityCatalog.Find(cityTerritoryId);
+         var label = city?.Name ?? $"city {cityTerritoryId}";
++        // Fork: break at the configured retreat (inn, housing) when Lifestream gets there; the city is the fallback.
++        var territory = await ReachRetreat() ?? cityTerritoryId;
++        if (CancelToken.IsCancellationRequested) return;
++        if (territory != cityTerritoryId) label = RetreatLabels[(int)Plugin.Cfg.HumanizerRetreat];
+         var breakMin = Math.Max(1, durationMs / 60_000);
+         Diag($"Humanize start: {label}, break {durationMs / 1000}s");
+         Svc.Chat.Print($"[AFG] Humanize: taking a ~{breakMin}m break in {label}.");
+ 
+-        if (Svc.ClientState.TerritoryType != cityTerritoryId)
++        if (Svc.ClientState.TerritoryType != territory)
+         {
+             var reached = false;
+             await RunWithStatusPinned($"Teleporting to {label}",
+@@ -85,12 +89,20 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
+         while (Environment.TickCount64 < deadline)
+         {
+             if (CancelToken.IsCancellationRequested) return;
+-            if (Svc.ClientState.TerritoryType != cityTerritoryId)
++            if (Svc.ClientState.TerritoryType != territory)
+             {
+-                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {cityTerritoryId}); ending early.");
++                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {territory}); ending early.");
+                 return;
+             }
+ 
++            // Fork: pause before each hop (upstream paused after it), so a long pause means no movement from arrival on.
++            var (pauseLo, pauseHi) = PauseRangeMs();
++            var pauseMs = pauseLo == pauseHi ? pauseLo : rng.Next(pauseLo, pauseHi + 1);
++            Status = $"Idling in {label}";
++            if (pauseMs > 0) await IdleFor(pauseMs, deadline);
++            if (CancelToken.IsCancellationRequested) return;
++            if (Environment.TickCount64 >= deadline) break;
++
+             var player = Svc.Objects.LocalPlayer;
+             if (player is null) { await DelayMs(PlayerWaitPollMs); continue; }
+ 
+@@ -111,17 +123,10 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
+             var perHopBudget = (int)Math.Min(WalkWatchdogMs, deadline - Environment.TickCount64);
+             if (perHopBudget < 4_000) break;
+ 
+-            var move = new MoveOp(o => o.Move(cityTerritoryId, dest.Value,
++            var move = new MoveOp(o => o.Move(territory, dest.Value,
+                 MovementConfig.Default.WithTolerance(ArrivalTolerance),
+                 stopCondition: () => Environment.TickCount64 >= deadline || CancelToken.IsCancellationRequested));
+             await RunCancellable(move, perHopBudget, $"humanize-walk-{hops}", StuckDetector.MoveStallAbort($"humanize-walk-{hops}"));
+-
+-            if (CancelToken.IsCancellationRequested) return;
+-            if (Environment.TickCount64 >= deadline) break;
+-
+-            var (pauseLo, pauseHi) = PauseRangeMs();
+-            var pauseMs = pauseLo == pauseHi ? pauseLo : rng.Next(pauseLo, pauseHi + 1);
+-            if (pauseMs > 0) await IdleFor(pauseMs, deadline);
+         }
+ 
+         Diag($"Humanize done in {label} after {hops} hop(s).");
+diff --git a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
+index da8719c..9e803ed 100644
+--- a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
++++ b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
+@@ -94,7 +94,7 @@ internal static class HumanizerSettings
+             SettingsControls.RangeInlineWidth(),
+             () => SettingsControls.DrawRangeInline(cfg, "##hum_pause_min", "##hum_pause_max",
+                 () => cfg.HumanizerPauseMinSec, v => cfg.HumanizerPauseMinSec = v,
+-                () => cfg.HumanizerPauseMaxSec, v => cfg.HumanizerPauseMaxSec = v, 60, 0, Loc.T(L.Settings.SecondsFormat)));
++                () => cfg.HumanizerPauseMaxSec, v => cfg.HumanizerPauseMaxSec = v, MaxPauseSec, 0, Loc.T(L.Settings.SecondsFormat)));
+ 
+         SettingsRow.Draw(Loc.T(L.Settings.WalkDistance),
+             Loc.T(L.Settings.WalkDistanceHelp),
+@@ -104,10 +104,27 @@ internal static class HumanizerSettings
+                 () => cfg.HumanizerWanderMaxMeters, v => cfg.HumanizerWanderMaxMeters = v, 200, 5, Loc.T(L.Settings.MetersFormat)));
+     }
+ 
++    // Fork: up to 999 minutes (double-click the field to type), so a break can be spent standing still.
++    private const int MaxPauseSec = 999 * 60;
++
+     private static void DrawCitiesGroup(Configuration cfg)
+     {
+         using var group = SettingsGroup.Begin(Loc.T(L.Settings.HumanizerCities));
+ 
++        // Fork: break location; the cities below stay the fallback when Lifestream cannot get there.
++        SettingsRow.Draw("Break location",
++            "City wanders as upstream. Inn and housing are reached with Lifestream (/li inn, apartment, home, fc); a private or FC house is only entered when Lifestream's house registration says \"Enter house\". If Lifestream can't get there, the break falls back to a city below.",
++            SettingsControls.RowComboWidth,
++            () =>
++            {
++                var selected = (int)cfg.HumanizerRetreat;
++                if (SettingsControls.DrawPlainCombo("##hum_retreat", ref selected, Core.Tasks.AutoHumanize.RetreatLabels, SettingsControls.RowComboWidth))
++                {
++                    cfg.HumanizerRetreat = (Core.Tasks.HumanizerRetreat)selected;
++                    cfg.SaveDebounced();
++                }
++            });
++
+         SettingsRow.DrawBlock(Loc.T(L.Settings.AllowedCities),
+             Loc.T(L.Settings.AllowedCitiesHelp),
+             () => DrawHumanizerCityList(cfg));
+diff --git a/ECommons b/ECommons
+index f1656e8..62cd604 160000
+--- a/ECommons
++++ b/ECommons
+@@ -1 +1 @@
+-Subproject commit f1656e8885eff98d331dcb3136ae8af4d05edfb2
++Subproject commit 62cd604ff7934381b2270b513f9f62bc1b9a73e9
