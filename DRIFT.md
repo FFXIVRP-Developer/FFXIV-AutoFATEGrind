@@ -123,6 +123,13 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 | `Core/Tasks/AutoFate.Yokai.cs` `SummonYokaiMinion` | `await LeaveWaterForSummon(minionName);` after `StowFashionAccessory()`; the method below it; usings `Core.Ipc`, `clib.TaskSystem`, `System.Numerics` | Runs before the summon attempts. |
 | `Core/Tasks/AutoCommon.Teleport.cs` | `InWater()` `private` → `private protected` | Needed by the subclass. |
 
+### 13. City districts without an aetheryte (README-FORK item 13)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Zones/ZoneAetherytes.cs` `ResolveGateway` | field-only check widened to field or town (`TownUse = 0`); a missing/invalid hub falls back to `HubOfShardIn` | Inns (use 2) stay excluded. If upstream fixes Upper Decks another way, drop this. |
+| same, helpers | `TownUse`, `HubOfShardIn` before `ResolveAttunableIds` | Pure addition. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

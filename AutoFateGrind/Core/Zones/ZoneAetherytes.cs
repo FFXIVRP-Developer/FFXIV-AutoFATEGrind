@@ -69,17 +69,47 @@ internal static class ZoneAetherytes
 
         var territories = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
         if (territories?.GetRowOrDefault(territoryId) is not { } territory) return null;
-        if (territory.TerritoryIntendedUse.ValueNullable?.RowId != ZoneRegistry.StandardFieldUse) return null;
-
-        var gatewayId = territory.Aetheryte.RowId;
-        if (gatewayId == 0) return null;
+        // Fork (README-FORK item 13): city districts too. Limsa Upper Decks has no aetheryte, and "already works" was not
+        // true for AutoRepair: "territory 128 has no aetheryte to teleport to; giving up" after every FATE (2026-10-03,
+        // the Maelstrom Mender), with the gear at 13%. Inns stay out (reached through the innkeeper).
+        var intendedUse = territory.TerritoryIntendedUse.ValueNullable?.RowId;
+        if (intendedUse != ZoneRegistry.StandardFieldUse && intendedUse != TownUse) return null;
 
         var aetherytes = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
-        if (aetherytes?.GetRowOrDefault(gatewayId) is not { IsAetheryte: true } gatewayRow) return null;
-        if (gatewayRow.Territory.RowId == 0 || gatewayRow.Territory.RowId == territoryId) return null;
+        if (aetherytes is null) return null;
+        var gatewayId = territory.Aetheryte.RowId;
+        if (aetherytes.GetRowOrDefault(gatewayId) is not { IsAetheryte: true } gatewayRow
+            || gatewayRow.Territory.RowId == 0 || gatewayRow.Territory.RowId == territoryId)
+        {
+            // Fork: no hub named for the territory: take the main aetheryte of the aethernet one of its shards belongs to.
+            if (HubOfShardIn(aetherytes, territoryId) is not { } hub) return null;
+            gatewayRow = hub;
+            gatewayId = hub.RowId;
+        }
         if (!TryResolvePosition(gatewayRow, out var position)) return null;
 
         return new ZoneGateway(gatewayId, gatewayRow.Territory.RowId, ResolveName(gatewayRow), position);
+    }
+
+    // Fork: TerritoryIntendedUse row 0 is a town (city districts like Limsa Upper Decks).
+    private const uint TownUse = 0;
+
+    // Fork: the main aetheryte (outside the territory) of the aethernet that one of the territory's shards belongs to.
+    private static Lumina.Excel.Sheets.Aetheryte? HubOfShardIn(Lumina.Excel.ExcelSheet<Lumina.Excel.Sheets.Aetheryte> aetherytes, uint territoryId)
+    {
+        foreach (var shard in aetherytes)
+        {
+            if (shard.IsAetheryte || shard.Territory.RowId != territoryId || shard.AethernetGroup == 0) continue;
+            foreach (var main in aetherytes)
+            {
+                if (main.IsAetheryte && main.AethernetGroup == shard.AethernetGroup
+                    && main.Territory.RowId != 0 && main.Territory.RowId != territoryId)
+                {
+                    return main;
+                }
+            }
+        }
+        return null;
     }
 
     private static uint[] ResolveAttunableIds(uint territoryId)

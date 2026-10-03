@@ -104,6 +104,13 @@ Every change in the code is marked with a `// Fork:` comment.
     Bronze Lake, which is how the character got there. A mounted move flew off, counted the air as "out of the water"
     and dropped back in on the summon's dismount, hence on foot. Worked 15:46 (Camp Bronze Lake, ~448 m).
 
+13. **City districts without an aetheryte** (`ZoneAetherytes.cs` `ResolveGateway`, `HubOfShardIn`). Upstream's two-leg
+    gateway (teleport to the hub, ride the aethernet in) only served open-world zones; its note said Limsa Upper Decks
+    "already works", but AutoRepair's trip to the Maelstrom Mender (territory 128) failed after every FATE with
+    "territory 128 has no aetheryte to teleport to; giving up" (2026-10-03, gear at 13 %, NPC-only repair). Town
+    territories (TerritoryIntendedUse 0) now use the gateway too; inns stay out. When the territory names no hub, the
+    main aetheryte of the aethernet one of its shards belongs to is used (Upper Decks → Limsa Lower Decks).
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -117,6 +124,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 6 Resume run after reload | Removed. |
 | 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 | 8 IPC | Works: BoatRunner starts and soft-stops runs. |
+| 13 City districts without an aetheryte | Not yet observed. Look for `reached ...; riding its aethernet into territory 128`. |
 | 12 Leave the water to summon | Works: swam out of Bronze Lake toward Camp Bronze Lake, FATEs resumed (2026-10-03 15:46). |
 | 11 Ring-chase time limit | Per-target version did not fire (target switching). Now progress-based; not yet observed. Look for `Chased outside the FATE ring`. |
 | 10 Yo-kai minion per zone | Not yet observed. Look for `Yo-kai in <zone>: farming`. |
