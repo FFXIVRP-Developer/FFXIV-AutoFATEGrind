@@ -1,18 +1,17 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..b590d34 100644
+index efc08bd..4d12824 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
-@@ -11,6 +11,9 @@ public sealed class Configuration : IPluginConfiguration
+@@ -11,6 +11,8 @@ public sealed class Configuration : IPluginConfiguration
      public int Version { get; set; }
  
      public bool AutoShowOnLogin { get; set; } = false;
-+    // Fork: restart a run that was going when the plugin unloaded; ResumeRunPending is that memory (AutoResume).
-+    public bool AutoResumeEnabled { get; set; } = false;
++    // Fork: a run was going when the plugin last unloaded, so the next load starts it again (AutoResume).
 +    public bool ResumeRunPending { get; set; } = false;
  
      public string Language { get; set; } = "";
  
-@@ -144,6 +147,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +146,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -391,7 +390,7 @@ index 0878ae6..a319ad5 100644
          Diag($"Humanize done in {label} after {hops} hop(s).");
 diff --git a/AutoFateGrind/Core/Tasks/AutoResume.cs b/AutoFateGrind/Core/Tasks/AutoResume.cs
 new file mode 100644
-index 0000000..d1ab7bf
+index 0000000..36fb89a
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoResume.cs
 @@ -0,0 +1,63 @@
@@ -435,7 +434,7 @@ index 0000000..d1ab7bf
 +    private void Tick(IFramework framework)
 +    {
 +        if (finished) return;
-+        if (!Plugin.Cfg.AutoResumeEnabled || !Plugin.Cfg.ResumeRunPending)
++        if (!Plugin.Cfg.ResumeRunPending)
 +        {
 +            finished = true;
 +            return;
@@ -454,7 +453,7 @@ index 0000000..d1ab7bf
 +        finished = true;
 +        if (Plugin.Instance.Controller.Running) return;
 +        RunLog.Info("Auto-resume: a run was going when the plugin last unloaded; starting it again.");
-+        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload (turn off under Settings > General > Resume run after reload).");
++        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload. Press Stop to keep it stopped next time.");
 +        Plugin.Instance.StartFromCommand();
 +    }
 +}
@@ -492,24 +491,6 @@ index 7ff8682..c7b3f9c 100644
      {
          if (Controller.Running)
          {
-diff --git a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
-index 8e1d186..c4a9869 100644
---- a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
-+++ b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
-@@ -35,6 +35,13 @@ internal static class GeneralSettings
-             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoShowOnLogin, v => cfg.AutoShowOnLogin = v, "##gen_autoshow"),
-             SettingsRow.ToggleHeight);
- 
-+        // Fork
-+        SettingsRow.Draw("Resume run after reload",
-+            "If a run was going when the plugin unloaded (plugin reload, game closed or crashed), start it again once you are in game. Pressing Stop, or a run ending on its own, means it will not restart.",
-+            SettingsControls.ToggleWidth,
-+            () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeEnabled, v => cfg.AutoResumeEnabled = v, "##gen_autoresume"),
-+            SettingsRow.ToggleHeight);
-+
-         SettingsRow.Draw(Loc.T(L.Settings.LivePopout),
-             Loc.T(L.Settings.LivePopoutHelp),
-             SettingsControls.ToggleWidth,
 diff --git a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
 index da8719c..9e803ed 100644
 --- a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
