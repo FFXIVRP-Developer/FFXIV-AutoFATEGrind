@@ -180,5 +180,4 @@ internal sealed partial class AutoFateController
 
 }
 
-// Fork: OceanTrip is not in CanPause's list on purpose: the voyage is a duty, and the in-content auto-pause would kill it.
-internal enum AutoPhase { Idle, Grinding, Trading, Repairing, Humanizing, Finishing, Paused, OceanTrip }
+internal enum AutoPhase { Idle, Grinding, Trading, Repairing, Humanizing, Finishing, Paused }

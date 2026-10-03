@@ -23,7 +23,6 @@ internal static class TravelSettings
         DrawMountGroup(cfg);
         DrawZoneSwapGroup(cfg);
         DrawFatePlayGroup(cfg);
-        OceanTripSettings.Draw(cfg); // Fork
     }
 
     private static void DrawMountGroup(Configuration cfg)

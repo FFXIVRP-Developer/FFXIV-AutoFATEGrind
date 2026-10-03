@@ -200,7 +200,6 @@ internal static class RunningPanel
             AutoPhase.Trading    => (Styling.AccentAmber, Styling.AccentAmberSoft, Loc.T(L.Run.PhaseTrading)),
             AutoPhase.Repairing  => (Styling.TextStrong,  Styling.TextSecondary,   Loc.T(L.Run.PhaseRepairing)),
             AutoPhase.Humanizing => (Styling.AccentMint,  Styling.AccentMintSoft,  Loc.T(L.Run.PhaseBreak)),
-            AutoPhase.OceanTrip  => (Styling.AccentBlue,  Styling.AccentBlueSoft,  "Ocean fishing"), // Fork
             AutoPhase.Finishing  => (Styling.AccentMint,  Styling.AccentMintSoft,  Loc.T(L.Run.PhaseFinishing)),
             AutoPhase.Grinding   => (Styling.AccentBlue,  Styling.AccentBlueSoft,  inFate ? Loc.T(L.Run.PhaseEngaging) : Loc.T(L.Run.PhaseGrinding)),
             _                    => (Styling.TextDim,     Styling.TextSecondary,   Loc.T(L.Run.PhaseStandingBy)),

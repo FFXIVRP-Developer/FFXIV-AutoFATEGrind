@@ -118,7 +118,6 @@ internal static class ReadyState
         AutoPhase.Trading    => Loc.T(L.Run.PhaseTrading),
         AutoPhase.Repairing  => Loc.T(L.Run.PhaseRepairing),
         AutoPhase.Humanizing => Loc.T(L.Run.PhaseBreak),
-        AutoPhase.OceanTrip  => "Ocean fishing", // Fork
         AutoPhase.Finishing  => Loc.T(L.Run.PhaseFinishing),
         AutoPhase.Grinding   => Loc.T(L.Run.PhaseGrinding),
         _                    => Loc.T(L.Run.PhaseStandingBy),

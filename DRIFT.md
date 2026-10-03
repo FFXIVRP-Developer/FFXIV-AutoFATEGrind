@@ -91,20 +91,6 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 | `Configuration.cs` | `UnsyncForNonFateMobs` after `KeepTwistOfFate` | Pure addition; the store build ignores the key. |
 | `Windows/Sections/Config/TravelSettings.cs` `DrawFatePlayGroup` | literal-English toggle row after "Keep Twist of Fate" | Cosmetic. No `L.cs` changes. |
 
-### 8. Ocean fishing trips (README-FORK item 8)
-
-| File | Hook | Must stay true |
-|---|---|---|
-| `Core/Tasks/AutoOceanTrip.cs` | **new file**: the trip task, `OceanTripStep(Kind)`, `OceanTripSteps` defaults, IPC wrappers (Henchman, AutoRetainer, Dagobert) | Copy as-is. Breaks if Henchman renames `StartOnABoat` / `IsBusy` / `CancelAllTasks`, or the boat territories (900, 1163) change. |
-| `Core/Tasks/AutoFate.OceanTrip.cs` | **new file**: `OceanTripReady()`, `HandOffToOceanTrip()` | Copy as-is. Uses upstream's `SoftStopReady`, `HoldForCollectReward`, `ClearBlockingCombat`. |
-| `Core/Tasks/AutoFate.cs` | `GrindState.OceanTrip`; in `ComputeState` right after the soft-stop check `if (OceanTripReady()) return GrindState.OceanTrip;`; the `case GrindState.OceanTrip` next to `SoftStop` | Must sit after the soft stop (a user stop wins) and before anything that moves. |
-| `Core/Tasks/AutoFateSession.cs` | `PendingOceanTrip`, `PendingOceanTripFromZone` after `StopWhenSafe` | Pure addition. |
-| `Core/Tasks/AutoFateController.Handoffs.cs` `HandlePostFateHandoffs` | the `PendingOceanTrip` block first, after the stale/soft-stop checks | Resumes through `ResumeGrindOrHumanize` like the other hand-offs. |
-| `Core/Tasks/AutoFateController.cs` | `AutoPhase.OceanTrip` | **Never add it to `CanPause`**: the voyage is a duty and the in-content auto-pause would stop the trip. |
-| `Windows/Sections/RunningPanel.cs`, `ReadyState.cs` | `AutoPhase.OceanTrip` label rows | Cosmetic. |
-| `Configuration.cs` | `OceanTripEnabled`, `OceanTripEveryHours`, `OceanTripBefore`, `OceanTripAfter` (nullable lists) | The lists stay null in the initialiser: Newtonsoft appends to an existing list on load. |
-| `Windows/Sections/Config/OceanTripSettings.cs` + `TravelSettings.Draw` | **new file**, one call line | Cosmetic. |
-
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

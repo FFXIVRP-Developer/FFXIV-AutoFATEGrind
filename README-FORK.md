@@ -64,27 +64,6 @@ Every change in the code is marked with a `// Fork:` comment.
    - No other plugin does this (checked 2026-10-03: Pandora's Box, Automaton, TwistOfFayte, Moirai,
      AutoFateSync, FrenRider, Henchman, autofate only sync on arrival).
 
-8. **Ocean fishing trips** (`AutoOceanTrip.cs`, `AutoFate.OceanTrip.cs`, Settings → Travel → "Ocean
-   fishing", off by default). AutoDuty-style before / after lists around a voyage instead of a loop.
-   - **When:** registration opens on even UTC hours for 13 minutes. From 12 minutes before (up to 4
-     after) a voyage on a matching hour ("How often": every 2 h ... 24 h), the grind stops at the soft-stop
-     safe point (no running FATE, Collect reward collected, out of combat) and hands off. One trip per voyage.
-   - **Before the boat** (default Sell, Discard) → **Henchman** `Henchman.StartOnABoat` (IPC; Henchman
-     does Fisher gear set, bait, repair, boarding, AutoHook presets) → wait until on the boat (territory 900
-     / 1163) and back on land → `Henchman.CancelAllTasks` (its task otherwise loops to the next voyage) and
-     a Lifestream abort → **After the boat** (default Sell, Discard, Retainers, Dagobert) → re-equip the
-     gear set the run had → resume the run in the zone it left.
-   - Steps: **Sell** walks to the merchant & mender at the Limsa voyage desk (-399, 3, 80; where Henchman
-     sells) and sends `/ays itemsell`. **Discard** sends `/ays discard`. **Retainers** opens the Limsa Lower
-     Decks bell (2000401) and runs AutoRetainer as AutoDuty does (`/autoretainer e` until busy, wait, `/autoretainer d`),
-     only when a retainer is ready. **Dagobert** opens the same bell and calls the Dagobert fork's
-     `Dagobert.PinchAllRetainers`, waits on `Dagobert.IsBusy`, then lifts AutoRetainer's suppression.
-     **Chat command** sends any command. Steps are reorderable, each can be switched off, and a failed step
-     is logged and skipped so the run always resumes.
-   - Not paused by "pause in content": the trip is its own phase (`AutoPhase.OceanTrip`), not in `CanPause`.
-   - Set up Henchman's On A Boat for the grinding character (single character mode, the character and world
-     filled in) and leave its own sell/discard after a voyage off.
-
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -96,8 +75,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 4 Break location | Not yet observed. Look for `Humanize retreat ...: arrived in territory` in `dalamud.log`. |
 | 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
 | 6 Resume run after reload | Works: run restarted about 1 s after a hot reload. |
-| 8 Ocean fishing trips | Not yet observed. Look for `Ocean trip` lines in `dalamud.log`. Unverified: whether `/ays itemsell` sells at the voyage-desk merchant without opening its shop first. |
-| 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed, override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
+| 7 Unsync for non-FATE mobs | Not yet observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 
 ## Using the humanizer rest
 
