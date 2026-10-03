@@ -262,7 +262,10 @@ public sealed partial class AutoFate
                 break;
             }
             Diag($"In the water ({ConditionTag()}), where {minionName} cannot be summoned; moving toward {what} ~{Vector3.Distance(Svc.Objects.LocalPlayer?.Position ?? point, point):F0}m away until on land");
-            var move = new MoveOp(o => o.Move(territory, point, MovementConfig.Everything.WithTolerance(3f), stopCondition: () => !InWater()));
+            // On foot (swimming to the shore): with a mount clib flew off, "out of the water" was true in the air, the walk
+            // stopped mid-flight, and the summon's dismount dropped the character back into the lake.
+            var move = new MoveOp(o => o.Move(territory, point, MovementConfig.Default.WithTolerance(3f),
+                stopCondition: () => !InWater() && !Svc.Condition[ConditionFlag.Mounted]));
             await RunCancellable(move, YokaiLeaveWaterMs, "yokai-leave-water", StuckDetector.MoveStallAbort("yokai-leave-water"));
         }
 
