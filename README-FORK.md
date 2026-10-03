@@ -98,8 +98,11 @@ Every change in the code is marked with a `// Fork:` comment.
 12. **Leave the water to summon a Yo-kai** (`AutoFate.Yokai.cs` `LeaveWaterForSummon`, `InWater` in
     `AutoCommon.Teleport.cs` became `private protected`). No minion can be summoned while swimming or diving, and the
     minion wait only retried the summon: 2026-10-03 the character floated in Upper La Noscea for minutes, "Could not
-    summon Manjimutt (4 attempts, swim)", parked. Before summoning, a character in the water now moves toward the nearest
-    reachable navmesh point, then toward the zone's central landing (on land), each walk stopping once out of the water.
+    summon Manjimutt (4 attempts, swim)", parked. Before summoning, a character in the water now moves on foot (swims)
+    toward the nearest reachable navmesh point, then the zone's nearest aetheryte (always on land), then the zone's
+    central landing, each move stopping once out of the water and not mounted. Upper La Noscea's central landing is in
+    Bronze Lake, which is how the character got there. A mounted move flew off, counted the air as "out of the water"
+    and dropped back in on the summon's dismount, hence on foot. Worked 15:46 (Camp Bronze Lake, ~448 m).
 
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
@@ -114,7 +117,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 6 Resume run after reload | Removed. |
 | 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 | 8 IPC | Works: BoatRunner starts and soft-stops runs. |
-| 12 Leave the water to summon | Not yet observed. Look for `In the water (...), where X cannot be summoned`. |
+| 12 Leave the water to summon | Works: swam out of Bronze Lake toward Camp Bronze Lake, FATEs resumed (2026-10-03 15:46). |
 | 11 Ring-chase time limit | Per-target version did not fire (target switching). Now progress-based; not yet observed. Look for `Chased outside the FATE ring`. |
 | 10 Yo-kai minion per zone | Not yet observed. Look for `Yo-kai in <zone>: farming`. |
 | 9 Fight free before a zone teleport | Not yet observed. Look for `In combat outside a FATE; enabling rotation to fight free` before `Off-zone ... teleporting`. |
