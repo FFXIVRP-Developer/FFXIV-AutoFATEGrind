@@ -66,6 +66,18 @@ to stay ticked: upstream skips the break when the list is empty.
 | `Core/Tasks/AutoCommon.Landing.cs` `LandAndDismount` | right after `FindLandingSpots(...)`: if nothing was found, add `NearestPointReachable(around, 60, 60)` as the only spot | A floorless spot must never lead to a descent in place. If upstream adds its own wider search, drop ours. |
 | same, constants | `LandingFarSearchMeters = 60f` | Pure addition. |
 
+### 6. Resume run after reload (README-FORK item 6)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoResume.cs` | **new file**: `Unloading` flag, `MarkStarted()`/`MarkEnded()`, framework-tick starter | Copy as-is. |
+| `Configuration.cs` | `AutoResumeEnabled`, `ResumeRunPending` after `AutoShowOnLogin` | Pure addition. |
+| `Core/Tasks/AutoFateController.cs` `RunAll` | `AutoResume.MarkStarted();` right after `session = s;` | Must run only once a run really starts (after every "Start aborted" return). |
+| same, `Stop()` | `AutoResume.MarkEnded();` at the top | Every user stop goes through `Stop()`. |
+| `Core/Tasks/AutoFateController.RunLifecycle.cs` `EndRun` | `AutoResume.MarkEnded();` after `FinalizeRun` | `EndRun` is the choke point for runs ending on their own. If upstream adds an end path that skips `EndRun`, hook it too. |
+| `Plugin.cs` | ctor end: `autoResume = new AutoResume();` + field; `Dispose` first lines: `AutoResume.Unloading = true; autoResume.Dispose();`; `StartFromCommand` `private` → `internal` | **`Unloading` must be set before anything else in `Dispose`.** The grind task's completion callback fires *after* unload and calls `EndRun`, which would otherwise clear the memory on every reload (seen in the log: "FATE grind ended ... Run ends" after "Finished unloading"). |
+| `Windows/Sections/Config/GeneralSettings.cs` | "Resume run after reload" toggle after "Open on login" | Literal English, not localised. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

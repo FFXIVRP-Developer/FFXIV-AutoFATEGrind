@@ -38,6 +38,12 @@ Every change in the code is marked with a `// Fork:` comment.
    retried the same spot every 3 s forever (East Shroud, 2026-10-03, stuck at (-122,10,92)). Now it flies
    to the nearest walkable navmesh point within 60 y and lands there.
 
+6. **Resume run after reload** (`AutoResume.cs`, Settings → General). Starting a run saves
+   `ResumeRunPending = true` in the config. Stop, a soft stop or a run that ends on its own (goal met,
+   nothing left) clears it. A plugin unload (reload, game exit, crash) does not. With the option on, the
+   next load waits until you are in game and settled for 15 s, then starts the run like `/afg start`.
+   A paused run counts as going, so it restarts too. The option is off by default.
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 Not changed: BossMod Reborn still drives in-ring movement (it dodges AoEs; vnav would not).

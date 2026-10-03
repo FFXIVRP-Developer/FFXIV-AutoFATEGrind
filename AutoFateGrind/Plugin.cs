@@ -85,7 +85,10 @@ public sealed class Plugin : IDalamudPlugin
 
         Svc.ClientState.Login += OnLogin;
         if (Svc.ClientState.IsLoggedIn) OnLogin();
+        autoResume = new AutoResume(); // Fork
     }
+
+    private readonly AutoResume autoResume; // Fork
 
     // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
     // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
@@ -103,6 +106,8 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        AutoResume.Unloading = true; // Fork: keep the resume memory through this instance's run-end callbacks
+        autoResume.Dispose(); // Fork
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
@@ -153,7 +158,7 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    private void StartFromCommand()
+    internal void StartFromCommand() // Fork: was private; AutoResume starts runs through it
     {
         if (Controller.Running)
         {

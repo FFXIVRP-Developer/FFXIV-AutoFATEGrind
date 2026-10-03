@@ -10,6 +10,7 @@ internal sealed partial class AutoFateController
     private void EndRun(AutoFateSession? s)
     {
         FinalizeRun(s);
+        AutoResume.MarkEnded(); // Fork
         Phase = AutoPhase.Idle;
         MaybeRunAfterAction(s);
     }
