@@ -118,10 +118,10 @@ index ad2be07..69735ab 100644
  
 diff --git a/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
 new file mode 100644
-index 0000000..a76a3e8
+index 0000000..b80e9a8
 --- /dev/null
 +++ b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,55 @@
 +using Dalamud.Plugin.Ipc;
 +using ECommons.DalamudServices;
 +
@@ -133,10 +133,13 @@ index 0000000..a76a3e8
 +//   AutoFateGrind.StopWhenSafe ()            ends the run once the current FATE is over and combat is clear
 +//   AutoFateGrind.Stop         ()            ends the run now
 +//   AutoFateGrind.Phase        () -> string  Idle, Grinding, Repairing, Trading, Humanizing, Finishing, Paused
++//   AutoFateGrind.IsBusy       () -> bool    the local plugins' standard "doing something" (a run, incl. finishing the
++//                                            FATE after StopWhenSafe); callers wait for false
 +internal sealed class AfgIpcProvider : IDisposable
 +{
 +    private const string Prefix = "AutoFateGrind";
 +
++    private readonly ICallGateProvider<bool> isBusy;
 +    private readonly ICallGateProvider<bool> isRunning;
 +    private readonly ICallGateProvider<bool> start;
 +    private readonly ICallGateProvider<object> stopWhenSafe;
@@ -151,6 +154,8 @@ index 0000000..a76a3e8
 +        stop         = Svc.PluginInterface.GetIpcProvider<object>($"{Prefix}.Stop");
 +        phase        = Svc.PluginInterface.GetIpcProvider<string>($"{Prefix}.Phase");
 +
++        isBusy       = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsBusy");
++        isBusy.RegisterFunc(() => plugin.Controller.Running);
 +        isRunning.RegisterFunc(() => plugin.Controller.Running);
 +        start.RegisterFunc(() =>
 +        {
@@ -164,6 +169,7 @@ index 0000000..a76a3e8
 +
 +    public void Dispose()
 +    {
++        isBusy.UnregisterFunc();
 +        isRunning.UnregisterFunc();
 +        start.UnregisterFunc();
 +        stopWhenSafe.UnregisterAction();
@@ -1243,10 +1249,356 @@ index 4a2b0bb..508007f 100644
          SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
              Loc.T(L.Settings.CollectHandInHelp),
              SettingsControls.ToggleWidth,
-diff --git a/ECommons b/ECommons
-index f1656e8..62cd604 160000
---- a/ECommons
-+++ b/ECommons
-@@ -1 +1 @@
--Subproject commit f1656e8885eff98d331dcb3136ae8af4d05edfb2
-+Subproject commit 62cd604ff7934381b2270b513f9f62bc1b9a73e9
+diff --git a/DRIFT.md b/DRIFT.md
+new file mode 100644
+index 0000000..248d565
+--- /dev/null
++++ b/DRIFT.md
+@@ -0,0 +1,162 @@
++# Drift and conflict recovery
++
++How to bring this fork back onto upstream (`origin/master`) when ForkWatch says it is behind, and how
++to re-apply each change by hand when a rebase conflicts. README-FORK.md says *what* each item does;
++this file says *where it hooks into upstream* and *what must stay true* after a merge.
++
++The full diff against upstream is kept in `docs/fork-vs-upstream.patch` (regenerate it after every fork
++commit, see the end). Every fork line in the code carries a `// Fork:` comment, so
++`git grep -n "Fork:"` lists every hook point.
++
++## Rebase procedure
++
++```
++git fetch origin
++git rebase origin/master            # fork/vnav-engage onto upstream
++# conflicts: resolve with the per-item notes below, then: git add <file>; git rebase --continue
++git submodule update                # if upstream moved the ECommons pin, see "ECommons" below
++dotnet build ... -p:OutDir=<scratch>  # compile check (README-FORK "Rebuild")
++```
++
++If a rebase gets messy, abort it (`git rebase --abort`), start a fresh branch from `origin/master`, and
++re-apply the items one by one from this file. Every item is small and self-contained. The new files
++(`AutoHumanize.Retreat.cs`, `AutoFate.TargetSync.cs`, `Core/Ipc/AfgIpcProvider.cs`) can be copied as-is.
++
++## Footprint per item
++
++### 1-2. Line of sight in engage (README-FORK items 1, 2)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Game/Fates/FateMobScanner.cs` | `using ...BGCollision;` + `HasLineOfSight()` + `SightHeightMeters` appended at the end of the class | Pure addition. Only conflicts if upstream adds its own LoS helper: then delete ours and call theirs. |
++| `Core/Tasks/AutoFate.Engage.cs` `HasTargetInReach` | body uses `TryGetTarget` and adds `&& HasLineOfSight(...)` | Every caller of "target in reach" must also require sight. Upstream callers: the combat-stall bounce, `TickEngagementWatchdog`, `RepositionToFateMob.EngagedOrGone`. |
++| same, `TryGetSightBlockedTarget` | new helper next to `HasTargetInReach` | Pure addition. |
++| same, `TickEngagementWatchdog` | after `idle.MarkOutOfReach();`: compute `sightBlocked`, pass the stall time to `idle.Stalled(pos, ms)` and `sightBlocked` to `RepositionToFateMob` | If upstream rewrites the watchdog, re-insert "sight-blocked → shorter stall → walk to that target". |
++| same, `RepositionToFateMob` | extra parameter `FateMobTarget? sightBlocked`; goal/hitbox/distance come from it when set; `closeIn` is true when set; separate Diag text | If upstream changes the tolerance maths, keep: blocked → walk to the target itself with the melee tolerance. |
++| same, `EngageIdleTracker.Stalled` | takes `int stallMs` instead of reading `EngageIdleStallMs` | Callers pass `EngageIdleStallMs` for the normal case. |
++| same, `DescribeEngageSituation` | appends `(no LoS)` to the target text | Cosmetic. Drop it if it conflicts. |
++| `Core/Tasks/AutoFate.cs` | `EngageSightStallMs = 3_000` after `EngageIdleStallMs` | Pure addition. |
++
++### 3. Progress resets repositions (README-FORK item 3)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoFate.Engage.cs` engage loop | `idle.ForgetRepositions();` inside `if (fate.Progress != lastProgress)` | Has to run wherever upstream notices progress. |
++| same, `EngageIdleTracker` | `ForgetRepositions()` method | Pure addition. |
++
++### 4. Humanizer break location (README-FORK item 4)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoHumanize.Retreat.cs` | **new file**: `HumanizerRetreat` enum, `RetreatLabels`, `ReachRetreat()` (Lifestream IPC `ExecuteCommand`, `IsBusy`, `Abort`) | Copy as-is. Only breaks if Lifestream renames its IPC or its `/li` keywords (`inn`, `apartment`, `home`, `fc`). |
++| `Core/Tasks/AutoHumanize.cs` class line | `sealed class` → `sealed partial class` | Needed for the new file. |
++| same, `Execute()` top | `var territory = await ReachRetreat() ?? cityTerritoryId;` then the cancel check and label swap; the teleport `if` compares with `territory` | Upstream teleports to `cityTerritoryId`. Keep that call as it is: the teleport only runs when no retreat was reached, so `territory == cityTerritoryId` there. |
++| same, wander loop | territory check and `o.Move(territory, ...)` use `territory`; **the pause moved from after the walk to before it** | The point of the change: the first thing after arriving is the pause, so a 999-minute pause means no movement at all. If upstream restructures the loop, keep pause-first. |
++| `Configuration.cs` | `HumanizerRetreat` property after `HumanizerWanderMaxMeters` | The saved JSON is shared with the store build. The store build ignores the extra key. |
++| `Windows/Sections/Config/HumanizerSettings.cs` | `MaxPauseSec = 999 * 60` used as the pause range max (upstream: `60`); "Break location" row at the top of `DrawCitiesGroup` | The UI text is literal English, not localised, on purpose: no `L.cs` / `Localization/*.json` changes to conflict. |
++| `Core/Tasks/AutoFate.Engage.cs` `QueueHandoffIfDue` | `HumanizerCities.Count > 0` → `AutoHumanize.HasBreakPlace(Plugin.Cfg)` | A retreat alone must be enough to queue a break. |
++| `Core/Tasks/AutoFateController.Handoffs.cs` `ResumeGrindOrHumanize` | the `Count == 0` skip uses `!HasBreakPlace(cfg)`; the "no catalog city" skip only applies with `HumanizerRetreat.City`; `cityId` is `0` when no city is ticked | `0` means "no city fallback". `AutoHumanize.Execute` aborts the break (BreakTaken stays false) when the retreat fails and the city is `0`. Never teleport to territory 0. |
++| `Windows/Sections/Config/HumanizerSettings.cs` | the "No cities selected" warning only shows with `HumanizerRetreat.City` | Cosmetic. |
++
++The controller still picks a city (when any is ticked) and passes it in as the fallback for a failed retreat.
++
++### 5. Landing over water (README-FORK item 5)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoCommon.Landing.cs` `LandAndDismount` | right after `FindLandingSpots(...)`: if nothing was found, add `NearestPointReachable(around, 60, 60)` as the only spot | A floorless spot must never lead to a descent in place. If upstream adds its own wider search, drop ours. |
++| same, constants | `LandingFarSearchMeters = 60f` | Pure addition. |
++
++### 6. Resume run after reload (README-FORK item 6)
++
++Removed 2026-10-03: it restarted runs that BoatRunner had not asked for. No hooks left; the controller
++files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when AFG runs.
++
++### 7. Unsync for non-FATE mobs (README-FORK item 7)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoFate.TargetSync.cs` | **new file**: `TickTargetSync`, `RestoreFateSync`, `WaitForFateSync`, `ResetTargetSync`, `TryGetNonFateFoe` | Copy as-is. Uses upstream's `SyncToFate` for the sync back; breaks only if that is renamed. |
++| `Core/Tasks/AutoFate.Engage.cs` `EngageCurrentFate` | `ResetTargetSync();` before the first `SyncToFate(fateId);` | State is per FATE. |
++| same, engage loop | per-tick `SyncToFate(fateId);` → `TickTargetSync(fateId);` | **Nothing else in the loop may call `SyncToFate` every tick**, or it undoes the unsync. If upstream moves the per-tick sync, move `TickTargetSync` with it. |
++| same, Collect block | `!targetUnsynced && (` around the hand-in / pickup-walk call | Items need the sync. Any new upstream item step in the loop gets the same guard. |
++| same, Collect wrap-up | `await WaitForFateSync(fateId);` before `WrapUpCollectFate` (the `if` got braces) | Leftovers are handed in synced. |
++| same, engage `finally` | `ReleaseBossModSync();` after `ReleaseCollectPullHold(preset);` | The FateUtils `Sync` override must never outlive the FATE. If upstream changes the bundled preset's FateUtils track or option names, update `FateHelperSyncTrack` / `FateHelperSyncNoneOption`. |
++| `Configuration.cs` | `UnsyncForNonFateMobs` after `KeepTwistOfFate` | Pure addition; the store build ignores the key. |
++| `Windows/Sections/Config/TravelSettings.cs` `DrawFatePlayGroup` | literal-English toggle row after "Keep Twist of Fate" | Cosmetic. No `L.cs` changes. |
++
++### 8. IPC (README-FORK item 8)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Ipc/AfgIpcProvider.cs` | **new file** | Copy as-is. Calls `Plugin.StartFromCommand` (`private` → `internal`, `// Fork` on that line), `Controller.Running/StopWhenSafe/Stop/Phase`. The IPC names are the contract with the boat orchestrator: keep them. |
++| `Plugin.cs` | ctor end: `ipcProvider = new Core.Ipc.AfgIpcProvider(this);` + field; `Dispose`: `ipcProvider.Dispose();` after `autoResume.Dispose();` | Unregister on dispose, or a reload throws "already registered". |
++
++### 9. Fight free before a zone teleport (README-FORK item 9)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoFate.cs` `GoToZone` | `await ClearBlockingCombat();` + cancel check before the first `Status` line; `await ClearBlockingCombat();` after `FaultIfCharacterStaysBlocked();` | Every zone teleport is preceded by a fight-free when in combat. If upstream moves the teleport, keep the call in front of it. |
++| `Core/Tasks/AutoFate.Movement.cs` `ClearBlockingCombat` | the running-FATE `break` also needs `Svc.ClientState.TerritoryType == zone.TerritoryId`; the "still in combat" Diag names target and FATE | Off-zone, never hand combat to a FATE the state machine will not engage. |
++
++### 10. Yo-kai minion per zone (README-FORK item 10)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Game/Yokai/YokaiProgress.cs` | fork block after `ResolveTargetMinionId`: `DropsIn`, `ResolveTargetIndexForZone`, `ZonesForAll`, `IsZoneDone` | Pure addition. Uses upstream's `IsFarmable`, `ZonesFor`, `UnlockedZoneMask`. |
++| `Core/Modes/BuiltInModes.cs` `YokaiMedalsMode` | `PlanZones` → `ZonesForAll`; adds `IsZoneDone` / `ZoneDoneReason` | The mode must report zone-done, or a zone with nothing left keeps the run there. |
++| `Core/Tasks/AutoFateController.cs` `PlanYokaiZones` | zones from `ZonesForAll`, first target from `ResolveTargetIndexForZone` at the start zone | If upstream changes the Yo-kai planning, keep "all zones, minion per zone". |
++| `Core/Tasks/AutoFate.Yokai.cs` `YokaiTargetChanged` | switches `session.YokaiTargetMinionId` in place and always returns false | Returning true would hand off and replan for every zone change. |
++
++### 11. Ring-chase time limit (README-FORK item 11)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoFate.Engage.cs` `TickRingChase` | cooldown check with the "no target" exit; the progress clock and give-up block right after it | Must run before the "within goal / frozen → return true" exit, or that exit can loop forever. Keep it per chase, not per target. |
++| same, fields | `ringChaseActiveSinceMs`, `ringChaseProgress`, `ringChaseCooldownUntilMs`, `RingChaseMaxMs`, `RingChaseCooldownMs` | Pure addition. |
++| same, `ResetEngageOverrides` | resets `ringChaseActiveSinceMs` and `ringChaseCooldownUntilMs` | Per FATE. |
++
++### 12. Leave the water to summon a Yo-kai (README-FORK item 12)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Tasks/AutoFate.Yokai.cs` `SummonYokaiMinion` | `await LeaveWaterForSummon(minionName);` after `StowFashionAccessory()`; the method below it; usings `Core.Ipc`, `clib.TaskSystem`, `System.Numerics` | Runs before the summon attempts. |
++| `Core/Tasks/AutoCommon.Teleport.cs` | `InWater()` `private` → `private protected` | Needed by the subclass. |
++
++### 13. City districts without an aetheryte (README-FORK item 13)
++
++| File | Hook | Must stay true |
++|---|---|---|
++| `Core/Zones/ZoneAetherytes.cs` `ResolveGateway` | field-only check widened to field or town (`TownUse = 0`); a missing/invalid hub falls back to `HubOfShardIn` | Inns (use 2) stay excluded. If upstream fixes Upper Decks another way, drop this. |
++| same, helpers | `TownUse`, `HubOfShardIn` before `ResolveAttunableIds` | Pure addition. |
++
++### ECommons submodule
++
++The local commit on `ECommons` branch `fork/excelpage-alias` adds one line
++(`using ExcelPage = Lumina.Excel.ExcelPage;` in `ExcelServices/Sheets/QuestDialogueText.cs`).
++
++- Upstream bumps the ECommons pin: `cd ECommons; git fetch; git checkout <new pin>`. Build. If the
++  `ExcelPage` ambiguity error is back, `git cherry-pick fork/excelpage-alias`. If it builds clean,
++  ECommons fixed it and the local commit is obsolete. Then commit the new pointer in the fork.
++- If `git submodule update` complains that the local commit is unreachable, it lives only in this
++  clone's `ECommons/.git`. Re-create it from the one-line description above.
++
++## What "too far" looks like
++
++Signs that re-applying beats rebasing:
++- upstream split or renamed `AutoFate.Engage.cs` / `AutoHumanize.cs`
++- `EngageIdleTracker` was replaced
++- the humanizer stopped using a wander loop
++- the controller no longer ends runs through `Stop()` / `EndRun()` (auto-resume hooks)
++- `AutoCommon.Landing.cs` no longer has the `FindLandingSpots` ring
++
++In that case, start from upstream and re-implement the "Must stay true" lines above in the new shape.
++Each item is under ~40 lines of real code.
++
++## Regenerate the patch
++
++```
++git diff origin/master -- . ":(exclude)*.md" ":(exclude)docs/**" > docs/fork-vs-upstream.patch
++```
++
++Commit it separately ("Regenerate fork-vs-upstream.patch"), as in the AutoDuty fork.
+diff --git a/README-FORK.md b/README-FORK.md
+new file mode 100644
+index 0000000..2c9c4e4
+--- /dev/null
++++ b/README-FORK.md
+@@ -0,0 +1,179 @@
++# Auto FATE Grind local fork
++
++This folder is a local clone of [XeldarAlz/FFXIV-AutoFATEGrind](https://github.com/XeldarAlz/FFXIV-AutoFATEGrind)
++with the additions below on the branch `fork/vnav-engage`. It is not published anywhere. ForkWatch
++tracks it against upstream `master`; rebase onto upstream when ForkWatch reports it behind.
++
++Every change in the code is marked with a `// Fork:` comment.
++
++## What is different from upstream
++
++1. **Line of sight counts toward "in reach"** (`FateMobScanner.HasLineOfSight`, `AutoFate.Engage.cs`).
++   Upstream treated a targeted FATE mob as engaged as soon as it was in combat and within reach by
++   distance. A mob behind a rock or ledge therefore silenced every engage watchdog (idle reposition,
++   preset bounce, stall bail) while each cast failed with "Target not in line of sight", and the
++   character stood facing it indefinitely. The check is a level-collision raycast
++   (`BGCollisionModule.RaycastMaterialFilter`) between points 2 y above both sets of feet.
++2. **Sight-blocked target is walked to with vnav after 3 s** (`EngageSightStallMs`). The walk goes to
++   the target itself (not the nearest mob) with the melee approach tolerance and stops as soon as the
++   target is in reach *and* in sight. BossMod keeps the rotation running; its movement is parked for
++   the walk, as upstream already does for its idle reposition. The engage diagnostics line marks the
++   target `(no LoS)` when the ray is blocked.
++3. **FATE progress resets the reposition count.** Upstream abandoned and blacklisted a FATE after three
++   repositions toward mobs it never reached, even while the FATE was progressing. An escort FATE
++   ("What Have You Done for Mead Lately", 2026-10-03) was dropped at 87 % this way because its mobs
++   spawn ahead of the moving escort.
++
++4. **Humanizer break location** (`AutoHumanize.Retreat.cs`, Settings → Humanizer → "Break location").
++   City is upstream's wander. Inn room, Apartment, Private house and Free Company house are reached with
++   Lifestream (`/li inn`, `apartment`, `home`, `fc`). Lifestream enters a private/FC house only when its
++   house registration has the enter mode "Enter house". If Lifestream is missing, fails or times out
++   (180 s), the break falls back to a city from the ticked list. With no city ticked that break is
++   skipped and retried after the next FATE. Upstream required a ticked city for any break; with a
++   location other than City none is needed (`AutoHumanize.HasBreakPlace`). The wander
++   loop now **pauses before each hop** instead of after, and the pause range goes up to 999 minutes
++   (double-click the field to type). A pause longer than the break means the character never moves
++   during the break. No barracks: Lifestream cannot enter them (its `gc` stops at the Grand Company desk).
++
++5. **Landing over water** (`AutoCommon.Landing.cs`). When no floor is found within 6 y under a flying
++   character, upstream descended in place. Over water that freezes in the air, and the Yo-kai summon
++   retried the same spot every 3 s forever (East Shroud, 2026-10-03, stuck at (-122,10,92)). Now it flies
++   to the nearest walkable navmesh point within 60 y and lands there.
++
++6. *(Removed 2026-10-03.)* **Resume run after reload** restarted a run on the next plugin load. It fought
++   BoatRunner, which starts and stops AFG through item 8's IPC, so it is gone: AFG never starts a run on
++   its own now. BoatRunner resumes its own cycle after a reload instead. A stale `ResumeRunPending` key in
++   the saved config is ignored.
++
++7. **Unsync for non-FATE mobs** (`AutoFate.TargetSync.cs`, Settings → Travel → "Unsync for non-FATE
++   mobs", on by default). Upstream re-synced every engage tick, so a world mob that aggroed inside a
++   FATE ring was fought at the FATE's level. Now, when the hard target is a live combatant with no FATE
++   id that is already fighting, and that has lasted 1.5 s, the plugin sends `/levelsync off`. The sync
++   comes back through `FateManager.LevelSync()` (upstream's call) right away when a FATE mob is targeted
++   or combat ends, and after 1.5 s of no target mid-fight (so chaining two world mobs doesn't flicker).
++   - FATE mobs need the sync: BossMod never casts at a FATE mob while unsynced.
++   - BossMod's FATE helper (`MiscAI.FateUtils`, track `Sync`) is set to `Enable` in the bundled preset
++     and re-syncs within a second. While unsynced, AFG overrides that track to `None` (a transient
++     strategy, like the chocobo override) and clears it when it syncs again or the FATE ends.
++   - Collect FATEs: AFG's pickup walk and hand-in trip don't start while the unsync is on, and the
++     leftover hand-in at 100 % waits up to 5 s for the sync first.
++   - Never toggles while mounted. If the game ignores `/levelsync off` three times in one FATE (e.g.
++     refused in combat), it stops trying for that FATE. Every switch is a `Diag` line in `dalamud.log`.
++   - No other plugin does this (checked 2026-10-03: Pandora's Box, Automaton, TwistOfFayte, Moirai,
++     AutoFateSync, FrenRider, Henchman, autofate only sync on arrival).
++
++8. **IPC for other local plugins** (`Core/Ipc/AfgIpcProvider.cs`). Upstream has none. Used by the local
++   boat orchestrator to run AFG while it waits for an ocean fishing voyage:
++   `AutoFateGrind.IsRunning() → bool`, `AutoFateGrind.Start() → bool` (like `/afg start`, true when a run
++   is going after), `AutoFateGrind.StopWhenSafe()` (like `/afg stop soft`), `AutoFateGrind.Stop()`,
++   `AutoFateGrind.Phase() → string`.
++
++9. **Fight free before a zone teleport** (`AutoFate.cs` `GoToZone`, `AutoFate.Movement.cs` `ClearBlockingCombat`).
++   Upstream's zone teleport only waited for combat to drop while nothing fought back: 2026-10-03 the character stood
++   6+ minutes in South Shroud, in combat, bound for Upper La Noscea, every try "combat/casting (combat)". Now
++   `GoToZone` runs `ClearBlockingCombat` (rotation on, up to 30 s) before every attempt and after a blocked one, and
++   `ClearBlockingCombat`'s "a FATE started on top of us, let the state machine take it" exit only applies in the run's
++   own zone (off-zone the state machine is in WrongZone and never engages that FATE). The "still in combat" line now
++   names the target and the FATE.
++
++10. **Yo-kai minion per zone** (`YokaiProgress.cs` fork block, `BuiltInModes.cs` `YokaiMedalsMode`,
++    `AutoFateController.PlanYokaiZones`, `AutoFate.Yokai.cs` `YokaiTargetChanged`). Upstream farmed one minion at a time
++    and planned only its three zones, handing off and replanning when it reached the goal. Every ARR zone pays for two
++    minions, so now the run plans every zone some unfinished minion drops in (sorted by territory id, which groups the
++    regions) and, in each zone, farms a minion that still needs medals there: the one out, else the last target, else
++    the first in the roster. The switch happens in place (`Yo-kai in <zone>: farming X instead of Y`); the existing
++    companion check before each FATE summons it. A zone where no unfinished minion drops is "done"
++    (`IsZoneDone`) and rotated past; the run ends when the roster is done, as before. The Yo-kai hand-off
++    (`PendingYokaiAdvance`) no longer fires.
++
++11. **Ring-chase time limit** (`AutoFate.Engage.cs` `TickRingChase`, `RingChaseMaxMs = 45 s`). Upstream's chase of a
++    target outside BossMod's FATE ring could stand still for good: its "target within goal" and "position frozen" exits
++    report "still chasing" without walking, BossMod's movement stays parked, and the engagement watchdog is skipped
++    while chasing (2026-10-03, FATE 312 In the Sac, Killer Mantis 13 m off, the character stood with no log for
++    minutes). Chasing (any target) for 45 s while the FATE's progress does not move is given up: the target is cleared
++    and marked as given up, movement goes back to BossMod, and no chase starts for 30 s, so the normal watchdogs run.
++    Progress resets the clock. (The first version timed each target; switching Pugils restarted it, FATE 239, and a
++    target within reach but not being hit never counted.) The clock and cooldown reset with each new FATE.
++
++12. **Leave the water to summon a Yo-kai** (`AutoFate.Yokai.cs` `LeaveWaterForSummon`, `InWater` in
++    `AutoCommon.Teleport.cs` became `private protected`). No minion can be summoned while swimming or diving, and the
++    minion wait only retried the summon: 2026-10-03 the character floated in Upper La Noscea for minutes, "Could not
++    summon Manjimutt (4 attempts, swim)", parked. Before summoning, a character in the water now moves on foot (swims)
++    toward the nearest reachable navmesh point, then the zone's nearest aetheryte (always on land), then the zone's
++    central landing, each move stopping once out of the water and not mounted. Upper La Noscea's central landing is in
++    Bronze Lake, which is how the character got there. A mounted move flew off, counted the air as "out of the water"
++    and dropped back in on the summon's dismount, hence on foot. Worked 15:46 (Camp Bronze Lake, ~448 m).
++
++13. **City districts without an aetheryte** (`ZoneAetherytes.cs` `ResolveGateway`, `HubOfShardIn`). Upstream's two-leg
++    gateway (teleport to the hub, ride the aethernet in) only served open-world zones; its note said Limsa Upper Decks
++    "already works", but AutoRepair's trip to the Maelstrom Mender (territory 128) failed after every FATE with
++    "territory 128 has no aetheryte to teleport to; giving up" (2026-10-03, gear at 13 %, NPC-only repair). Town
++    territories (TerritoryIntendedUse 0) now use the gateway too; inns stay out. When the territory names no hub, the
++    main aetheryte of the aethernet one of its shards belongs to is used (Upper Decks → Limsa Lower Decks).
++
++See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
++
++14. **`AutoFateGrind.IsBusy`** (`Core/Ipc/AfgIpcProvider.cs`): the local plugins' standard status call, true while a
++    run goes, finishing the FATE after `StopWhenSafe` included. Every local fork and own plugin has
++    `<InternalName>.IsBusy`; BoatRunner waits on it.
++
++## Verified in game
++
++| Item | Status (2026-10-03) |
++|---|---|
++| 1-2 Line of sight | Not yet observed. Look for `(no LoS)` / "out of line of sight" lines in `dalamud.log`. |
++| 3 Progress resets repositions | Not yet observed. |
++| 4 Break location | Not yet observed. Look for `Humanize retreat ...: arrived in territory` in `dalamud.log`. |
++| 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
++| 6 Resume run after reload | Removed. |
++| 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
++| 8 IPC | Works: BoatRunner starts and soft-stops runs. |
++| 13 City districts without an aetheryte | Not yet observed. Look for `reached ...; riding its aethernet into territory 128`. |
++| 12 Leave the water to summon | Works: swam out of Bronze Lake toward Camp Bronze Lake, FATEs resumed (2026-10-03 15:46). |
++| 11 Ring-chase time limit | Per-target version did not fire (target switching). Now progress-based; not yet observed. Look for `Chased outside the FATE ring`. |
++| 10 Yo-kai minion per zone | Not yet observed. Look for `Yo-kai in <zone>: farming`. |
++| 9 Fight free before a zone teleport | Not yet observed. Look for `In combat outside a FATE; enabling rotation to fight free` before `Off-zone ... teleporting`. |
++
++## Using the humanizer rest
++
++Settings → Humanizer:
++1. Turn the humanizer on and set "FATEs between breaks" and "Break length".
++2. "Break location" (under Cities): Inn room, Apartment, Private house or Free Company house. No city
++   needs to be ticked. Ticked cities only serve as the fallback when Lifestream can't get there.
++3. "Pause between hops": set both ends to 999 minutes (double-click a field to type). The character
++   then stands still for the whole break.
++
++For a private or FC house, register it in Lifestream with the enter mode "Enter house" first.
++
++Not changed: BossMod Reborn still drives in-ring movement (it dodges AoEs; vnav would not).
++
++## Submodule
++
++`ECommons` points at upstream's pinned commit plus one local commit on `fork/excelpage-alias`: a
++`using ExcelPage = Lumina.Excel.ExcelPage;` alias in `ExcelServices/Sheets/QuestDialogueText.cs`. The
++Dalamud dev build of 2026-10-02 added `FFXIVClientStructs.FFXIV.Component.Excel.ExcelPage`, which made
++the name ambiguous and broke the build (ECommons master had not fixed it yet). Drop the local commit
++once upstream ECommons has the fix.
++
++## Rebuild
++
++Commit first (ForkWatch reads the commit stamped in the DLL), then:
++
++```
++$env:DALAMUD_HOME = '<Me>\XIVLauncher\addon\Hooks\dev\'
++dotnet build AutoFateGrind/AutoFateGrind.csproj -c Release -p:DalamudLibPath=$env:DALAMUD_HOME
++```
++
++Output: `AutoFateGrind\bin\Release\AutoFateGrind.dll`. For a compile check without touching the loaded
++build add `-p:OutDir=<scratch>`; the packager step then fails on the missing `bin\Release` DLL, which is
++expected and harmless.
++
++## Loading it
++
++Add `AutoFateGrind\bin\Release\AutoFateGrind.dll` as a dev plugin location and disable the
++repository-installed Auto FATE Grind (both share the internal name). Settings are shared with the
++installed plugin (`pluginConfigs\AutoFateGrind.json`).
++
++Currently loaded in the `Me` profile only (since 2026-10-03). Slaves still get the store build through
++`SLAVE_PLUGINS`. Dalamud hot-reloads the dev plugin on every build into `bin\Release`. That stops a
++running run; BoatRunner starts it again at its next waiting phase, or start it with `/afg start`.
