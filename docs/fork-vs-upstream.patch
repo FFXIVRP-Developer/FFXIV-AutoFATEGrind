@@ -1,8 +1,18 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..9efa7b7 100644
+index efc08bd..b590d34 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
-@@ -144,6 +144,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -11,6 +11,9 @@ public sealed class Configuration : IPluginConfiguration
+     public int Version { get; set; }
+ 
+     public bool AutoShowOnLogin { get; set; } = false;
++    // Fork: restart a run that was going when the plugin unloaded; ResumeRunPending is that memory (AutoResume).
++    public bool AutoResumeEnabled { get; set; } = false;
++    public bool ResumeRunPending { get; set; } = false;
+ 
+     public string Language { get; set; } = "";
+ 
+@@ -144,6 +147,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -196,6 +206,38 @@ index 1f98ff8..acdd821 100644
      private const int   EngageRepositionWatchdogMs = 40_000;
      private const float EngageMeleeApproachToleranceMeters  = 2.5f;
      private const float EngageRangedApproachToleranceMeters = 15f;
+diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
+index 48ea1e8..890db38 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
+@@ -10,6 +10,7 @@ internal sealed partial class AutoFateController
+     private void EndRun(AutoFateSession? s)
+     {
+         FinalizeRun(s);
++        AutoResume.MarkEnded(); // Fork
+         Phase = AutoPhase.Idle;
+         MaybeRunAfterAction(s);
+     }
+diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.cs b/AutoFateGrind/Core/Tasks/AutoFateController.cs
+index 481f303..acac99e 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFateController.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFateController.cs
+@@ -85,6 +85,7 @@ internal sealed partial class AutoFateController
+         }
+ 
+         session = s;
++        AutoResume.MarkStarted(); // Fork
+         Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
+ 
+         ApplyStartingClass();
+@@ -165,6 +166,7 @@ internal sealed partial class AutoFateController
+     public void Stop()
+     {
+         var ending = session;
++        AutoResume.MarkEnded(); // Fork
+         currentTask = null;
+         grindTask = null;
+         PauseReason = PauseReason.None;
 diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
 new file mode 100644
 index 0000000..5dd1b92
@@ -347,6 +389,127 @@ index 0878ae6..a319ad5 100644
          }
  
          Diag($"Humanize done in {label} after {hops} hop(s).");
+diff --git a/AutoFateGrind/Core/Tasks/AutoResume.cs b/AutoFateGrind/Core/Tasks/AutoResume.cs
+new file mode 100644
+index 0000000..d1ab7bf
+--- /dev/null
++++ b/AutoFateGrind/Core/Tasks/AutoResume.cs
+@@ -0,0 +1,63 @@
++using Dalamud.Game.ClientState.Conditions;
++using Dalamud.Plugin.Services;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Tasks;
++
++// Fork: restarts a run that was going when the plugin last unloaded (reload, game exit, crash). Starting a run
++// remembers it in the config; Stop or a run that ends on its own forgets it. An unload must not forget it, and
++// the run-end callbacks of an unloading instance still fire after Dispose, so Plugin.Dispose raises Unloading first.
++internal sealed class AutoResume : IDisposable
++{
++    // Lets the previous load's game, plugins and navmesh settle before the run starts.
++    private const int SettleMs = 15_000;
++
++    public static bool Unloading;
++
++    private long readySinceMs;
++    private bool finished;
++
++    public AutoResume() => Svc.Framework.Update += Tick;
++
++    public void Dispose() => Svc.Framework.Update -= Tick;
++
++    public static void MarkStarted()
++    {
++        if (Plugin.Cfg.ResumeRunPending) return;
++        Plugin.Cfg.ResumeRunPending = true;
++        Plugin.Cfg.Save();
++    }
++
++    public static void MarkEnded()
++    {
++        if (Unloading || !Plugin.Cfg.ResumeRunPending) return;
++        Plugin.Cfg.ResumeRunPending = false;
++        Plugin.Cfg.Save();
++    }
++
++    private void Tick(IFramework framework)
++    {
++        if (finished) return;
++        if (!Plugin.Cfg.AutoResumeEnabled || !Plugin.Cfg.ResumeRunPending)
++        {
++            finished = true;
++            return;
++        }
++
++        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null || Svc.Condition[ConditionFlag.BetweenAreas])
++        {
++            readySinceMs = 0;
++            return;
++        }
++
++        var now = Environment.TickCount64;
++        if (readySinceMs == 0) readySinceMs = now;
++        if (now - readySinceMs < SettleMs) return;
++
++        finished = true;
++        if (Plugin.Instance.Controller.Running) return;
++        RunLog.Info("Auto-resume: a run was going when the plugin last unloaded; starting it again.");
++        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload (turn off under Settings > General > Resume run after reload).");
++        Plugin.Instance.StartFromCommand();
++    }
++}
+diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
+index 7ff8682..c7b3f9c 100644
+--- a/AutoFateGrind/Plugin.cs
++++ b/AutoFateGrind/Plugin.cs
+@@ -85,8 +85,11 @@ public sealed class Plugin : IDalamudPlugin
+ 
+         Svc.ClientState.Login += OnLogin;
+         if (Svc.ClientState.IsLoggedIn) OnLogin();
++        autoResume = new AutoResume(); // Fork
+     }
+ 
++    private readonly AutoResume autoResume; // Fork
++
+     // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
+     // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
+     // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
+@@ -103,6 +106,8 @@ public sealed class Plugin : IDalamudPlugin
+ 
+     public void Dispose()
+     {
++        AutoResume.Unloading = true; // Fork: keep the resume memory through this instance's run-end callbacks
++        autoResume.Dispose(); // Fork
+         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
+ 
+         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+@@ -153,7 +158,7 @@ public sealed class Plugin : IDalamudPlugin
+         }
+     }
+ 
+-    private void StartFromCommand()
++    internal void StartFromCommand() // Fork: was private; AutoResume starts runs through it
+     {
+         if (Controller.Running)
+         {
+diff --git a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
+index 8e1d186..c4a9869 100644
+--- a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
++++ b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
+@@ -35,6 +35,13 @@ internal static class GeneralSettings
+             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoShowOnLogin, v => cfg.AutoShowOnLogin = v, "##gen_autoshow"),
+             SettingsRow.ToggleHeight);
+ 
++        // Fork
++        SettingsRow.Draw("Resume run after reload",
++            "If a run was going when the plugin unloaded (plugin reload, game closed or crashed), start it again once you are in game. Pressing Stop, or a run ending on its own, means it will not restart.",
++            SettingsControls.ToggleWidth,
++            () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeEnabled, v => cfg.AutoResumeEnabled = v, "##gen_autoresume"),
++            SettingsRow.ToggleHeight);
++
+         SettingsRow.Draw(Loc.T(L.Settings.LivePopout),
+             Loc.T(L.Settings.LivePopoutHelp),
+             SettingsControls.ToggleWidth,
 diff --git a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
 index da8719c..9e803ed 100644
 --- a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
