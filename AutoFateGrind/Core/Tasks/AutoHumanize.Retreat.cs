@@ -15,6 +15,10 @@ public sealed partial class AutoHumanize
 {
     public static readonly string[] RetreatLabels = ["City (wander)", "Inn room", "Apartment", "Private house", "Free Company house"];
 
+    // Upstream only breaks with a city ticked; a retreat (inn, housing) is a place to break on its own.
+    public static bool HasBreakPlace(Configuration cfg)
+        => cfg.HumanizerCities.Count > 0 || cfg.HumanizerRetreat != HumanizerRetreat.City;
+
     private const int RetreatWatchdogMs   = 180_000;
     private const int RetreatStartGraceMs = 1_500;
     private const int RetreatPollMs       = 500;

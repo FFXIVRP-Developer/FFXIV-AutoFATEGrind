@@ -156,7 +156,7 @@ internal static class HumanizerSettings
             ImGui.Spacing();
         }
 
-        if (cfg.HumanizerCities.Count == 0)
+        if (cfg.HumanizerCities.Count == 0 && cfg.HumanizerRetreat == Core.Tasks.HumanizerRetreat.City) // Fork: no warning with a retreat
             using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentRose))
                 ImGui.TextWrapped(Loc.T(L.Settings.NoCities));
     }

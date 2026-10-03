@@ -28,7 +28,9 @@ Every change in the code is marked with a `// Fork:` comment.
    City is upstream's wander. Inn room, Apartment, Private house and Free Company house are reached with
    Lifestream (`/li inn`, `apartment`, `home`, `fc`). Lifestream enters a private/FC house only when its
    house registration has the enter mode "Enter house". If Lifestream is missing, fails or times out
-   (180 s), the break falls back to a city from the ticked list, so keep at least one ticked. The wander
+   (180 s), the break falls back to a city from the ticked list. With no city ticked that break is
+   skipped and retried after the next FATE. Upstream required a ticked city for any break; with a
+   location other than City none is needed (`AutoHumanize.HasBreakPlace`). The wander
    loop now **pauses before each hop** instead of after, and the pause range goes up to 999 minutes
    (double-click the field to type). A pause longer than the break means the character never moves
    during the break. No barracks: Lifestream cannot enter them (its `gc` stops at the Grand Company desk).

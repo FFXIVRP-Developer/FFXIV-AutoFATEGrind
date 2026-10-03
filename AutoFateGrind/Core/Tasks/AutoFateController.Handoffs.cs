@@ -162,7 +162,7 @@ internal sealed partial class AutoFateController
         owningSession.PendingHumanizeFromZone = null;
 
         var cfg = Plugin.Cfg;
-        if (!cfg.HumanizerEnabled || cfg.HumanizerCities.Count == 0)
+        if (!cfg.HumanizerEnabled || !AutoHumanize.HasBreakPlace(cfg)) // Fork: was HumanizerCities.Count == 0
         {
             Diag("Humanize hand-off skipped: feature disabled or no cities selected.");
             owningSession.ResetBreakCounter();
@@ -173,14 +173,14 @@ internal sealed partial class AutoFateController
         // Filter against the catalog so cities removed from the registry (e.g. Ul'dah, dropped due to
         // navmesh issues) are ignored even if they're still in an older saved config.
         var cities = cfg.HumanizerCities.Where(id => Core.Zones.CityCatalog.Find(id) is not null).ToArray();
-        if (cities.Length == 0)
+        if (cities.Length == 0 && cfg.HumanizerRetreat == HumanizerRetreat.City) // Fork: a retreat needs no city
         {
             Diag("Humanize hand-off skipped: no selected cities are in the current catalog.");
             owningSession.ResetBreakCounter();
             StartFateGrind(resumeIndex, owningSession);
             return;
         }
-        var cityId = cities[rng.Next(cities.Length)];
+        var cityId = cities.Length == 0 ? 0u : cities[rng.Next(cities.Length)]; // Fork: 0 = no city fallback
         var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
         var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
         var minutes = rng.Next(minMin, maxMin + 1);

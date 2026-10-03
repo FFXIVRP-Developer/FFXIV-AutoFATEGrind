@@ -55,9 +55,11 @@ re-apply the items one by one from this file. Every item is small and self-conta
 | `Configuration.cs` | `HumanizerRetreat` property after `HumanizerWanderMaxMeters` | The saved JSON is shared with the store build. The store build ignores the extra key. |
 | `Windows/Sections/Config/HumanizerSettings.cs` | `MaxPauseSec = 999 * 60` used as the pause range max (upstream: `60`); "Break location" row at the top of `DrawCitiesGroup` | The UI text is literal English, not localised, on purpose: no `L.cs` / `Localization/*.json` changes to conflict. |
 
-The controller (`AutoFateController.Handoffs.cs`) is **not** touched. It still picks a city and passes it in.
-That city is the fallback when Lifestream can't reach the location. It is also why at least one city has
-to stay ticked: upstream skips the break when the list is empty.
+| `Core/Tasks/AutoFate.Engage.cs` `QueueHandoffIfDue` | `HumanizerCities.Count > 0` → `AutoHumanize.HasBreakPlace(Plugin.Cfg)` | A retreat alone must be enough to queue a break. |
+| `Core/Tasks/AutoFateController.Handoffs.cs` `ResumeGrindOrHumanize` | the `Count == 0` skip uses `!HasBreakPlace(cfg)`; the "no catalog city" skip only applies with `HumanizerRetreat.City`; `cityId` is `0` when no city is ticked | `0` means "no city fallback". `AutoHumanize.Execute` aborts the break (BreakTaken stays false) when the retreat fails and the city is `0`. Never teleport to territory 0. |
+| `Windows/Sections/Config/HumanizerSettings.cs` | the "No cities selected" warning only shows with `HumanizerRetreat.City` | Cosmetic. |
+
+The controller still picks a city (when any is ticked) and passes it in as the fallback for a failed retreat.
 
 ### 5. Landing over water (README-FORK item 5)
 

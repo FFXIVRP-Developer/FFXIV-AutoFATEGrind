@@ -332,7 +332,7 @@ public sealed partial class AutoFate
             return true;
 
         if (Plugin.Cfg.HumanizerEnabled
-         && Plugin.Cfg.HumanizerCities.Count > 0
+         && AutoHumanize.HasBreakPlace(Plugin.Cfg) // Fork: was HumanizerCities.Count > 0
          && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
         {
             Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");

@@ -61,6 +61,11 @@ public sealed partial class AutoHumanize(uint cityTerritoryId, int durationMs) :
         // Fork: break at the configured retreat (inn, housing) when Lifestream gets there; the city is the fallback.
         var territory = await ReachRetreat() ?? cityTerritoryId;
         if (CancelToken.IsCancellationRequested) return;
+        if (territory == 0)
+        {
+            Diag("Humanize aborted: the break location was not reached and no city is ticked to fall back to.");
+            return;
+        }
         if (territory != cityTerritoryId) label = RetreatLabels[(int)Plugin.Cfg.HumanizerRetreat];
         var breakMin = Math.Max(1, durationMs / 60_000);
         Diag($"Humanize start: {label}, break {durationMs / 1000}s");
