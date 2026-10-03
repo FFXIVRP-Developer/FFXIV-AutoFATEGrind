@@ -38,7 +38,7 @@ internal sealed class AutoResume : IDisposable
     private void Tick(IFramework framework)
     {
         if (finished) return;
-        if (!Plugin.Cfg.AutoResumeEnabled || !Plugin.Cfg.ResumeRunPending)
+        if (!Plugin.Cfg.ResumeRunPending)
         {
             finished = true;
             return;
@@ -57,7 +57,7 @@ internal sealed class AutoResume : IDisposable
         finished = true;
         if (Plugin.Instance.Controller.Running) return;
         RunLog.Info("Auto-resume: a run was going when the plugin last unloaded; starting it again.");
-        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload (turn off under Settings > General > Resume run after reload).");
+        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload. Press Stop to keep it stopped next time.");
         Plugin.Instance.StartFromCommand();
     }
 }

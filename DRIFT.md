@@ -71,13 +71,11 @@ to stay ticked: upstream skips the break when the list is empty.
 | File | Hook | Must stay true |
 |---|---|---|
 | `Core/Tasks/AutoResume.cs` | **new file**: `Unloading` flag, `MarkStarted()`/`MarkEnded()`, framework-tick starter | Copy as-is. |
-| `Configuration.cs` | `AutoResumeEnabled`, `ResumeRunPending` after `AutoShowOnLogin` | Pure addition. |
+| `Configuration.cs` | `ResumeRunPending` after `AutoShowOnLogin` | Pure addition. No on/off setting by design: whether a run was going is the only switch. |
 | `Core/Tasks/AutoFateController.cs` `RunAll` | `AutoResume.MarkStarted();` right after `session = s;` | Must run only once a run really starts (after every "Start aborted" return). |
 | same, `Stop()` | `AutoResume.MarkEnded();` at the top | Every user stop goes through `Stop()`. |
 | `Core/Tasks/AutoFateController.RunLifecycle.cs` `EndRun` | `AutoResume.MarkEnded();` after `FinalizeRun` | `EndRun` is the choke point for runs ending on their own. If upstream adds an end path that skips `EndRun`, hook it too. |
 | `Plugin.cs` | ctor end: `autoResume = new AutoResume();` + field; `Dispose` first lines: `AutoResume.Unloading = true; autoResume.Dispose();`; `StartFromCommand` `private` → `internal` | **`Unloading` must be set before anything else in `Dispose`.** The grind task's completion callback fires *after* unload and calls `EndRun`, which would otherwise clear the memory on every reload (seen in the log: "FATE grind ended ... Run ends" after "Finished unloading"). |
-| `Windows/Sections/Config/GeneralSettings.cs` | "Resume run after reload" toggle after "Open on login" | Literal English, not localised. |
-
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line

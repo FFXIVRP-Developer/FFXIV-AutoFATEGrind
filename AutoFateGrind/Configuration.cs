@@ -11,8 +11,7 @@ public sealed class Configuration : IPluginConfiguration
     public int Version { get; set; }
 
     public bool AutoShowOnLogin { get; set; } = false;
-    // Fork: restart a run that was going when the plugin unloaded; ResumeRunPending is that memory (AutoResume).
-    public bool AutoResumeEnabled { get; set; } = false;
+    // Fork: a run was going when the plugin last unloaded, so the next load starts it again (AutoResume).
     public bool ResumeRunPending { get; set; } = false;
 
     public string Language { get; set; } = "";

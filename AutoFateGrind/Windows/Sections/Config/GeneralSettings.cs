@@ -35,13 +35,6 @@ internal static class GeneralSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoShowOnLogin, v => cfg.AutoShowOnLogin = v, "##gen_autoshow"),
             SettingsRow.ToggleHeight);
 
-        // Fork
-        SettingsRow.Draw("Resume run after reload",
-            "If a run was going when the plugin unloaded (plugin reload, game closed or crashed), start it again once you are in game. Pressing Stop, or a run ending on its own, means it will not restart.",
-            SettingsControls.ToggleWidth,
-            () => SettingsControls.DrawToggle(cfg, () => cfg.AutoResumeEnabled, v => cfg.AutoResumeEnabled = v, "##gen_autoresume"),
-            SettingsRow.ToggleHeight);
-
         SettingsRow.Draw(Loc.T(L.Settings.LivePopout),
             Loc.T(L.Settings.LivePopoutHelp),
             SettingsControls.ToggleWidth,
