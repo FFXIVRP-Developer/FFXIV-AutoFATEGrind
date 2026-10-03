@@ -112,8 +112,9 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 
 | File | Hook | Must stay true |
 |---|---|---|
-| `Core/Tasks/AutoFate.Engage.cs` `TickRingChase` | `ringChaseSinceMs` set with a new chase target; the give-up block right after the new-target `Diag` | Must run before the "within goal / frozen → return true" exit, or that exit can loop forever. |
-| same, fields | `ringChaseSinceMs`, `RingChaseMaxMs` next to `ringChaseTargetId` | Pure addition. |
+| `Core/Tasks/AutoFate.Engage.cs` `TickRingChase` | cooldown check with the "no target" exit; the progress clock and give-up block right after it | Must run before the "within goal / frozen → return true" exit, or that exit can loop forever. Keep it per chase, not per target. |
+| same, fields | `ringChaseActiveSinceMs`, `ringChaseProgress`, `ringChaseCooldownUntilMs`, `RingChaseMaxMs`, `RingChaseCooldownMs` | Pure addition. |
+| same, `ResetEngageOverrides` | resets `ringChaseActiveSinceMs` and `ringChaseCooldownUntilMs` | Per FATE. |
 
 ### ECommons submodule
 

@@ -542,8 +542,31 @@ public sealed partial class AutoFate
     // again once the target is back within its reach or gone.
     private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
     {
-        if (!TryFindRingChaseTarget(fateId, idle.Meters, out var target))
+        // Fork: after a chase was given up, BossMod and the engagement watchdog own the fight for a while.
+        if (Environment.TickCount64 < ringChaseCooldownUntilMs || !TryFindRingChaseTarget(fateId, idle.Meters, out var target))
         {
+            ringChaseActiveSinceMs = 0;
+            EndRingChase(preset);
+            return false;
+        }
+
+        // Fork: chasing (any target) for RingChaseMaxMs while the FATE's progress does not move is given up. A per-target
+        // clock was not enough: the target kept switching between Pugils and restarted it (2026-10-03, FATE 239), and a
+        // target within reach but not being hit never counted. Progress resets the clock, so a working chase goes on.
+        var progress = PublicEvent.GetFateById(fateId)?.Progress ?? 0;
+        var now = Environment.TickCount64;
+        if (ringChaseActiveSinceMs == 0 || progress != ringChaseProgress)
+        {
+            ringChaseActiveSinceMs = now;
+            ringChaseProgress = progress;
+        }
+        else if (now - ringChaseActiveSinceMs > RingChaseMaxMs)
+        {
+            Diag($"Chased outside the FATE ring for {RingChaseMaxMs / 1000}s with FATE {fateId} stuck at {progress}% ({DescribeEngageSituation(fateId, idle.Meters)}); giving the target up and leaving the fight to BossMod for {RingChaseCooldownMs / 1000}s");
+            ringChaseGivenUpTargetId = target.GameObjectId;
+            Svc.Targets.Target = null;
+            ringChaseActiveSinceMs = 0;
+            ringChaseCooldownUntilMs = now + RingChaseCooldownMs;
             EndRingChase(preset);
             return false;
         }
@@ -552,21 +575,7 @@ public sealed partial class AutoFate
         {
             ringChaseTargetId = target.GameObjectId;
             ringChaseFailures = 0;
-            ringChaseSinceMs = Environment.TickCount64; // Fork
             Diag($"Target of FATE {fateId} stands outside BossMod's FATE-ring pathfind area ({target.DistanceToHitbox:F0}m off its hitbox); AFG walks the character while BossMod keeps attacking ({DescribeEngageSituation(fateId, idle.Meters)})");
-        }
-
-        // Fork: a chase that has not brought the target into reach in RingChaseMaxMs is given up. Every other exit needs a
-        // walk to fail or the target to change; "within goal" and "position frozen" return true without walking, and with
-        // BossMod's movement parked and the engagement watchdog skipped while chasing, the character stood still
-        // (2026-10-03, FATE 312 In the Sac, Killer Mantis 13 m off, no log for minutes).
-        if (Environment.TickCount64 - ringChaseSinceMs > RingChaseMaxMs && target.DistanceToHitbox > idle.Meters)
-        {
-            Diag($"Chased the out-of-ring target of FATE {fateId} for {RingChaseMaxMs / 1000}s without getting it into reach ({DescribeEngageSituation(fateId, idle.Meters)}); giving it up and handing movement back to BossMod");
-            ringChaseGivenUpTargetId = target.GameObjectId;
-            Svc.Targets.Target = null;
-            EndRingChase(preset);
-            return false;
         }
         if (!ringChaseParked)
         {
@@ -681,6 +690,8 @@ public sealed partial class AutoFate
         ringChaseTargetId = 0;
         ringChaseFailures = 0;
         ringChaseGivenUpTargetId = 0;
+        ringChaseActiveSinceMs = 0;   // Fork
+        ringChaseCooldownUntilMs = 0; // Fork
         collectPullsHeld = false;
         if (!BossModIPC.Instance.CanClearTransientStrategy)
         {
@@ -817,8 +828,12 @@ public sealed partial class AutoFate
 
     private bool  ringChaseParked;
     private ulong ringChaseTargetId;
-    private long  ringChaseSinceMs; // Fork: when the chase of ringChaseTargetId began
-    private const int RingChaseMaxMs = 45_000; // Fork
+    // Fork (README-FORK item 11): chasing without FATE progress is given up after RingChaseMaxMs, then no chase for the cooldown.
+    private long  ringChaseActiveSinceMs;
+    private int   ringChaseProgress;
+    private long  ringChaseCooldownUntilMs;
+    private const int RingChaseMaxMs = 45_000;
+    private const int RingChaseCooldownMs = 30_000;
     private int   ringChaseFailures;
     private ulong ringChaseGivenUpTargetId;
 

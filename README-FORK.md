@@ -90,8 +90,10 @@ Every change in the code is marked with a `// Fork:` comment.
     target outside BossMod's FATE ring could stand still for good: its "target within goal" and "position frozen" exits
     report "still chasing" without walking, BossMod's movement stays parked, and the engagement watchdog is skipped
     while chasing (2026-10-03, FATE 312 In the Sac, Killer Mantis 13 m off, the character stood with no log for
-    minutes). A chase that has not got the same target into reach within 45 s is given up: the target is cleared,
-    marked as given up, and movement goes back to BossMod, where the normal watchdogs run.
+    minutes). Chasing (any target) for 45 s while the FATE's progress does not move is given up: the target is cleared
+    and marked as given up, movement goes back to BossMod, and no chase starts for 30 s, so the normal watchdogs run.
+    Progress resets the clock. (The first version timed each target; switching Pugils restarted it, FATE 239, and a
+    target within reach but not being hit never counted.) The clock and cooldown reset with each new FATE.
 
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
@@ -106,7 +108,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 6 Resume run after reload | Removed. |
 | 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 | 8 IPC | Works: BoatRunner starts and soft-stops runs. |
-| 11 Ring-chase time limit | Not yet observed. Look for `Chased the out-of-ring target`. |
+| 11 Ring-chase time limit | Per-target version did not fire (target switching). Now progress-based; not yet observed. Look for `Chased outside the FATE ring`. |
 | 10 Yo-kai minion per zone | Not yet observed. Look for `Yo-kai in <zone>: farming`. |
 | 9 Fight free before a zone teleport | Not yet observed. Look for `In combat outside a FATE; enabling rotation to fight free` before `Off-zone ... teleporting`. |
 
