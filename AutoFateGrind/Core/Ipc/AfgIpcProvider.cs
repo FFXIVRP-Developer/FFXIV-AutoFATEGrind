@@ -9,10 +9,13 @@ namespace AutoFateGrind.Core.Ipc;
 //   AutoFateGrind.StopWhenSafe ()            ends the run once the current FATE is over and combat is clear
 //   AutoFateGrind.Stop         ()            ends the run now
 //   AutoFateGrind.Phase        () -> string  Idle, Grinding, Repairing, Trading, Humanizing, Finishing, Paused
+//   AutoFateGrind.IsBusy       () -> bool    the local plugins' standard "doing something" (a run, incl. finishing the
+//                                            FATE after StopWhenSafe); callers wait for false
 internal sealed class AfgIpcProvider : IDisposable
 {
     private const string Prefix = "AutoFateGrind";
 
+    private readonly ICallGateProvider<bool> isBusy;
     private readonly ICallGateProvider<bool> isRunning;
     private readonly ICallGateProvider<bool> start;
     private readonly ICallGateProvider<object> stopWhenSafe;
@@ -27,6 +30,8 @@ internal sealed class AfgIpcProvider : IDisposable
         stop         = Svc.PluginInterface.GetIpcProvider<object>($"{Prefix}.Stop");
         phase        = Svc.PluginInterface.GetIpcProvider<string>($"{Prefix}.Phase");
 
+        isBusy       = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsBusy");
+        isBusy.RegisterFunc(() => plugin.Controller.Running);
         isRunning.RegisterFunc(() => plugin.Controller.Running);
         start.RegisterFunc(() =>
         {
@@ -40,6 +45,7 @@ internal sealed class AfgIpcProvider : IDisposable
 
     public void Dispose()
     {
+        isBusy.UnregisterFunc();
         isRunning.UnregisterFunc();
         start.UnregisterFunc();
         stopWhenSafe.UnregisterAction();

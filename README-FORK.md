@@ -113,6 +113,10 @@ Every change in the code is marked with a `// Fork:` comment.
 
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
+14. **`AutoFateGrind.IsBusy`** (`Core/Ipc/AfgIpcProvider.cs`): the local plugins' standard status call, true while a
+    run goes, finishing the FATE after `StopWhenSafe` included. Every local fork and own plugin has
+    `<InternalName>.IsBusy`; BoatRunner waits on it.
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |
