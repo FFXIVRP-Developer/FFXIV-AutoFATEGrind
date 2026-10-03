@@ -86,6 +86,13 @@ Every change in the code is marked with a `// Fork:` comment.
     (`IsZoneDone`) and rotated past; the run ends when the roster is done, as before. The Yo-kai hand-off
     (`PendingYokaiAdvance`) no longer fires.
 
+11. **Ring-chase time limit** (`AutoFate.Engage.cs` `TickRingChase`, `RingChaseMaxMs = 45 s`). Upstream's chase of a
+    target outside BossMod's FATE ring could stand still for good: its "target within goal" and "position frozen" exits
+    report "still chasing" without walking, BossMod's movement stays parked, and the engagement watchdog is skipped
+    while chasing (2026-10-03, FATE 312 In the Sac, Killer Mantis 13 m off, the character stood with no log for
+    minutes). A chase that has not got the same target into reach within 45 s is given up: the target is cleared,
+    marked as given up, and movement goes back to BossMod, where the normal watchdogs run.
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 ## Verified in game
@@ -99,6 +106,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 6 Resume run after reload | Removed. |
 | 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 | 8 IPC | Works: BoatRunner starts and soft-stops runs. |
+| 11 Ring-chase time limit | Not yet observed. Look for `Chased the out-of-ring target`. |
 | 10 Yo-kai minion per zone | Not yet observed. Look for `Yo-kai in <zone>: farming`. |
 | 9 Fight free before a zone teleport | Not yet observed. Look for `In combat outside a FATE; enabling rotation to fight free` before `Off-zone ... teleporting`. |
 

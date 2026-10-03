@@ -552,7 +552,21 @@ public sealed partial class AutoFate
         {
             ringChaseTargetId = target.GameObjectId;
             ringChaseFailures = 0;
+            ringChaseSinceMs = Environment.TickCount64; // Fork
             Diag($"Target of FATE {fateId} stands outside BossMod's FATE-ring pathfind area ({target.DistanceToHitbox:F0}m off its hitbox); AFG walks the character while BossMod keeps attacking ({DescribeEngageSituation(fateId, idle.Meters)})");
+        }
+
+        // Fork: a chase that has not brought the target into reach in RingChaseMaxMs is given up. Every other exit needs a
+        // walk to fail or the target to change; "within goal" and "position frozen" return true without walking, and with
+        // BossMod's movement parked and the engagement watchdog skipped while chasing, the character stood still
+        // (2026-10-03, FATE 312 In the Sac, Killer Mantis 13 m off, no log for minutes).
+        if (Environment.TickCount64 - ringChaseSinceMs > RingChaseMaxMs && target.DistanceToHitbox > idle.Meters)
+        {
+            Diag($"Chased the out-of-ring target of FATE {fateId} for {RingChaseMaxMs / 1000}s without getting it into reach ({DescribeEngageSituation(fateId, idle.Meters)}); giving it up and handing movement back to BossMod");
+            ringChaseGivenUpTargetId = target.GameObjectId;
+            Svc.Targets.Target = null;
+            EndRingChase(preset);
+            return false;
         }
         if (!ringChaseParked)
         {
@@ -803,6 +817,8 @@ public sealed partial class AutoFate
 
     private bool  ringChaseParked;
     private ulong ringChaseTargetId;
+    private long  ringChaseSinceMs; // Fork: when the chase of ringChaseTargetId began
+    private const int RingChaseMaxMs = 45_000; // Fork
     private int   ringChaseFailures;
     private ulong ringChaseGivenUpTargetId;
 

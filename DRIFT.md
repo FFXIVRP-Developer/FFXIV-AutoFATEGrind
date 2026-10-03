@@ -108,6 +108,13 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 | `Core/Tasks/AutoFateController.cs` `PlanYokaiZones` | zones from `ZonesForAll`, first target from `ResolveTargetIndexForZone` at the start zone | If upstream changes the Yo-kai planning, keep "all zones, minion per zone". |
 | `Core/Tasks/AutoFate.Yokai.cs` `YokaiTargetChanged` | switches `session.YokaiTargetMinionId` in place and always returns false | Returning true would hand off and replan for every zone change. |
 
+### 11. Ring-chase time limit (README-FORK item 11)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoFate.Engage.cs` `TickRingChase` | `ringChaseSinceMs` set with a new chase target; the give-up block right after the new-target `Diag` | Must run before the "within goal / frozen → return true" exit, or that exit can loop forever. |
+| same, fields | `ringChaseSinceMs`, `RingChaseMaxMs` next to `ringChaseTargetId` | Pure addition. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line
