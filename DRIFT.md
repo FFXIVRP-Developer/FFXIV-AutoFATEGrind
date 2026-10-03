@@ -20,7 +20,7 @@ dotnet build ... -p:OutDir=<scratch>  # compile check (README-FORK "Rebuild")
 
 If a rebase gets messy, abort it (`git rebase --abort`), start a fresh branch from `origin/master`, and
 re-apply the items one by one from this file. Every item is small and self-contained. The new files
-(`AutoHumanize.Retreat.cs`, `AutoResume.cs`) can be copied as-is.
+(`AutoHumanize.Retreat.cs`, `AutoFate.TargetSync.cs`, `Core/Ipc/AfgIpcProvider.cs`) can be copied as-is.
 
 ## Footprint per item
 
@@ -69,14 +69,8 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 
 ### 6. Resume run after reload (README-FORK item 6)
 
-| File | Hook | Must stay true |
-|---|---|---|
-| `Core/Tasks/AutoResume.cs` | **new file**: `Unloading` flag, `MarkStarted()`/`MarkEnded()`, framework-tick starter | Copy as-is. |
-| `Configuration.cs` | `ResumeRunPending` after `AutoShowOnLogin` | Pure addition. No on/off setting by design: whether a run was going is the only switch. |
-| `Core/Tasks/AutoFateController.cs` `RunAll` | `AutoResume.MarkStarted();` right after `session = s;` | Must run only once a run really starts (after every "Start aborted" return). |
-| same, `Stop()` | `AutoResume.MarkEnded();` at the top | Every user stop goes through `Stop()`. |
-| `Core/Tasks/AutoFateController.RunLifecycle.cs` `EndRun` | `AutoResume.MarkEnded();` after `FinalizeRun` | `EndRun` is the choke point for runs ending on their own. If upstream adds an end path that skips `EndRun`, hook it too. |
-| `Plugin.cs` | ctor end: `autoResume = new AutoResume();` + field; `Dispose` first lines: `AutoResume.Unloading = true; autoResume.Dispose();`; `StartFromCommand` `private` → `internal` | **`Unloading` must be set before anything else in `Dispose`.** The grind task's completion callback fires *after* unload and calls `EndRun`, which would otherwise clear the memory on every reload (seen in the log: "FATE grind ended ... Run ends" after "Finished unloading"). |
+Removed 2026-10-03: it restarted runs that BoatRunner had not asked for. No hooks left; the controller
+files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when AFG runs.
 
 ### 7. Unsync for non-FATE mobs (README-FORK item 7)
 
@@ -95,7 +89,7 @@ The controller still picks a city (when any is ticked) and passes it in as the f
 
 | File | Hook | Must stay true |
 |---|---|---|
-| `Core/Ipc/AfgIpcProvider.cs` | **new file** | Copy as-is. Calls `Plugin.StartFromCommand` (internal since item 6), `Controller.Running/StopWhenSafe/Stop/Phase`. The IPC names are the contract with the boat orchestrator: keep them. |
+| `Core/Ipc/AfgIpcProvider.cs` | **new file** | Copy as-is. Calls `Plugin.StartFromCommand` (`private` → `internal`, `// Fork` on that line), `Controller.Running/StopWhenSafe/Stop/Phase`. The IPC names are the contract with the boat orchestrator: keep them. |
 | `Plugin.cs` | ctor end: `ipcProvider = new Core.Ipc.AfgIpcProvider(this);` + field; `Dispose`: `ipcProvider.Dispose();` after `autoResume.Dispose();` | Unregister on dispose, or a reload throws "already registered". |
 
 ### ECommons submodule

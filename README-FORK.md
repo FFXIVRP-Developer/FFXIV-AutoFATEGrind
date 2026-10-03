@@ -40,12 +40,10 @@ Every change in the code is marked with a `// Fork:` comment.
    retried the same spot every 3 s forever (East Shroud, 2026-10-03, stuck at (-122,10,92)). Now it flies
    to the nearest walkable navmesh point within 60 y and lands there.
 
-6. **Resume run after reload** (`AutoResume.cs`, no setting). Starting a run saves
-   `ResumeRunPending = true` in the config. Stop, a soft stop or a run that ends on its own (goal met,
-   nothing left) clears it. A plugin unload (reload, game exit, crash) does not. The next load starts
-   the run like `/afg start` as soon as you are in game and every required plugin is loaded (after a
-   game launch vnavmesh/BossMod can load after AFG); no fixed delay. A paused run
-   counts as going, so it restarts too.
+6. *(Removed 2026-10-03.)* **Resume run after reload** restarted a run on the next plugin load. It fought
+   BoatRunner, which starts and stops AFG through item 8's IPC, so it is gone: AFG never starts a run on
+   its own now. BoatRunner resumes its own cycle after a reload instead. A stale `ResumeRunPending` key in
+   the saved config is ignored.
 
 7. **Unsync for non-FATE mobs** (`AutoFate.TargetSync.cs`, Settings → Travel → "Unsync for non-FATE
    mobs", on by default). Upstream re-synced every engage tick, so a world mob that aggroed inside a
@@ -68,7 +66,7 @@ Every change in the code is marked with a `// Fork:` comment.
    boat orchestrator to run AFG while it waits for an ocean fishing voyage:
    `AutoFateGrind.IsRunning() → bool`, `AutoFateGrind.Start() → bool` (like `/afg start`, true when a run
    is going after), `AutoFateGrind.StopWhenSafe()` (like `/afg stop soft`), `AutoFateGrind.Stop()`,
-   `AutoFateGrind.Phase() → string`. A stop through IPC clears the auto-resume memory like any stop.
+   `AutoFateGrind.Phase() → string`.
 
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
@@ -80,9 +78,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 | 3 Progress resets repositions | Not yet observed. |
 | 4 Break location | Not yet observed. Look for `Humanize retreat ...: arrived in territory` in `dalamud.log`. |
 | 5 Landing over water | Works: found ground 39 y away instead of hovering (East Shroud). |
-| 6 Resume run after reload | Works: run restarted about 1 s after a hot reload. |
+| 6 Resume run after reload | Removed. |
+| 7 Unsync for non-FATE mobs | Unsync works; the first build was re-synced by BossMod's FATE helper within a second (fixed with the override). Not yet re-observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 | 8 IPC | Not yet observed. |
-| 7 Unsync for non-FATE mobs | Not yet observed. Look for `/levelsync off` and `Synced to FATE ... (non-FATE fight over)` in `dalamud.log`; "last try" lines mean the game refused the unsync. |
 
 ## Using the humanizer rest
 
@@ -126,4 +124,4 @@ installed plugin (`pluginConfigs\AutoFateGrind.json`).
 
 Currently loaded in the `Me` profile only (since 2026-10-03). Slaves still get the store build through
 `SLAVE_PLUGINS`. Dalamud hot-reloads the dev plugin on every build into `bin\Release`. That stops a
-running run, and item 6 then restarts it.
+running run; BoatRunner starts it again at its next waiting phase, or start it with `/afg start`.

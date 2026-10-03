@@ -85,7 +85,6 @@ internal sealed partial class AutoFateController
         }
 
         session = s;
-        AutoResume.MarkStarted(); // Fork
         Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
 
         ApplyStartingClass();
@@ -166,7 +165,6 @@ internal sealed partial class AutoFateController
     public void Stop()
     {
         var ending = session;
-        AutoResume.MarkEnded(); // Fork
         currentTask = null;
         grindTask = null;
         PauseReason = PauseReason.None;
