@@ -54,6 +54,68 @@ index 08faec6..1776ca3 100644
 +        return !BGCollisionModule.RaycastMaterialFilter(origin, offset / distance, out _, distance);
 +    }
  }
+diff --git a/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs b/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs
+index ad2be07..69735ab 100644
+--- a/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs
++++ b/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs
+@@ -94,6 +94,57 @@ internal static unsafe class YokaiProgress
+         return index < 0 ? 0 : YokaiCatalog.Entries[index].MinionId;
+     }
+ 
++    // ---- Fork: minion per zone (README-FORK item 10) ------------------------------------------------------------
++    // Every zone pays for two minions. The run plans every zone some unfinished minion uses and, in each zone, farms a
++    // minion that still needs medals and drops there: the one out, else the last target, else the first in the list.
++
++    /// <summary>Fork: the zone is one of the minion's three and its aetheryte is attuned.</summary>
++    public static bool DropsIn(int entryIndex, uint territoryId)
++    {
++        var zoneIds = YokaiCatalog.Entries[entryIndex].ZoneIds;
++        var slot = Array.IndexOf(zoneIds, territoryId);
++        return slot >= 0 && (Statuses[entryIndex].UnlockedZoneMask & (1 << slot)) != 0;
++    }
++
++    /// <summary>Fork: the minion to farm in this zone, -1 when no unfinished minion drops here.</summary>
++    public static int ResolveTargetIndexForZone(Configuration configuration, uint territoryId, uint preferredMinionId)
++    {
++        bool Fits(int index) => index >= 0 && IsFarmable(configuration, index) && DropsIn(index, territoryId);
++
++        var summonedIndex = YokaiCatalog.IndexOfMinion(YokaiOps.SummonedMinionId());
++        if (Fits(summonedIndex)) return summonedIndex;
++        var preferredIndex = YokaiCatalog.IndexOfMinion(preferredMinionId);
++        if (Fits(preferredIndex)) return preferredIndex;
++        for (var index = 0; index < statuses.Length; index++)
++        {
++            if (Fits(index)) return index;
++        }
++        return -1;
++    }
++
++    /// <summary>
++    ///     Fork: every zone some unfinished minion drops in, once each, by territory id: that groups La Noscea, Thanalan
++    ///     and the Shroud (and each later expansion), so rotating to the next zone is mostly a short hop.
++    /// </summary>
++    public static IReadOnlyList<ZoneInfo> ZonesForAll(Configuration configuration)
++    {
++        var zones = new List<ZoneInfo>();
++        var seen = new HashSet<uint>();
++        for (var index = 0; index < statuses.Length; index++)
++        {
++            if (!IsFarmable(configuration, index)) continue;
++            foreach (var zone in ZonesFor(index))
++            {
++                if (seen.Add(zone.TerritoryId)) zones.Add(zone);
++            }
++        }
++        return zones.OrderBy(zone => zone.TerritoryId).ToList();
++    }
++
++    /// <summary>Fork: nothing in this zone still needs medals.</summary>
++    public static bool IsZoneDone(Configuration configuration, uint territoryId)
++        => Ready && ResolveTargetIndexForZone(configuration, territoryId, 0) < 0;
++
+     public static bool IsComplete(Configuration configuration)
+         => Ready && ResolveTargetIndex(configuration, 0) < 0;
+ 
 diff --git a/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
 new file mode 100644
 index 0000000..a76a3e8
@@ -109,6 +171,23 @@ index 0000000..a76a3e8
 +        phase.UnregisterFunc();
 +    }
 +}
+diff --git a/AutoFateGrind/Core/Modes/BuiltInModes.cs b/AutoFateGrind/Core/Modes/BuiltInModes.cs
+index ef48ca1..36e2b74 100644
+--- a/AutoFateGrind/Core/Modes/BuiltInModes.cs
++++ b/AutoFateGrind/Core/Modes/BuiltInModes.cs
+@@ -96,5 +96,11 @@ public sealed class YokaiMedalsMode : IFateGrindMode
+ 
+     public bool PlansZones => true;
+ 
+-    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => YokaiProgress.ZonesFor(YokaiProgress.ResolveTargetIndex(cfg, 0));
++    // Fork: every zone an unfinished minion drops in (was the first target's three); the minion is picked per zone.
++    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => YokaiProgress.ZonesForAll(cfg);
++
++    // Fork: a zone is done once no unfinished minion drops there; the run rotates past it.
++    public bool IsZoneDone(uint territoryId) => YokaiProgress.IsZoneDone(Plugin.Cfg, territoryId);
++
++    public string ZoneDoneReason(uint territoryId) => "no yo-kai that still needs medals drops here";
+ }
 diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
 index 840facc..19ee843 100644
 --- a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
@@ -566,6 +645,41 @@ index 0000000..9c097da
 +        return true;
 +    }
 +}
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs b/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
+index 67b55f1..71f9e76 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Yokai.cs
+@@ -17,6 +17,8 @@ public sealed partial class AutoFate
+ 
+     private long yokaiParkWarnedAtMs;
+ 
++    // Fork: the minion is picked per zone and switched in place (the companion check before each FATE summons it); no
++    // hand-off or replan, so this never reports a change. A zone with no minion left is GoalZoneDone's to rotate past.
+     private bool YokaiTargetChanged()
+     {
+         if (!ZoneSelection.IsYokaiGoal(Plugin.Cfg))
+@@ -24,8 +26,19 @@ public sealed partial class AutoFate
+             return false;
+         }
+ 
+-        var target = YokaiProgress.ResolveTargetMinionId(Plugin.Cfg, session.YokaiTargetMinionId);
+-        return target != 0 && target != session.YokaiTargetMinionId;
++        var index = YokaiProgress.ResolveTargetIndexForZone(Plugin.Cfg, zone.TerritoryId, session.YokaiTargetMinionId);
++        if (index < 0)
++        {
++            return false;
++        }
++
++        var minionId = YokaiCatalog.Entries[index].MinionId;
++        if (minionId != session.YokaiTargetMinionId)
++        {
++            Diag($"Yo-kai in {zone.Name}: farming {YokaiProgress.MinionName(index)} ({YokaiProgress.Statuses[index].Medals}/{YokaiProgress.MedalTarget(Plugin.Cfg)} medals) instead of {YokaiTargetName()}");
++            session.YokaiTargetMinionId = minionId;
++        }
++        return false;
+     }
+ 
+     private void ReportYokaiGoalMet()
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
 index 1f98ff8..16ad1e4 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
@@ -632,6 +746,35 @@ index 924cdf3..97580da 100644
          var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
          var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
          var minutes = rng.Next(minMin, maxMin + 1);
+diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.cs b/AutoFateGrind/Core/Tasks/AutoFateController.cs
+index 481f303..6ecbf77 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFateController.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFateController.cs
+@@ -93,17 +93,20 @@ internal sealed partial class AutoFateController
+ 
+     private bool PlanYokaiZones(AutoFateSession owningSession)
+     {
+-        var targetIndex = YokaiProgress.ResolveTargetIndex(Plugin.Cfg, owningSession.YokaiTargetMinionId);
+-        var zones = YokaiProgress.ZonesFor(targetIndex);
++        // Fork: every zone an unfinished minion drops in; the minion is picked per zone (AutoFate.YokaiTargetChanged).
++        var zones = YokaiProgress.ZonesForAll(Plugin.Cfg);
+         Diag($"Yo-kai roster: {YokaiProgress.DescribeRoster(Plugin.Cfg)}");
+         if (zones.Count == 0)
+         {
+             return false;
+         }
+ 
+-        owningSession.YokaiTargetMinionId = YokaiCatalog.Entries[targetIndex].MinionId;
+         activeZones = zones;
+-        Diag($"Yo-kai target: {YokaiProgress.MinionName(targetIndex)} ({YokaiProgress.Statuses[targetIndex].Medals}/{YokaiProgress.MedalTarget(Plugin.Cfg)} medals), {zones.Count} zone(s).");
++        var startTerritory = zones[CurrentTerritoryIndex()].TerritoryId;
++        var targetIndex = YokaiProgress.ResolveTargetIndexForZone(Plugin.Cfg, startTerritory, owningSession.YokaiTargetMinionId);
++        if (targetIndex < 0) targetIndex = YokaiProgress.ResolveTargetIndex(Plugin.Cfg, owningSession.YokaiTargetMinionId);
++        owningSession.YokaiTargetMinionId = targetIndex < 0 ? 0 : YokaiCatalog.Entries[targetIndex].MinionId;
++        Diag($"Yo-kai: {zones.Count} zone(s) where a minion still needs medals; starting with {(targetIndex < 0 ? "none" : YokaiProgress.MinionName(targetIndex))}, picked per zone from here.");
+         return true;
+     }
+ 
 diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
 new file mode 100644
 index 0000000..59d36f9
