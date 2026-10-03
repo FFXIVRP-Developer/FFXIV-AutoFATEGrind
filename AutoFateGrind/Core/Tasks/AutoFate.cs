@@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     // Idle = the character has not displaced while nothing in reach is being fought; BossMod never moves
     // toward a mob outside its FATE-circle pathfind map, so AFG walks in with vnav after this long.
     private const int   EngageIdleStallMs = 8_000;
+    // Fork: same idle rule while the target is in reach but out of line of sight.
+    private const int   EngageSightStallMs = 3_000;
     private const int   EngageRepositionWatchdogMs = 40_000;
     private const float EngageMeleeApproachToleranceMeters  = 2.5f;
     private const float EngageRangedApproachToleranceMeters = 15f;

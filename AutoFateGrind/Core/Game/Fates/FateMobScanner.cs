@@ -3,6 +3,7 @@ using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
 using Dalamud.Game.ClientState.Objects.Types;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
 using System;
 using System.Numerics;
 using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
@@ -187,4 +188,21 @@ internal static unsafe class FateMobScanner
 
     private static float DistanceToHitbox(Vector3 from, IBattleNpc npc)
         => MathF.Max(0f, Vector3.Distance(from, npc.Position) - npc.HitboxRadius);
+
+    // Fork: positions are at the feet; the ray runs between chest heights so ground bumps don't count as walls.
+    private const float SightHeightMeters = 2f;
+
+    // Fork: true when no level collision lies between the two points; the game refuses casts ("Target not in line of sight") otherwise.
+    public static bool HasLineOfSight(Vector3 from, Vector3 to)
+    {
+        var lift = new Vector3(0f, SightHeightMeters, 0f);
+        var origin = from + lift;
+        var offset = to + lift - origin;
+        var distance = offset.Length();
+        if (distance < 0.01f)
+        {
+            return true;
+        }
+        return !BGCollisionModule.RaycastMaterialFilter(origin, offset / distance, out _, distance);
+    }
 }

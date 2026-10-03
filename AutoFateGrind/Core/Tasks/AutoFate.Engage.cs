@@ -211,6 +211,7 @@ public sealed partial class AutoFate
                     lastProgress = fate.Progress;
                     lastProgressAtMs = Environment.TickCount64;
                     combatStallBounces = 0;
+                    idle.ForgetRepositions();
                 }
                 else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                       && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
@@ -385,7 +386,9 @@ public sealed partial class AutoFate
         }
         idle.MarkOutOfReach();
 
-        if (!idle.Stalled(player.Position))
+        // Fork: standing still facing a sight-blocked target never fixes itself, so it gets the shorter wait.
+        FateMobTarget? sightBlocked = TryGetSightBlockedTarget(fateId, player.Position, idle.Meters, out var blocked) ? blocked : null;
+        if (!idle.Stalled(player.Position, sightBlocked is null ? EngageIdleStallMs : EngageSightStallMs))
         {
             return false;
         }
@@ -409,28 +412,43 @@ public sealed partial class AutoFate
             return true;
         }
 
-        await RepositionToFateMob(fateId, fateName, survey, idle);
+        await RepositionToFateMob(fateId, fateName, survey, idle, sightBlocked);
         idle.Restart();
         Status = $"Engaging {fateName}";
         return false;
     }
 
+    // Fork: a target behind a wall or ledge is not in reach; distance alone kept the watchdogs quiet while every cast failed.
     private static bool HasTargetInReach(uint fateId, float reachMeters)
         => Svc.Objects.LocalPlayer is { } player
-        && FateMobScanner.TryGetTargetedMob(fateId, player.Position, out var distance)
-        && distance <= reachMeters;
+        && FateMobScanner.TryGetTarget(fateId, player.Position, out var target)
+        && target.DistanceToHitbox <= reachMeters
+        && FateMobScanner.HasLineOfSight(player.Position, target.Position);
 
-    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle)
+    // Fork: the targeted FATE mob is close enough to hit but level geometry blocks the line of sight.
+    private static bool TryGetSightBlockedTarget(uint fateId, Vector3 from, float reachMeters, out FateMobTarget target)
+        => FateMobScanner.TryGetTarget(fateId, from, out target)
+        && target.DistanceToHitbox <= reachMeters
+        && !FateMobScanner.HasLineOfSight(from, target.Position);
+
+    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle, FateMobTarget? sightBlocked)
     {
         idle.CountReposition();
         Status = $"Closing on {fateName}";
-        Diag($"Engagement idle on FATE {fateId} ({fateName}) for {EngageIdleStallMs / 1000}s with nothing in reach; walking to the nearest mob with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})");
+        Diag(sightBlocked is null
+            ? $"Engagement idle on FATE {fateId} ({fateName}) for {EngageIdleStallMs / 1000}s with nothing in reach; walking to the nearest mob with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})"
+            : $"Target of FATE {fateId} ({fateName}) is out of line of sight for {EngageSightStallMs / 1000}s; walking to it with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})");
 
-        var dest = survey.NearestPosition.OnMesh();
+        // Fork: a sight-blocked target is walked to directly, not whichever mob happens to be nearest.
+        var goal = sightBlocked?.Position ?? survey.NearestPosition;
+        var goalHitbox = sightBlocked?.HitboxRadius ?? survey.NearestHitboxRadius;
+        var goalDistance = sightBlocked?.DistanceToHitbox ?? survey.NearestDistanceToHitbox;
+        var dest = goal.OnMesh();
         // Already inside the ranged approach distance and still not fighting means the ground in between is the
         // problem, so close in like a melee; clib ends a move that starts within its tolerance without moving.
-        var closeIn = idle.Meters <= EngageMeleeReachMeters || survey.NearestDistanceToHitbox <= EngageRangedApproachToleranceMeters;
-        var tolerance = survey.NearestHitboxRadius + (closeIn
+        // Fork: a blocked line of sight is the same problem at any distance.
+        var closeIn = sightBlocked is not null || idle.Meters <= EngageMeleeReachMeters || goalDistance <= EngageRangedApproachToleranceMeters;
+        var tolerance = goalHitbox + (closeIn
             ? EngageMeleeApproachToleranceMeters
             : EngageRangedApproachToleranceMeters);
         var config = MovementConfig.Default.WithTolerance(tolerance);
@@ -741,7 +759,7 @@ public sealed partial class AutoFate
         var targetDescription = target is null
             ? "none"
             : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
-                ? $"{target.Name}@{targetDistance:F0}m"
+                ? $"{target.Name}@{targetDistance:F0}m{(FateMobScanner.HasLineOfSight(position, target.Position) ? "" : "(no LoS)")}"
                 : $"{target.Name}(not this FATE)";
         var nearest = survey.Any
             ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
@@ -792,7 +810,7 @@ public sealed partial class AutoFate
         public float Meters { get; } = reachMeters;
         public int Repositions { get; private set; }
 
-        public bool Stalled(Vector3 position)
+        public bool Stalled(Vector3 position, int stallMs)
         {
             var now = Environment.TickCount64;
             if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
@@ -802,10 +820,14 @@ public sealed partial class AutoFate
                 idleSinceMs = now;
                 return false;
             }
-            return now - idleSinceMs >= EngageIdleStallMs;
+            return now - idleSinceMs >= stallMs;
         }
 
         public void CountReposition() => Repositions++;
+
+        // Fork: a FATE whose progress moves is being worked (an escort walking on, other players fighting),
+        // so earlier repositions that missed a moving pack must not add up to abandoning it.
+        public void ForgetRepositions() => Repositions = 0;
 
         public void MarkInReach()
         {
