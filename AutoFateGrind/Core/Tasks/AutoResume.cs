@@ -9,12 +9,8 @@ namespace AutoFateGrind.Core.Tasks;
 // the run-end callbacks of an unloading instance still fire after Dispose, so Plugin.Dispose raises Unloading first.
 internal sealed class AutoResume : IDisposable
 {
-    // Lets the previous load's game, plugins and navmesh settle before the run starts.
-    private const int SettleMs = 15_000;
-
     public static bool Unloading;
 
-    private long readySinceMs;
     private bool finished;
 
     public AutoResume() => Svc.Framework.Update += Tick;
@@ -44,15 +40,13 @@ internal sealed class AutoResume : IDisposable
             return;
         }
 
-        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null || Svc.Condition[ConditionFlag.BetweenAreas])
+        // Starts the moment the character is in game and every required plugin is loaded (after a game launch
+        // vnavmesh/BossMod may load after AFG); the run itself waits for the navmesh.
+        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null || Svc.Condition[ConditionFlag.BetweenAreas]
+         || !External.ExternalPlugins.AllRequiredInstalled())
         {
-            readySinceMs = 0;
             return;
         }
-
-        var now = Environment.TickCount64;
-        if (readySinceMs == 0) readySinceMs = now;
-        if (now - readySinceMs < SettleMs) return;
 
         finished = true;
         if (Plugin.Instance.Controller.Running) return;
