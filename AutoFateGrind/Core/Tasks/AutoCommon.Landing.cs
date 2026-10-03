@@ -13,6 +13,8 @@ public abstract partial class AutoCommon
     private const int MaxLandingSpots = 3;
     private const float LandingRingRadiusMeters = 6f;
     private const int LandingRingPoints = 6;
+    // Fork: search box half-extent for the fallback landing spot when the ring finds no floor.
+    private const float LandingFarSearchMeters = 60f;
     private const int LandingCandidateCount = 1 + LandingRingPoints;
     private const float LandingFloorHalfExtentMeters = 3f;
     // Probed from well above, so the floor found is the top layer under the spot and not a cave or tunnel below it.
@@ -53,6 +55,13 @@ public abstract partial class AutoCommon
     {
         Status = "Landing";
         var found = FindLandingSpots(around, landingSpots);
+        // Fork: over water (or any floorless spot) descending in place freezes in the air and the caller retries the
+        // same spot forever; land on the nearest walkable mesh further out instead.
+        if (found == 0 && NavmeshIPC.Instance.NearestPointReachable(around, LandingFarSearchMeters, LandingFarSearchMeters) is { } far)
+        {
+            Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; using the nearest walkable mesh at {FormatPosition(far)}");
+            landingSpots[found++] = far;
+        }
         if (found == 0)
         {
             Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; descending where the flight ended");

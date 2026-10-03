@@ -33,6 +33,11 @@ Every change in the code is marked with a `// Fork:` comment.
    (double-click the field to type). A pause longer than the break means the character never moves
    during the break. No barracks: Lifestream cannot enter them (its `gc` stops at the Grand Company desk).
 
+5. **Landing over water** (`AutoCommon.Landing.cs`). When no floor is found within 6 y under a flying
+   character, upstream descended in place. Over water that freezes in the air, and the Yo-kai summon
+   retried the same spot every 3 s forever (East Shroud, 2026-10-03, stuck at (-122,10,92)). Now it flies
+   to the nearest walkable navmesh point within 60 y and lands there.
+
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 
 Not changed: BossMod Reborn still drives in-ring movement (it dodges AoEs; vnav would not).

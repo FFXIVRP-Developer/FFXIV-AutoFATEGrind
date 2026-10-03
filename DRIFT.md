@@ -59,6 +59,13 @@ The controller (`AutoFateController.Handoffs.cs`) is **not** touched. It still p
 That city is the fallback when Lifestream can't reach the location. It is also why at least one city has
 to stay ticked: upstream skips the break when the list is empty.
 
+### 5. Landing over water (README-FORK item 5)
+
+| File | Hook | Must stay true |
+|---|---|---|
+| `Core/Tasks/AutoCommon.Landing.cs` `LandAndDismount` | right after `FindLandingSpots(...)`: if nothing was found, add `NearestPointReachable(around, 60, 60)` as the only spot | A floorless spot must never lead to a descent in place. If upstream adds its own wider search, drop ours. |
+| same, constants | `LandingFarSearchMeters = 60f` | Pure addition. |
+
 ### ECommons submodule
 
 The local commit on `ECommons` branch `fork/excelpage-alias` adds one line
