@@ -210,8 +210,10 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     answer logged. Bundled preset revision 3 adds StayCloseToPartyRole. The leader on a tank job pulls the FATE to itself
     (`AutoFate.TankPull.cs`, switch: Tank pulls with its ranged attack): FATE mobs within 20 m not fighting yet each get
     its ranged attack (Shield Lob, Tomahawk, Unmend, Lightning Shot; `ActionManager.UseAction`), nearest first, then
-    "wrong pulls" (FATE mobs attacking a non-tank player; Provoke when it is up), up to 8 per pass (4 when already in
-    combat), BossMod off for the pass; checked every 3 s, 6 s after a pass.
+    "wrong pulls" (FATE mobs attacking a non-tank player; Provoke when it is up), up to 8 per pass, BossMod off for the
+    pass; checked every second (pulling is the tank's top priority). The tank stance (Iron Will, Defiance, Grit, Royal
+    Guard) is turned on first when it is off. With nothing in reach, it walks toward the nearest FATE mob not on it (up to
+    120 m; one in reach but out of sight: to 5 m) and pulls on arrival.
 
 22. **Melee positionals** (Settings → Multibox → Spreading → Melee positionals, on). A melee DPS gets BossMod's
     `MiscAI.GoToPositional` Positional Rear or Flank (alternating by its place in the connected group), EdgeBuffer Small,

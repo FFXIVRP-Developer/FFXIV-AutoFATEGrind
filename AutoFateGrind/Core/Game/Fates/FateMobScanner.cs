@@ -70,7 +70,7 @@ internal static unsafe class FateMobScanner
 
     /// <summary>Fork (item 21): FATE mobs a tank should pull, within reach and in sight: first those fighting nobody yet
     /// (nearest first), then "wrong pulls", mobs attacking a player who is not a tank (nearest first).</summary>
-    public static List<(IBattleNpc Mob, bool WrongPull)> PullCandidates(uint fateId, Vector3 from, float maxDistanceToHitbox)
+    public static List<(IBattleNpc Mob, bool WrongPull)> PullCandidates(uint fateId, Vector3 from, float maxDistanceToHitbox, bool requireSight = true)
     {
         var me = Svc.Objects.LocalPlayer?.GameObjectId ?? 0;
         var fresh = new List<IBattleNpc>();
@@ -78,7 +78,7 @@ internal static unsafe class FateMobScanner
         foreach (var obj in Svc.Objects)
         {
             if (obj is not IBattleNpc npc || !IsLiveMobOfFate(npc, fateId)) continue;
-            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || !HasLineOfSight(from, npc.Position)) continue;
+            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || (requireSight && !HasLineOfSight(from, npc.Position))) continue;
             if ((npc.StatusFlags & DalamudStatusFlags.InCombat) == 0) { fresh.Add(npc); continue; }
             if (npc.TargetObjectId == me || npc.TargetObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter victim) continue;
             if (victim.ClassJob.Value.Role != 1) wrong.Add(npc);
