@@ -69,11 +69,14 @@ internal static class MultiboxPanel
     /// <summary>The leader's view of its slaves (every follower card of this PC).</summary>
     public static void DrawSlaveList()
     {
-        var slaves = MultiboxLink.Clients().Where(c => c.Role == MultiboxRole.Follower).ToList();
-        ImGui.TextColored(Styling.TextSecondary, $"SLAVES ({slaves.Count(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)} connected)");
+        // Connected slaves only, by name: the cards are rewritten every 2 s, so their file order shuffles the rows.
+        var slaves = MultiboxLink.Clients()
+            .Where(c => c.Role == MultiboxRole.Follower && DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        ImGui.TextColored(Styling.TextSecondary, $"SLAVES ({slaves.Count} connected)");
         if (slaves.Count == 0)
         {
-            ImGui.TextDisabled("No slave has reported. Slaves are clients with the Slave role, opened on this PC.");
+            ImGui.TextDisabled("No slave connected. Slaves are clients with the Slave role, logged in on this PC.");
             return;
         }
 

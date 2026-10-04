@@ -35,7 +35,9 @@ internal static class MultiboxSettings
                 });
         }
 
-        var clients = MultiboxLink.Clients();
+        // Connected clients only, leader first, then by name (file order changes every 2 s as the cards are rewritten).
+        var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
+            .OrderBy(c => c.Role).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
         using (SettingsGroup.Begin("Leader"))
         {
             var leaders = clients.Where(c => c.Role == MultiboxRole.Leader && DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh).ToList();
@@ -59,7 +61,7 @@ internal static class MultiboxSettings
         {
             if (clients.Count == 0)
             {
-                ImGui.TextDisabled("No client has reported yet (AFG writes a card every 2 s while logged in).");
+                ImGui.TextDisabled("No client connected (AFG writes a card every 2 s while logged in).");
                 return;
             }
 
