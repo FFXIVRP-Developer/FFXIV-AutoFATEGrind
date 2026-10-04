@@ -84,6 +84,9 @@ public sealed class Configuration : IPluginConfiguration
     public bool SpreadDodgeMargin { get; set; } = true;
     public bool SpreadCombatRange { get; set; } = true;
     public bool SpreadInCombat { get; set; } = true;
+
+    // Fork (item 21): with a leader on a tank job, slaves do not pull: they assist its target and stay near it.
+    public bool TankLeaderAssist { get; set; } = true;
     // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
     public bool ResumeAfterReload { get; set; } = true;
     public bool ResumeAfterReloadPending { get; set; }

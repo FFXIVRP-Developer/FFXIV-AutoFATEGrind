@@ -16,7 +16,9 @@ public enum MultiboxRole
     Follower = 1,
 }
 
-internal sealed record LeaderState(uint World, uint Territory, uint FateId, float X, float Y, float Z, DateTime UpdatedUtc, string Name, uint Instance = 0);
+// Fork (item 21): TargetId (the leader's current target, for slaves assisting a tank) and Tank (on a tank job).
+internal sealed record LeaderState(uint World, uint Territory, uint FateId, float X, float Y, float Z, DateTime UpdatedUtc, string Name, uint Instance = 0,
+                                   ulong TargetId = 0, bool Tank = false);
 
 internal sealed record ClientCard(ulong ContentId, string Name, string World, MultiboxRole Role, bool Running, uint Territory, string Zone,
                                   uint Instance, uint FateId, string Fate, string Status, DateTime UpdatedUtc);
@@ -65,7 +67,9 @@ internal static unsafe class MultiboxLink
         var player = Svc.Objects.LocalPlayer;
         if (player is null) return;
         var state = new LeaderState(player.CurrentWorld.RowId, territory, fateId, player.Position.X, player.Position.Y, player.Position.Z,
-                                    DateTime.UtcNow, player.Name.TextValue, CurrentInstance);
+                                    DateTime.UtcNow, player.Name.TextValue, CurrentInstance,
+                                    Svc.Targets.Target is Dalamud.Game.ClientState.Objects.Types.IBattleNpc { IsDead: false } t ? t.GameObjectId : 0,
+                                    player.ClassJob.Value.Role == 1);
         WriteAtomic(LeaderPath, JsonSerializer.Serialize(state));
     }
 

@@ -259,6 +259,7 @@ public sealed partial class AutoFate
                 }
 
                 TickTargetSync(fateId); // Fork: was SyncToFate(fateId); unsyncs for a non-FATE foe
+                TickTankAssist(preset); // fork (item 21): a slave with a tank leader assists it
 
                 if (isCollect)
                 {
@@ -457,7 +458,8 @@ public sealed partial class AutoFate
             : $"Target of FATE {fateId} ({fateName}) is out of line of sight for {EngageSightStallMs / 1000}s; walking to it with vnav (attempt {idle.Repositions}/{MaxEngageRepositions}; {DescribeEngageSituation(fateId, idle.Meters)})");
 
         // Fork: a sight-blocked target is walked to directly, not whichever mob happens to be nearest.
-        var goal = sightBlocked?.Position ?? survey.NearestPosition;
+        // Fork (item 21): a slave assisting a tank walks to the tank, not to a mob it would pull.
+        var goal = TankLeaderPosition() ?? sightBlocked?.Position ?? survey.NearestPosition;
         var goalHitbox = sightBlocked?.HitboxRadius ?? survey.NearestHitboxRadius;
         var goalDistance = sightBlocked?.DistanceToHitbox ?? survey.NearestDistanceToHitbox;
         var dest = Fork.Spread.AroundPoint(goal, goalHitbox + 1.5f).OnMesh(); // fork (item 20): this character's side of the mob

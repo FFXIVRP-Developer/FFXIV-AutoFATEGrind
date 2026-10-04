@@ -6,8 +6,9 @@ internal static class DefaultCombatPreset
 {
     public const string Name = AfgConstants.BundledCombatPresetName;
 
-    // Fork (item 20): 2 adds MiscAI.StayCloseToTarget (the fighting distance Spread sets) to the bundled preset.
-    public const int Revision = 2;
+    // Fork: 2 added MiscAI.StayCloseToTarget (item 20, the fighting distance), 3 MiscAI.StayCloseToPartyRole (item 21,
+    // slaves staying near a tank leader).
+    public const int Revision = 3;
 
     private const string Base64Brotli =
         "4YgOAWCc5ErO8zbnUraX8y98h5DuAagZYbHoXK2N6aRPiUwJNEIjld/bxzzxDUIjpMcWlWRSGomQm4jf" +
@@ -24,5 +25,5 @@ internal static class DefaultCombatPreset
     private const string NormalMovementKey = "\"BossMod.Autorotation.MiscAI.NormalMovement\": [";
 
     public static string GetSerialized() => cached ??= Base64Brotli.FromBase64().Replace(
-        NormalMovementKey, "\"BossMod.Autorotation.MiscAI.StayCloseToTarget\": [],\n    " + NormalMovementKey);
+        NormalMovementKey, "\"BossMod.Autorotation.MiscAI.StayCloseToTarget\": [],\n    \"BossMod.Autorotation.MiscAI.StayCloseToPartyRole\": [],\n    " + NormalMovementKey);
 }

@@ -51,6 +51,13 @@ internal static class MultiboxSettings
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadInCombat, v => cfg.SpreadInCombat = v, "##sp_fight"));
         }
 
+        // Fork (item 21)
+        using (SettingsGroup.Begin("Tank leader"))
+        {
+            SettingsRow.Draw("Slaves assist a tank leader", "When the leader is on a tank job, slaves do not pull: they take the leader's target, stay near the tank (melee 3 m, ranged at their own distance) and fight the pack it holds with their own rotation and AoE. A leader on any other job: everyone pulls for themselves as before.",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.TankLeaderAssist, v => cfg.TankLeaderAssist = v, "##tank_assist"));
+        }
+
         var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
             .OrderBy(c => c.Role).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
         using (SettingsGroup.Begin("Leader"))
