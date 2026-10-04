@@ -1,5 +1,5 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..4b339bb 100644
+index efc08bd..01c1de4 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
@@ -17,7 +17,7 @@ index efc08bd..4b339bb 100644
          }
      }
  
-@@ -68,6 +72,24 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +72,25 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -36,13 +36,14 @@ index efc08bd..4b339bb 100644
 +
 +    // Fork (item 21): with a leader on a tank job, slaves do not pull: they assist its target and stay near it.
 +    public bool TankLeaderAssist { get; set; } = true;
++    public bool TankLeaderPull { get; set; } = true;
 +    // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
 +    public bool ResumeAfterReload { get; set; } = true;
 +    public bool ResumeAfterReloadPending { get; set; }
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +166,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +167,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -323,7 +324,7 @@ index 0000000..2a9f50d
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
-index 08faec6..1776ca3 100644
+index 08faec6..e6cbbd8 100644
 --- a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 +++ b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 @@ -3,6 +3,7 @@ using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
@@ -334,7 +335,29 @@ index 08faec6..1776ca3 100644
  using System;
  using System.Numerics;
  using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
-@@ -187,4 +188,21 @@ internal static unsafe class FateMobScanner
+@@ -67,6 +68,21 @@ internal static unsafe class FateMobScanner
+             : new FateMobSurvey(liveCount, nearestPosition, nearestHitbox, nearestDistance, nearestVerticalDelta);
+     }
+ 
++    /// <summary>Fork (item 21): live mobs of the FATE not fighting anyone yet, within reach and in sight, nearest first.</summary>
++    public static List<IBattleNpc> UnpulledMobs(uint fateId, Vector3 from, float maxDistanceToHitbox)
++    {
++        var list = new List<IBattleNpc>();
++        foreach (var obj in Svc.Objects)
++        {
++            if (obj is not IBattleNpc npc || !IsLiveMobOfFate(npc, fateId)) continue;
++            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) != 0) continue;
++            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || !HasLineOfSight(from, npc.Position)) continue;
++            list.Add(npc);
++        }
++        list.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
++        return list;
++    }
++
+     public static bool TryGetTargetedMob(uint fateId, Vector3 from, out float distanceToHitbox)
+     {
+         var found = TryGetTarget(fateId, from, out var target);
+@@ -187,4 +203,21 @@ internal static unsafe class FateMobScanner
  
      private static float DistanceToHitbox(Vector3 from, IBattleNpc npc)
          => MathF.Max(0f, Vector3.Distance(from, npc.Position) - npc.HitboxRadius);
@@ -1133,7 +1156,7 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..a72ce86 100644
+index 35e0b04..12e3d78 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 @@ -39,7 +39,11 @@ public sealed partial class AutoFate
@@ -1178,13 +1201,14 @@ index 35e0b04..a72ce86 100644
                  }
                  else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                        && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
-@@ -246,13 +258,15 @@ public sealed partial class AutoFate
+@@ -246,13 +258,16 @@ public sealed partial class AutoFate
                      AssertPresetActive(preset);
                  }
  
 -                SyncToFate(fateId);
 +                TickTargetSync(fateId); // Fork: was SyncToFate(fateId); unsyncs for a non-FATE foe
 +                TickTankAssist(preset); // fork (item 21): a slave with a tank leader assists it
++                await TickTankPull(fateId, preset); // fork (item 21): a tank leader tags the FATE's mobs with its ranged attack
  
                  if (isCollect)
                  {
@@ -1196,7 +1220,7 @@ index 35e0b04..a72ce86 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -260,6 +274,7 @@ public sealed partial class AutoFate
+@@ -260,6 +275,7 @@ public sealed partial class AutoFate
                  }
  
                  var chasing = await TickRingChase(fateId, idle, preset);
@@ -1204,7 +1228,7 @@ index 35e0b04..a72ce86 100644
                  if (!chasing && !isCollect && await TickEngagementWatchdog(fateId, fate, idle))
                  {
                      break;
-@@ -269,12 +284,16 @@ public sealed partial class AutoFate
+@@ -269,12 +285,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -1221,7 +1245,7 @@ index 35e0b04..a72ce86 100644
              BossModIPC.Instance.ClearActive();
              if (isCollect) DisableTextAdvance();
          }
-@@ -331,7 +350,7 @@ public sealed partial class AutoFate
+@@ -331,7 +351,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -1230,7 +1254,7 @@ index 35e0b04..a72ce86 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +404,9 @@ public sealed partial class AutoFate
+@@ -385,7 +405,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -1241,7 +1265,7 @@ index 35e0b04..a72ce86 100644
          {
              return false;
          }
-@@ -409,28 +430,44 @@ public sealed partial class AutoFate
+@@ -409,28 +431,44 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -1295,7 +1319,7 @@ index 35e0b04..a72ce86 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -464,7 +501,7 @@ public sealed partial class AutoFate
+@@ -464,7 +502,7 @@ public sealed partial class AutoFate
          Status = $"Searching {fateName}";
          Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
  
@@ -1304,7 +1328,7 @@ index 35e0b04..a72ce86 100644
          var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
  
          bool MobSeenOrGone()
-@@ -518,8 +555,31 @@ public sealed partial class AutoFate
+@@ -518,8 +556,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
      {
@@ -1337,7 +1361,7 @@ index 35e0b04..a72ce86 100644
              EndRingChase(preset);
              return false;
          }
-@@ -643,6 +703,8 @@ public sealed partial class AutoFate
+@@ -643,6 +704,8 @@ public sealed partial class AutoFate
          ringChaseTargetId = 0;
          ringChaseFailures = 0;
          ringChaseGivenUpTargetId = 0;
@@ -1346,7 +1370,7 @@ index 35e0b04..a72ce86 100644
          collectPullsHeld = false;
          if (!BossModIPC.Instance.CanClearTransientStrategy)
          {
-@@ -741,7 +803,7 @@ public sealed partial class AutoFate
+@@ -741,7 +804,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -1355,7 +1379,7 @@ index 35e0b04..a72ce86 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -779,6 +841,12 @@ public sealed partial class AutoFate
+@@ -779,6 +842,12 @@ public sealed partial class AutoFate
  
      private bool  ringChaseParked;
      private ulong ringChaseTargetId;
@@ -1368,7 +1392,7 @@ index 35e0b04..a72ce86 100644
      private int   ringChaseFailures;
      private ulong ringChaseGivenUpTargetId;
  
-@@ -792,7 +860,7 @@ public sealed partial class AutoFate
+@@ -792,7 +861,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -1377,7 +1401,7 @@ index 35e0b04..a72ce86 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +870,15 @@ public sealed partial class AutoFate
+@@ -802,11 +871,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -1966,6 +1990,94 @@ index 0000000..7b87cbd
 +            Diag(on
 +                ? $"Tank leader: assisting the tank (no pulling {(general ? "accepted" : "REFUSED")}, stay near the tank {(role ? "accepted" : "REFUSED")})"
 +                : $"Tank leader: off (pulling again {(general ? "accepted" : "REFUSED")})");
++    }
++}
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
+new file mode 100644
+index 0000000..1f3fa3b
+--- /dev/null
++++ b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
+@@ -0,0 +1,82 @@
++using clib.Utils;
++using AutoFateGrind.Core.Game.Fates;
++using AutoFateGrind.Core.Ipc;
++using Dalamud.Game.ClientState.Objects.Types;
++using ECommons.DalamudServices;
++using FFXIVClientStructs.FFXIV.Client.Game;
++using System.Threading.Tasks;
++
++namespace AutoFateGrind.Core.Tasks;
++
++// Fork (README-FORK item 21): a leader on a tank job pulls the FATE to itself. FATE mobs within 20 m that are not fighting
++// anyone yet each get its ranged attack (PLD Shield Lob, WAR Tomahawk, DRK Unmend, GNB Lightning Shot), nearest first,
++// at most 8 per pass; BossMod is switched off for the pass so it does not fight over the target, then on again. The
++// pass repeats every few seconds while untagged mobs are in reach, so the pack builds up and the slaves AoE it.
++public sealed partial class AutoFate
++{
++    private const float TankPullReachMeters = 20f;
++    private const int TankPullMaxPerPass = 8;
++    private const int TankPullMaxInCombat = 4; // already holding a pack: BossMod (mitigation, dodges) is off for less time
++    private const int TankPullCheckEveryMs = 3_000;
++    private const int TankPullAfterPassMs = 6_000;
++
++    // ClassJob row → its ranged attack (the base class has it too).
++    private static readonly Dictionary<uint, uint> TankRangedAttack = new()
++    {
++        [1] = 24, [19] = 24,      // GLA / PLD: Shield Lob
++        [3] = 46, [21] = 46,      // MRD / WAR: Tomahawk
++        [32] = 3624,              // DRK: Unmend
++        [37] = 16143,             // GNB: Lightning Shot
++    };
++
++    private long nextTankPullMs;
++
++    private async Task TickTankPull(uint fateId, string preset)
++    {
++        var now = Environment.TickCount64;
++        if (now < nextTankPullMs) return;
++        nextTankPullMs = now + TankPullCheckEveryMs;
++        if (!Plugin.Cfg.TankLeaderPull || Multibox.MultiboxFollowerWatch.IsFollower) return;
++        if (Svc.Objects.LocalPlayer is not { } me || !TankRangedAttack.TryGetValue(me.ClassJob.RowId, out var action)) return;
++
++        var mobs = FateMobScanner.UnpulledMobs(fateId, me.Position, TankPullReachMeters);
++        if (mobs.Count == 0) return;
++        var max = Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat] ? TankPullMaxInCombat : TankPullMaxPerPass;
++        Diag($"Tank pull: {mobs.Count} FATE mob(s) within {TankPullReachMeters:F0} m not fighting yet; tagging up to {max}");
++
++        BossModIPC.Instance.ClearActive();
++        var tagged = 0;
++        try
++        {
++            foreach (var mob in mobs.Take(max))
++            {
++                if (CancelToken.IsCancellationRequested || PublicEvent.GetFateById(fateId) is not { State: FFXIVClientStructs.FFXIV.Client.Game.Fate.FateState.Running }) break;
++                if (mob.IsDead || (mob.StatusFlags & Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) != 0) continue;
++                Svc.Targets.Target = mob;
++                // The ranged attack is a GCD: wait until it can go on this mob (up to 3 s; out of range or sight: skip it).
++                if (!await WaitUntilTimed(() => ActionReady(action, mob.GameObjectId), 3_000, "tank pull: action ready", 5)) continue;
++                if (!UseActionOn(action, mob.GameObjectId)) continue;
++                tagged++;
++                await WaitUntilTimed(() => mob.IsDead || (mob.StatusFlags & Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) != 0, 1_500, "tank pull: tagged", 5);
++            }
++        }
++        finally
++        {
++            AssertPresetActive(preset);
++        }
++        Diag($"Tank pull: tagged {tagged} mob(s)");
++        nextTankPullMs = Environment.TickCount64 + TankPullAfterPassMs;
++    }
++
++    private static unsafe bool ActionReady(uint action, ulong target)
++    {
++        var am = ActionManager.Instance();
++        return am is not null && am->GetActionStatus(ActionType.Action, action, target) == 0;
++    }
++
++    private static unsafe bool UseActionOn(uint action, ulong target)
++    {
++        var am = ActionManager.Instance();
++        return am is not null && am->UseAction(ActionType.Action, action, target);
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
@@ -2921,10 +3033,10 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..db2155f
+index 0000000..cfd27c9
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,129 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Windows.Components;
 +using Dalamud.Bindings.ImGui;
@@ -2983,6 +3095,8 @@ index 0000000..db2155f
 +        {
 +            SettingsRow.Draw("Slaves assist a tank leader", "When the leader is on a tank job, slaves do not pull: they take the leader's target, stay near the tank (melee 3 m, ranged at their own distance) and fight the pack it holds with their own rotation and AoE. A leader on any other job: everyone pulls for themselves as before.",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.TankLeaderAssist, v => cfg.TankLeaderAssist = v, "##tank_assist"));
++            SettingsRow.Draw("Tank pulls with its ranged attack", "A leader on a tank job hits every FATE mob within 20 m that is not fighting yet with its ranged attack (Shield Lob, Tomahawk, Unmend, Lightning Shot), up to 8 per pass, so they come to it.",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.TankLeaderPull, v => cfg.TankLeaderPull = v, "##tank_pull"));
 +        }
 +
 +        var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
