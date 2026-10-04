@@ -75,6 +75,17 @@ internal static class GoalProgress
                 remainingText, false);
         }
 
+        if (cfg.StopAfterLevelsEnabled)
+        {
+            var target = RunLimits.LevelCap(cfg);
+            var gained = session?.LevelsGained ?? 0;
+            var left = Math.Max(0, target - gained);
+            return new Info(
+                Math.Clamp(gained / (float)target, 0f, 1f),
+                gained.ToString(Loc.Culture), Loc.T(L.Run.GoalOf, target),
+                left > 0 ? Loc.T(L.Run.LevelsLeft, left) : Loc.T(L.Run.TargetReached), false);
+        }
+
         return new Info(null, completed.ToString(Loc.Culture), Loc.T(L.Run.Done), Loc.T(L.Run.UntilYouStop), true);
     }
 

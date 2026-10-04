@@ -369,7 +369,13 @@ public sealed partial class AutoFate
 
     private bool StopConditionMet()
     {
-        var context = new ModeContext { CompletedCount = session.CompletedCount, Zones = zones, Elapsed = session.Elapsed };
+        var context = new ModeContext
+        {
+            CompletedCount = session.CompletedCount,
+            Zones = zones,
+            Elapsed = session.Elapsed,
+            LevelsGained = session.LevelsGained,
+        };
         return Plugin.Cfg.ActiveMode.IsComplete(context) || RunLimits.Reached(Plugin.Cfg, context);
     }
 
