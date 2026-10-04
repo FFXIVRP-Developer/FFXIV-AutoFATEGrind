@@ -4,6 +4,7 @@ using clib.TaskSystem;
 using Dalamud.Game.ClientState.Conditions;
 using ECommons.DalamudServices;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AutoFateGrind.Core.Tasks;
@@ -159,12 +160,13 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
 
     private async Task<List<Vector3>?> QueryWalkRoute(Vector3 from, Vector3 to)
     {
-        var pending = NavmeshIPC.Instance.Pathfind(from, to, fly: false);
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(CancelToken);
+        cancel.CancelAfter(RouteQueryTimeoutMs);
+        var pending = NavmeshIPC.Instance.Pathfind(from, to, fly: false, cancel.Token);
         if (pending is null) return null;
-        var deadline = Environment.TickCount64 + RouteQueryTimeoutMs;
         while (!pending.IsCompleted)
         {
-            if (CancelToken.IsCancellationRequested || Environment.TickCount64 >= deadline) return null;
+            if (cancel.IsCancellationRequested) return null;
             await NextFrame();
         }
         return pending.IsCompletedSuccessfully ? pending.Result : null;

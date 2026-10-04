@@ -1,4 +1,5 @@
 using AutoFateGrind.Core.Ipc;
+using Dalamud.Game.ClientState.Conditions;
 using ECommons.DalamudServices;
 using System;
 using System.Numerics;
@@ -29,6 +30,7 @@ internal sealed class MoveStallTracker
     private int lastWaypointCount;
     private bool followedOnce;
     private bool pathInterrupted;
+    private bool jumpedOutOfWedge;
     private long navWedgeSinceMs = Environment.TickCount64;
     private long idleSinceMs = Environment.TickCount64;
 
@@ -72,8 +74,27 @@ internal sealed class MoveStallTracker
             navWedgeSinceMs = now;
             return StallKind.None;
         }
-        return now - navWedgeSinceMs >= StuckDetector.NavWedgeTimeoutMs ? StallKind.NavWedge : StallKind.None;
+        if (now - navWedgeSinceMs < StuckDetector.NavWedgeTimeoutMs) return StallKind.None;
+
+        // A lip or a rock edge the capsule snags on is usually cleared by one jump while vnav keeps steering.
+        if (!jumpedOutOfWedge && CanJumpOutOfWedge())
+        {
+            jumpedOutOfWedge = true;
+            navWedgeSinceMs = now;
+            AutoCommon.UseGeneralAction(AutoCommon.JumpGeneralActionId);
+            RunLog.Info($"No progress toward the next waypoint in {StuckDetector.NavWedgeTimeoutMs / 1000}s at {pos}; jumping once before giving up on the move");
+            return StallKind.None;
+        }
+        return StallKind.NavWedge;
     }
+
+    private static bool CanJumpOutOfWedge()
+        => !Svc.Condition[ConditionFlag.InCombat]
+        && !Svc.Condition[ConditionFlag.InFlight]
+        && !Svc.Condition[ConditionFlag.Swimming]
+        && !Svc.Condition[ConditionFlag.Diving]
+        && !Svc.Condition[ConditionFlag.Jumping]
+        && !Svc.Condition[ConditionFlag.Jumping61];
 
     private bool DisplacedFromAnchor(Vector3 pos)
     {

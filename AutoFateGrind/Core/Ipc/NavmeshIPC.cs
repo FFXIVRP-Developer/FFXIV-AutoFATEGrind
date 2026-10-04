@@ -1,6 +1,7 @@
 using Dalamud.Plugin.Ipc;
 using ECommons.DalamudServices;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AutoFateGrind.Core.Ipc;
@@ -20,6 +21,7 @@ internal sealed class NavmeshIPC
     private readonly ICallGateSubscriber<bool> navIsReady;
     private readonly ICallGateSubscriber<float> navBuildProgress;
     private readonly ICallGateSubscriber<Vector3, Vector3, bool, Task<List<Vector3>>> navPathfind;
+    private readonly ICallGateSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>> navPathfindCancelable;
     private readonly ICallGateSubscriber<Vector3, float, float, Vector3?> nearestPointReachable;
     private readonly ICallGateSubscriber<Vector3, bool, float, Vector3?> pointOnFloor;
     private readonly ICallGateSubscriber<object> pathStop;
@@ -39,6 +41,7 @@ internal sealed class NavmeshIPC
         navIsReady                  = Svc.PluginInterface.GetIpcSubscriber<bool>("vnavmesh.Nav.IsReady");
         navBuildProgress            = Svc.PluginInterface.GetIpcSubscriber<float>("vnavmesh.Nav.BuildProgress");
         navPathfind                 = Svc.PluginInterface.GetIpcSubscriber<Vector3, Vector3, bool, Task<List<Vector3>>>("vnavmesh.Nav.Pathfind");
+        navPathfindCancelable       = Svc.PluginInterface.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>("vnavmesh.Nav.PathfindCancelable");
         nearestPointReachable       = Svc.PluginInterface.GetIpcSubscriber<Vector3, float, float, Vector3?>("vnavmesh.Query.Mesh.NearestPointReachable");
         pointOnFloor                = Svc.PluginInterface.GetIpcSubscriber<Vector3, bool, float, Vector3?>("vnavmesh.Query.Mesh.PointOnFloor");
         pathStop                    = Svc.PluginInterface.GetIpcSubscriber<object>("vnavmesh.Path.Stop");
@@ -82,11 +85,20 @@ internal sealed class NavmeshIPC
     }
 
     // Queues a pathfind on vnavmesh's own worker without moving. The task faults when the mesh is not
-    // loaded; null when this vnavmesh lacks the IPC or the call itself threw.
-    public Task<List<Vector3>>? Pathfind(Vector3 from, Vector3 to, bool fly)
-        => IpcGate.Invoke<Task<List<Vector3>>?>(navPathfind.HasFunction,
+    // loaded; null when this vnavmesh lacks the IPC or the call itself threw. vnav runs pathfinds one at a
+    // time, so an abandoned query has to be cancelled or the grind's next move waits behind it.
+    public Task<List<Vector3>>? Pathfind(Vector3 from, Vector3 to, bool fly, CancellationToken cancel)
+    {
+        if (navPathfindCancelable.HasFunction)
+        {
+            return IpcGate.Invoke<Task<List<Vector3>>?>(true,
+                () => navPathfindCancelable.InvokeFunc(from, to, fly, cancel),
+                null, "PathfindCancelable failed");
+        }
+        return IpcGate.Invoke<Task<List<Vector3>>?>(navPathfind.HasFunction,
             () => navPathfind.InvokeFunc(from, to, fly),
             null, "Pathfind failed");
+    }
 
     public Vector3? NearestPointReachable(Vector3 position, float halfExtentXZ = 5f, float halfExtentY = 5f)
         => IpcGate.Invoke(nearestPointReachable.HasFunction,
