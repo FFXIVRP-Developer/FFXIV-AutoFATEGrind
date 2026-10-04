@@ -182,6 +182,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     `NormalMovement.ForbiddenZoneCushion` Small or Medium. Fighting distance: `StayCloseToTarget.range` OnHitbox for
     tanks/melee, 12-20 m for ranged and healers. Both go in as transient strategies when the preset is activated, and
     BossMod's accepted/REFUSED answer is logged. The bundled preset (revision 2) gains the StayCloseToTarget module.
+    Every client writes `[AFG] POSITION (x,y,z) fate=… combat=… nearest player N m` every 30 s of a run. A client
+    publishes the FATE it picked (the one it stands in only when it picked none): overlapping FATEs made the id flicker
+    and slaves restart their move on each flip. "Picked FATE" is not logged again for the same FATE within 10 s.
 
 ## Verified in game
 

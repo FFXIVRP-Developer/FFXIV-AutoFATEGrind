@@ -39,7 +39,11 @@ public sealed partial class AutoFate
         var pickedId = fate.Id;
         var pickedName = fate.Name;
         Status = $"Moving to {fate.Name}";
-        Diag($"Picked FATE {fate.Id} ({fate.Name}) at {fate.Position}");
+        // Fork: the same pick again within 10 s is not logged again (a follower re-picking the same FATE).
+        if (fate.Id != lastLoggedPickId || Environment.TickCount64 - lastLoggedPickMs > 10_000)
+            Diag($"Picked FATE {fate.Id} ({fate.Name}) at {fate.Position}");
+        lastLoggedPickId = fate.Id;
+        lastLoggedPickMs = Environment.TickCount64;
 
         var moveResult = await MoveToFate(fate);
         if (CancelToken.IsCancellationRequested) return ExitReason.Quit;

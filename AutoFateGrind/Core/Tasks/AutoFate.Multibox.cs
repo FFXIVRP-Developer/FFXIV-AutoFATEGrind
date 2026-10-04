@@ -11,13 +11,20 @@ namespace AutoFateGrind.Core.Tasks;
 public sealed partial class AutoFate
 {
     private uint lastPickedFateId;
+    private uint lastLoggedPickId;
+    private long lastLoggedPickMs;
     private uint lastFollowedZone;
 
     /// <summary>Every state computation: the leader publishes; a follower moves its zone to the leader's.</summary>
     private void MultiboxTick()
     {
+        // The FATE this client picked (where it is going or fighting); the one it stands in only when it picked none.
+        // Overlapping FATEs made the published id flicker between the one picked and the one walked through, and a slave
+        // restarted its move on every flip (2026-10-04: FATEs 811/812, eight restarts in a second).
         var current = PublicEvent.CurrentFate;
-        MultiboxLink.CurrentFateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
+        MultiboxLink.CurrentFateId = lastPickedFateId != 0 && PublicEvent.GetFateById(lastPickedFateId) is { State: not (FateState.Ended or FateState.Failed) }
+            ? lastPickedFateId
+            : current is { State: FateState.Running } ? current.Id : 0;
 
         if (!MultiboxFollowerWatch.IsFollower)
         {
