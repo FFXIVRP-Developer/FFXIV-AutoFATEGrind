@@ -386,6 +386,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     private GrindState ComputeState()
     {
         RefreshPendingCollectReward();
+        MultiboxTick(); // fork (item 16)
 
         if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
             abandonedFateId = null;

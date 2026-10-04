@@ -70,6 +70,9 @@ public sealed class Configuration : IPluginConfiguration
     public bool KeepTwistOfFate { get; set; } = true;
     // Fork: inside a FATE, fight a non-FATE mob unsynced and sync again for the FATE (AutoFate.TargetSync).
     public bool UnsyncForNonFateMobs { get; set; } = true;
+    // Fork: multibox follow (item 16). Leader publishes its zone and FATE; Follower (set on slaves by the XIVProfiles override)
+    // goes to the leader's zone and takes its FATE.
+    public AutoFateGrind.Core.Multibox.MultiboxRole MultiboxRole { get; set; } = AutoFateGrind.Core.Multibox.MultiboxRole.Leader;
     public bool MountWhileWaitingForFates { get; set; } = false;
     public uint PreferredMountId { get; set; } = 0;
     public bool EconomyTravel { get; set; } = false;

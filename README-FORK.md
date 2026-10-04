@@ -122,6 +122,15 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     its last run ended because the goal was met (every Yo-kai zone done, item goal met), not a stop or a fault. BoatRunner
     then hands the wait to its next filler instead of restarting AFG every 2 minutes (each restart would end again at once).
 
+16. **Multibox follow** (`Core/Multibox/MultiboxLink.cs`, `AutoFate.Multibox.cs`, two hooks: `MultiboxTick()` at the
+    start of `ComputeState`, `LeaderFate()` at the start of `PickFate`; Settings → Travel → "Multibox role"). A Leader (the
+    default) writes its world, zone, FATE and position about once a second to
+    `%LOCALAPPDATA%\AutoFateGrind-fork\leader.json` (every client of the same Windows user reads it; no network). A
+    Follower, while that file is fresh (20 s) and on its own world, switches its zone to the leader's when it is one of
+    its run's zones (normal travel takes it there), and picks the leader's FATE when it exists in its own instance and
+    is still going; otherwise it picks as usual. A FATE it is in is never left for the leader's. XIVProfiles sets every
+    slave to Follower (`overrides/XIVLauncher/pluginConfigs/AutoFateGrind.json`), so MAIN is the only leader.
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |

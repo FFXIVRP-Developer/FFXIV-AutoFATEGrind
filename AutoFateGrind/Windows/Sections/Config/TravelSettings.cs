@@ -133,6 +133,21 @@ internal static class TravelSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.UnsyncForNonFateMobs, v => cfg.UnsyncForNonFateMobs = v, "##travel_unsync_nonfate"),
             SettingsRow.ToggleHeight);
 
+        // Fork (item 16): multibox follow.
+        SettingsRow.Draw("Multibox role",
+            "Leader: publishes the zone and FATE it grinds for other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
+            SettingsControls.RowComboWidth,
+            () =>
+            {
+                var role = (int)cfg.MultiboxRole;
+                if (SettingsControls.DrawPlainCombo("##travel_multibox_role", ref role, ["Leader", "Follower"], SettingsControls.RowComboWidth))
+                {
+                    cfg.MultiboxRole = (AutoFateGrind.Core.Multibox.MultiboxRole)role;
+                    cfg.Save();
+                }
+            },
+            SettingsRow.ToggleHeight);
+
         SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
             Loc.T(L.Settings.CollectHandInHelp),
             SettingsControls.ToggleWidth,

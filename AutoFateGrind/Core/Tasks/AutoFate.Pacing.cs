@@ -67,6 +67,19 @@ public sealed partial class AutoFate
 
     private PublicEvent? PickFate(Vector3 from)
     {
+        // Fork (item 16): a follower takes the leader's FATE when it is here.
+        if (LeaderFate() is { } leaderFate)
+        {
+            lastPickedFateId = leaderFate.Id;
+            return leaderFate;
+        }
+        var picked = PickFateOwn(from);
+        lastPickedFateId = picked?.Id ?? 0;
+        return picked;
+    }
+
+    private PublicEvent? PickFateOwn(Vector3 from)
+    {
         varietyConsideredIds.Clear();
         if (!Pacing.PickVarietyActive || returnToFateId is not null)
         {
