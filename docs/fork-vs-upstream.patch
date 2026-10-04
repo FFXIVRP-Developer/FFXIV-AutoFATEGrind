@@ -2055,10 +2055,10 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..0c7faa9
+index 0000000..bb76955
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,105 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Windows.Components;
 +using Dalamud.Bindings.ImGui;
@@ -2096,7 +2096,9 @@ index 0000000..0c7faa9
 +                });
 +        }
 +
-+        var clients = MultiboxLink.Clients();
++        // Connected clients only, leader first, then by name (file order changes every 2 s as the cards are rewritten).
++        var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
++            .OrderBy(c => c.Role).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
 +        using (SettingsGroup.Begin("Leader"))
 +        {
 +            var leaders = clients.Where(c => c.Role == MultiboxRole.Leader && DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh).ToList();
@@ -2120,7 +2122,7 @@ index 0000000..0c7faa9
 +        {
 +            if (clients.Count == 0)
 +            {
-+                ImGui.TextDisabled("No client has reported yet (AFG writes a card every 2 s while logged in).");
++                ImGui.TextDisabled("No client connected (AFG writes a card every 2 s while logged in).");
 +                return;
 +            }
 +
@@ -2195,10 +2197,10 @@ index 4f70e0b..a17c9af 100644
              }
 diff --git a/AutoFateGrind/Windows/Sections/MultiboxPanel.cs b/AutoFateGrind/Windows/Sections/MultiboxPanel.cs
 new file mode 100644
-index 0000000..34e51d5
+index 0000000..2dc07eb
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/MultiboxPanel.cs
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,114 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Core.Tasks;
 +using AutoFateGrind.Windows.Components;
@@ -2270,11 +2272,14 @@ index 0000000..34e51d5
 +    /// <summary>The leader's view of its slaves (every follower card of this PC).</summary>
 +    public static void DrawSlaveList()
 +    {
-+        var slaves = MultiboxLink.Clients().Where(c => c.Role == MultiboxRole.Follower).ToList();
-+        ImGui.TextColored(Styling.TextSecondary, $"SLAVES ({slaves.Count(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)} connected)");
++        // Connected slaves only, by name: the cards are rewritten every 2 s, so their file order shuffles the rows.
++        var slaves = MultiboxLink.Clients()
++            .Where(c => c.Role == MultiboxRole.Follower && DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
++            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
++        ImGui.TextColored(Styling.TextSecondary, $"SLAVES ({slaves.Count} connected)");
 +        if (slaves.Count == 0)
 +        {
-+            ImGui.TextDisabled("No slave has reported. Slaves are clients with the Slave role, opened on this PC.");
++            ImGui.TextDisabled("No slave connected. Slaves are clients with the Slave role, logged in on this PC.");
 +            return;
 +        }
 +
