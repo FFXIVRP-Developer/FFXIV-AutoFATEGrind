@@ -179,7 +179,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     When the leader's run stops it disbands the party (`InfoProxyPartyMember.DisbandParty`) if everyone else in it is
     one of its slaves, so boarding the boat starts clean; the next start invites everyone again. A slave treats dropping
     out of the party as the leader stopping: it finishes its FATE and waits 60 s for the leader (a leader back in time
-    re-invites it and it carries on), then parks at the inn of the world it is on (`/li inn`, same world; a break
+    re-invites it and it carries on), then parks: not at all when it already stands in an inn room (any of the 8:
+    TerritoryIntendedUse 2), else at its Grand Company city's inn (`/li inn 1` Limsa / `2` Ul'dah / `3` Gridania by
+    Lifestream's sorted InnData; plain `/li inn` without a company), always on the world it is on (a break
     location such as an apartment is on the home world and world-travelled the slaves away) and leaves any party left.
     A slave whose leader grinds on another world travels there first (`Lifestream.ChangeWorld`, one try per 2 min). A slave that logs in
     to no leader and no party also parks after 60 s.
