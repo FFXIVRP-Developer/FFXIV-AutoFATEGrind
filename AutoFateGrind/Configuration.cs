@@ -83,6 +83,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool SpreadCrowdNudge { get; set; } = true;
     public bool SpreadDodgeMargin { get; set; } = true;
     public bool SpreadCombatRange { get; set; } = true;
+    public bool SpreadInCombat { get; set; } = true;
     // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
     public bool ResumeAfterReload { get; set; } = true;
     public bool ResumeAfterReloadPending { get; set; }

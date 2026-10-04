@@ -247,6 +247,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 LogHeartbeat(state);
             }
 
+            await TickIdleNudge(state); // fork (item 20): a waiting character in a crowd steps away
+
             switch (state)
             {
                 case GrindState.AllDone:

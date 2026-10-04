@@ -41,12 +41,14 @@ internal static class MultiboxSettings
         {
             SettingsRow.Draw("Own side", "Each character keeps its own side of the FATE and of the mob it walks to (from its character id), so several characters arrive and close in from different directions.",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadStandAngle, v => cfg.SpreadStandAngle = v, "##sp_side"));
-            SettingsRow.Draw("Move away from crowds", "After arriving, when another player stands within 6 m, step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
+            SettingsRow.Draw("Move away from crowds", "When another player stands within 6 m after arriving, and every 10 s while out of combat (between FATEs, waiting for mobs), step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCrowdNudge, v => cfg.SpreadCrowdNudge = v, "##sp_crowd"));
             SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge.",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadDodgeMargin, v => cfg.SpreadDodgeMargin = v, "##sp_dodge"));
             SettingsRow.Draw("Own fighting distance", "Melee fight on the target's hitbox; ranged jobs and healers hold their own distance between 12 and 20 m (per character).",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
+            SettingsRow.Draw("Step apart in fights", "A ranged job or healer with another player within 3 m steps to its own side of its target, only when no enemy nearby is casting and BossMod is not dodging. Melee and tanks stay on their target.",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadInCombat, v => cfg.SpreadInCombat = v, "##sp_fight"));
         }
 
         var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)

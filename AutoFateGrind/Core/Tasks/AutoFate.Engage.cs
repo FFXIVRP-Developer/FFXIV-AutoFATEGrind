@@ -267,6 +267,7 @@ public sealed partial class AutoFate
                 }
 
                 var chasing = await TickRingChase(fateId, idle, preset);
+                if (!chasing) await TickFightSpread(fateId, fate); // fork (item 20)
                 if (!chasing && !isCollect && await TickEngagementWatchdog(fateId, fate, idle))
                 {
                     break;

@@ -15,6 +15,9 @@ namespace AutoFateGrind.Core.Fork;
 //   2. crowd nudge   after arriving, someone within 6 m → a nearby spot with more room (BOCCHI's scoring)
 //   3. dodge margin  BossMod's ForbiddenZoneCushion: Small or Medium per character (was none)
 //   4. combat range  BossMod's StayCloseToTarget range: melee on the hitbox, ranged/healers 12-20 m per character
+//   5. idle nudge    the crowd nudge also every 10 s out of combat (between FATEs, waiting for mobs)
+//   6. fight step    a ranged job or healer with someone within 3 m steps to its own side of its target at its own
+//                    distance, only while nothing is casting nearby and BossMod is not moving it (no dodge going on)
 internal static class Spread
 {
     private const float CrowdRadius = 6f;       // a nudge when another player stands this close
@@ -130,6 +133,15 @@ internal static class Spread
         }
         return list;
     }
+
+    /// <summary>The ranged distance this character holds (6: where its fight step goes).</summary>
+    public static float RangedDistance() { EnsureSeed(); return rangedRange; }
+
+    /// <summary>A crowd nudge with no FATE ring to stay in (between FATEs): anywhere within 40 m of here.</summary>
+    public static Vector3? CrowdNudge(Vector3 me) => CrowdNudge(me, me, 40f / 0.85f);
+
+    /// <summary>Another player stands within this many metres.</summary>
+    public static bool SomeoneWithin(Vector3 me, float metres) => OtherPlayers().Any(o => Vector3.Distance(o, me) < metres);
 
     /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
     public static string? DodgeMargin()
