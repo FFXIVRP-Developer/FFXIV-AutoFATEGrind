@@ -611,10 +611,10 @@ index c1e6385..6bacb04 100644
  
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
 new file mode 100644
-index 0000000..9b2f732
+index 0000000..1844bdf
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,255 @@
 +using AutoFateGrind.Core.Modes;
 +using AutoFateGrind.Core.Tasks;
 +using Dalamud.Game.ClientState.Conditions;
@@ -683,6 +683,26 @@ index 0000000..9b2f732
 +         || Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BoundByDuty]) return;
 +
 +        var now = Environment.TickCount64;
++
++        // Parked = dormant: no travel, no party, no parking, so the slave can do other things with other plugins
++        // (2026-10-04). It wakes on the leader's next new run (the leader gone, then back) once it is idle.
++        if (Dormant)
++        {
++            var leaderNow = MultiboxLink.LeaderAnyWorld() is not null;
++            if (!leaderNow) dormantSawLeaderGone = true;
++            if (!leaderNow || !dormantSawLeaderGone || plugin.Controller.Running) return;
++            if (BusyElsewhere() is { } busy)
++            {
++                if (busy != lastBusyLogged) Svc.Log.Info($"[AFG] Multibox: the leader started a new run; waiting, busy with {busy}");
++                lastBusyLogged = busy;
++                return;
++            }
++            Svc.Log.Info("[AFG] Multibox: the leader started a new run and this client is idle; following again");
++            Dormant = false;
++            dormantSawLeaderGone = false;
++            lastBusyLogged = null;
++            leaderWasRunning = false; // counts as the leader starting now (the random start delay applies)
++        }
 +
 +        // The leader grinds on another world: an idle slave travels there first (Lifestream), then follows as usual.
 +        if (!plugin.Controller.Running && MultiboxLink.LeaderAnyWorld() is { } far
@@ -773,6 +793,35 @@ index 0000000..9b2f732
 +        }
 +    }
 +
++    /// <summary>Parked and left alone until the leader's next new run finds this client idle.</summary>
++    public static bool Dormant { get; private set; }
++    private static bool dormantSawLeaderGone;
++    private static string? lastBusyLogged;
++
++    // Plugins that run activities of their own: (display name, IPC function returning true while busy).
++    private static readonly (string Name, string Ipc)[] OtherActivities =
++    [
++        ("AutoDuty", "AutoDuty.IsBusy"), ("BOCCHI", "BOCCHI.IsBusy"), ("Saucy", "Saucy.IsBusy"), ("BoatRunner", "BoatRunner.IsBusy"),
++        ("ICE", "ICE.IsRunning"), ("Questionable", "Questionable.IsRunning"), ("AutoRetainer", "AutoRetainer.PluginState.IsBusy"),
++        ("Artisan", "Artisan.IsListRunning"), ("GatherBuddy", "GatherBuddyReborn.IsAutoGatherEnabled"), ("Lifestream", "Lifestream.IsBusy"),
++    ];
++
++    /// <summary>What keeps this client from rejoining: a duty, a loading screen, or another plugin busy; null when idle.</summary>
++    private static string? BusyElsewhere()
++    {
++        if (Svc.Condition[ConditionFlag.BoundByDuty] || Svc.Condition[ConditionFlag.BetweenAreas]) return "a duty or a loading screen";
++        foreach (var (name, ipc) in OtherActivities)
++        {
++            try
++            {
++                var gate = Svc.PluginInterface.GetIpcSubscriber<bool>(ipc);
++                if (gate.HasFunction && gate.InvokeFunc()) return name;
++            }
++            catch { /* not loaded or another signature: not busy */ }
++        }
++        return null;
++    }
++
 +    /// <summary>The current zone is an inn room: TerritoryIntendedUse 2 is exactly the 8 city inn rooms.</summary>
 +    private static bool InInnRoom()
 +        => Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.TerritoryIntendedUse.RowId == 2;
@@ -796,6 +845,8 @@ index 0000000..9b2f732
 +    private static void Park()
 +    {
 +        Parked = true;
++        Dormant = true;              // from here on the slave is left alone (other plugins may use it)
++        dormantSawLeaderGone = false;
 +        if (Blocked is null) MultiboxParty.LeaveAsSlave(); // the leader stopped (a blocked slave stays in the party)
 +        // Already in an inn room (any of them): it is parked, no trip (2026-10-04).
 +        if (InInnRoom())
@@ -974,7 +1025,7 @@ index 0000000..c6c1a4f
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxParty.cs b/AutoFateGrind/Core/Multibox/MultiboxParty.cs
 new file mode 100644
-index 0000000..45d030d
+index 0000000..4f12763
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxParty.cs
 @@ -0,0 +1,146 @@
@@ -1076,7 +1127,7 @@ index 0000000..45d030d
 +    {
 +        if (Environment.TickCount64 < nextAcceptMs) return;
 +        nextAcceptMs = Environment.TickCount64 + 1_000;
-+        if (!IsLeaderInvite() || UniversalParty.Length > 1) return;
++        if (MultiboxFollowerWatch.Dormant || !IsLeaderInvite() || UniversalParty.Length > 1) return; // dormant: busy with other things
 +        var proxy = InfoProxyPartyInvite.Instance();
 +        Svc.Log.Info($"[AFG] Multibox: accepting the party invite from the leader {proxy->InviterName}");
 +        proxy->RespondToInvitation(proxy->InviterName.StringPtr, true);
@@ -1126,7 +1177,7 @@ index 0000000..45d030d
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxPresence.cs b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 new file mode 100644
-index 0000000..6f78085
+index 0000000..e3be393
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 @@ -0,0 +1,55 @@
@@ -1173,7 +1224,7 @@ index 0000000..6f78085
 +        var fateId = running ? MultiboxLink.CurrentFateId : 0;
 +        var fate = fateId == 0 ? "" : PublicEventName(fateId);
 +        var role = MultiboxFollowerWatch.IsFollower ? MultiboxRole.Follower : MultiboxRole.Leader;
-+        var status = !running ? (MultiboxFollowerWatch.Parked ? (MultiboxFollowerWatch.Blocked is { } why ? $"parked: {why}" : "parked (leader stopped)") : "not running")
++        var status = !running ? (MultiboxFollowerWatch.Parked ? (MultiboxFollowerWatch.Blocked is { } why ? $"parked: {why}" : "parked (leader stopped)") + (MultiboxFollowerWatch.Dormant ? ", left alone until the leader's next run" : "") : "not running")
 +                   : role == MultiboxRole.Leader ? "leading"
 +                   : MultiboxLink.FollowerStatus;
 +
