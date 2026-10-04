@@ -1,5 +1,5 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..404d096 100644
+index efc08bd..56c1de5 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
@@ -17,7 +17,7 @@ index efc08bd..404d096 100644
          }
      }
  
-@@ -68,6 +72,20 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +72,21 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -32,13 +32,14 @@ index efc08bd..404d096 100644
 +    public bool SpreadCrowdNudge { get; set; } = true;
 +    public bool SpreadDodgeMargin { get; set; } = true;
 +    public bool SpreadCombatRange { get; set; } = true;
++    public bool SpreadInCombat { get; set; } = true;
 +    // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
 +    public bool ResumeAfterReload { get; set; } = true;
 +    public bool ResumeAfterReloadPending { get; set; }
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +162,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +163,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -152,10 +153,10 @@ index 0000000..75b5f3d
 +}
 diff --git a/AutoFateGrind/Core/Fork/Spread.cs b/AutoFateGrind/Core/Fork/Spread.cs
 new file mode 100644
-index 0000000..6406989
+index 0000000..2a9f50d
 --- /dev/null
 +++ b/AutoFateGrind/Core/Fork/Spread.cs
-@@ -0,0 +1,150 @@
+@@ -0,0 +1,162 @@
 +using System.Globalization;
 +using System.Numerics;
 +using AutoFateGrind.Core.Game.Fates;
@@ -173,6 +174,9 @@ index 0000000..6406989
 +//   2. crowd nudge   after arriving, someone within 6 m → a nearby spot with more room (BOCCHI's scoring)
 +//   3. dodge margin  BossMod's ForbiddenZoneCushion: Small or Medium per character (was none)
 +//   4. combat range  BossMod's StayCloseToTarget range: melee on the hitbox, ranged/healers 12-20 m per character
++//   5. idle nudge    the crowd nudge also every 10 s out of combat (between FATEs, waiting for mobs)
++//   6. fight step    a ranged job or healer with someone within 3 m steps to its own side of its target at its own
++//                    distance, only while nothing is casting nearby and BossMod is not moving it (no dodge going on)
 +internal static class Spread
 +{
 +    private const float CrowdRadius = 6f;       // a nudge when another player stands this close
@@ -288,6 +292,15 @@ index 0000000..6406989
 +        }
 +        return list;
 +    }
++
++    /// <summary>The ranged distance this character holds (6: where its fight step goes).</summary>
++    public static float RangedDistance() { EnsureSeed(); return rangedRange; }
++
++    /// <summary>A crowd nudge with no FATE ring to stay in (between FATEs): anywhere within 40 m of here.</summary>
++    public static Vector3? CrowdNudge(Vector3 me) => CrowdNudge(me, me, 40f / 0.85f);
++
++    /// <summary>Another player stands within this many metres.</summary>
++    public static bool SomeoneWithin(Vector3 me, float metres) => OtherPlayers().Any(o => Vector3.Distance(o, me) < metres);
 +
 +    /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
 +    public static string? DodgeMargin()
@@ -1051,7 +1064,7 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..8492dcd 100644
+index 35e0b04..0d35ebb 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 @@ -39,7 +39,11 @@ public sealed partial class AutoFate
@@ -1100,7 +1113,15 @@ index 35e0b04..8492dcd 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -269,12 +276,16 @@ public sealed partial class AutoFate
+@@ -260,6 +267,7 @@ public sealed partial class AutoFate
+                 }
+ 
+                 var chasing = await TickRingChase(fateId, idle, preset);
++                if (!chasing) await TickFightSpread(fateId, fate); // fork (item 20)
+                 if (!chasing && !isCollect && await TickEngagementWatchdog(fateId, fate, idle))
+                 {
+                     break;
+@@ -269,12 +277,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -1117,7 +1138,7 @@ index 35e0b04..8492dcd 100644
              BossModIPC.Instance.ClearActive();
              if (isCollect) DisableTextAdvance();
          }
-@@ -331,7 +342,7 @@ public sealed partial class AutoFate
+@@ -331,7 +343,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -1126,7 +1147,7 @@ index 35e0b04..8492dcd 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +396,9 @@ public sealed partial class AutoFate
+@@ -385,7 +397,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -1137,7 +1158,7 @@ index 35e0b04..8492dcd 100644
          {
              return false;
          }
-@@ -409,28 +422,43 @@ public sealed partial class AutoFate
+@@ -409,28 +423,43 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -1190,7 +1211,7 @@ index 35e0b04..8492dcd 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -464,7 +492,7 @@ public sealed partial class AutoFate
+@@ -464,7 +493,7 @@ public sealed partial class AutoFate
          Status = $"Searching {fateName}";
          Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
  
@@ -1199,7 +1220,7 @@ index 35e0b04..8492dcd 100644
          var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
  
          bool MobSeenOrGone()
-@@ -518,8 +546,31 @@ public sealed partial class AutoFate
+@@ -518,8 +547,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
      {
@@ -1232,7 +1253,7 @@ index 35e0b04..8492dcd 100644
              EndRingChase(preset);
              return false;
          }
-@@ -643,6 +694,8 @@ public sealed partial class AutoFate
+@@ -643,6 +695,8 @@ public sealed partial class AutoFate
          ringChaseTargetId = 0;
          ringChaseFailures = 0;
          ringChaseGivenUpTargetId = 0;
@@ -1241,7 +1262,7 @@ index 35e0b04..8492dcd 100644
          collectPullsHeld = false;
          if (!BossModIPC.Instance.CanClearTransientStrategy)
          {
-@@ -741,7 +794,7 @@ public sealed partial class AutoFate
+@@ -741,7 +795,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -1250,7 +1271,7 @@ index 35e0b04..8492dcd 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -779,6 +832,12 @@ public sealed partial class AutoFate
+@@ -779,6 +833,12 @@ public sealed partial class AutoFate
  
      private bool  ringChaseParked;
      private ulong ringChaseTargetId;
@@ -1263,7 +1284,7 @@ index 35e0b04..8492dcd 100644
      private int   ringChaseFailures;
      private ulong ringChaseGivenUpTargetId;
  
-@@ -792,7 +851,7 @@ public sealed partial class AutoFate
+@@ -792,7 +852,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -1272,7 +1293,7 @@ index 35e0b04..8492dcd 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +861,15 @@ public sealed partial class AutoFate
+@@ -802,11 +862,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -1595,6 +1616,106 @@ index a643c8e..6e73672 100644
      {
          varietyConsideredIds.Clear();
          if (!Pacing.PickVarietyActive || returnToFateId is not null)
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Spread.cs b/AutoFateGrind/Core/Tasks/AutoFate.Spread.cs
+new file mode 100644
+index 0000000..a372947
+--- /dev/null
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Spread.cs
+@@ -0,0 +1,94 @@
++using clib.TaskSystem;
++using AutoFateGrind.Core.Game.Ops;
++using clib.Utils;
++using FFXIVClientStructs.FFXIV.Client.Game.Fate;
++using System.Numerics;
++using Dalamud.Game.ClientState.Conditions;
++using Dalamud.Game.ClientState.Objects.Enums;
++using Dalamud.Game.ClientState.Objects.Types;
++using ECommons.DalamudServices;
++using System.Threading.Tasks;
++
++namespace AutoFateGrind.Core.Tasks;
++
++// Fork (README-FORK item 20): keeping characters apart after they arrived (Spread.cs has the values).
++//   idle nudge  out of combat (between FATEs, waiting for mobs), every 10 s: the crowd nudge again
++//   fight step  in combat, a ranged job or healer with another player within 3 m steps to its own side of its target,
++//               at its own distance; only when no enemy within 40 m is casting, it is not casting itself, and it has
++//               stood still for 1.5 s (BossMod is not moving it: no dodge going on). At most every 12 s, 10 m at most.
++public sealed partial class AutoFate
++{
++    private const int IdleNudgeEveryMs = 10_000;
++    private const int FightStepEveryMs = 12_000;
++    private const int FightCheckEveryMs = 2_000;
++    private const float FightStepCrowdMeters = 3f;
++    private const float FightStepMaxMeters = 10f;
++    private const int StillForMs = 1_500;
++
++    private long nextIdleNudgeMs;
++    private long nextFightStepMs;
++    private Vector3 lastSpreadPos;
++    private long stillSinceMs;
++
++    /// <summary>The main loop, out of a FATE: a waiting character in a crowd steps away (every 10 s).</summary>
++    private async Task TickIdleNudge(GrindState state)
++    {
++        if (state is not (GrindState.BetweenFates or GrindState.WaitingForFates)) return;
++        if (Environment.TickCount64 < nextIdleNudgeMs) return;
++        nextIdleNudgeMs = Environment.TickCount64 + IdleNudgeEveryMs;
++        if (!Plugin.Cfg.SpreadCrowdNudge || Svc.Condition[ConditionFlag.InCombat] || Svc.Condition[ConditionFlag.BetweenAreas]) return;
++        if (Svc.Objects.LocalPlayer is not { } me || Fork.Spread.CrowdNudge(me.Position) is not { } spot) return;
++        Diag($"Spread: waiting with someone within 6 m; moving {Vector3.Distance(me.Position, spot):F0} m to a spot with more room");
++        await WalkWithBossModParked(spot, MovementConfig.Default.WithTolerance(1.5f),
++            () => Svc.Condition[ConditionFlag.InCombat] || CancelToken.IsCancellationRequested, "spread-idle-nudge");
++    }
++
++    /// <summary>The fight loop, every tick: the out-of-combat nudge while waiting for mobs, the fight step in combat.</summary>
++    private async Task TickFightSpread(uint fateId, PublicEvent fate)
++    {
++        if (Svc.Objects.LocalPlayer is not { } me) return;
++        var now = Environment.TickCount64;
++        if (Vector3.Distance(me.Position, lastSpreadPos) > 0.3f) { lastSpreadPos = me.Position; stillSinceMs = now; }
++
++        if (!Svc.Condition[ConditionFlag.InCombat])
++        {
++            if (now < nextIdleNudgeMs) return;
++            nextIdleNudgeMs = now + IdleNudgeEveryMs;
++            await NudgeFromCrowd(fateId);
++            return;
++        }
++
++        if (!Plugin.Cfg.SpreadInCombat || now < nextFightStepMs) return;
++        nextFightStepMs = now + FightCheckEveryMs;
++        var role = me.ClassJob.Value.Role;
++        if (role is 1 or 2 || me.IsCasting) return;                                  // melee and tanks stay on their target
++        if (now - stillSinceMs < StillForMs) return;                                   // BossMod is moving it (a dodge)
++        if (Svc.Targets.Target is not IBattleChara target || target.IsDead) return;
++        if (!Fork.Spread.SomeoneWithin(me.Position, FightStepCrowdMeters)) return;
++        if (EnemyCastingNear(me.Position, 40f)) return;                                // something may be coming: no step
++
++        var distance = MathF.Min(Fork.Spread.RangedDistance() * 0.8f, Vector3.Distance(me.Position, target.Position));
++        var dest = Fork.Spread.AroundPoint(target.Position, MathF.Max(distance, target.HitboxRadius + 3f));
++        var step = Vector3.Distance(me.Position, dest);
++        if (step < 2f || step > FightStepMaxMeters) return;
++        if (Game.Fates.FateGround.HorizontalDistance(dest, fate.Position) > fate.Radius * 0.9f) return;
++
++        nextFightStepMs = now + FightStepEveryMs;
++        Diag($"Spread: someone within {FightStepCrowdMeters:F0} m in the fight; stepping {step:F0} m to my side of {target.Name}");
++        var targetId = target.GameObjectId;
++        await WalkWithBossModParked(dest, MovementConfig.Default.WithTolerance(1.5f),
++            () => !Svc.Condition[ConditionFlag.InCombat] || Svc.Targets.Target?.GameObjectId != targetId
++               || EnemyCastingNear(Svc.Objects.LocalPlayer?.Position ?? dest, 40f) || PublicEvent.GetFateById(fateId) is not { State: FateState.Running },
++            $"spread-fight-step-{fateId}");
++    }
++
++    private static bool EnemyCastingNear(Vector3 at, float metres)
++    {
++        foreach (var obj in Svc.Objects)
++        {
++            if (obj is IBattleNpc { BattleNpcKind: BattleNpcSubKind.Combatant, IsCasting: true } npc && Vector3.Distance(npc.Position, at) <= metres)
++                return true;
++        }
++        return false;
++    }
++}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
 new file mode 100644
 index 0000000..9c097da
@@ -1953,7 +2074,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..0afc223 100644
+index 1f98ff8..276709e 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -1973,7 +2094,16 @@ index 1f98ff8..0afc223 100644
      }
  
      private GrindState lastObservedState = GrindState.Idle;
-@@ -261,6 +264,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -244,6 +247,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+                 LogHeartbeat(state);
+             }
+ 
++            await TickIdleNudge(state); // fork (item 20): a waiting character in a crowd steps away
++
+             switch (state)
+             {
+                 case GrindState.AllDone:
+@@ -261,6 +266,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                      await HandOffToNextYokai();
                      return;
  
@@ -1984,7 +2114,7 @@ index 1f98ff8..0afc223 100644
                  case GrindState.GoalZoneDone:
                      if (await LeaveDoneZone() is ExitReason.Quit) return;
                      break;
-@@ -384,6 +391,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -384,6 +393,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      private GrindState ComputeState()
      {
          RefreshPendingCollectReward();
@@ -1992,7 +2122,7 @@ index 1f98ff8..0afc223 100644
  
          if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
              abandonedFateId = null;
-@@ -437,6 +445,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -437,6 +447,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              return GrindState.Engaging;
          }
  
@@ -2003,7 +2133,7 @@ index 1f98ff8..0afc223 100644
          if (ShouldWaitForFollowUp())
              return GrindState.WaitingForFollowUp;
  
-@@ -470,7 +482,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -470,7 +484,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(Math.Clamp(Plugin.Cfg.SwapZoneWaitSec, 0, MaxSwapWaitSec) * 1000);
          }
  
@@ -2012,7 +2142,7 @@ index 1f98ff8..0afc223 100644
           && Environment.TickCount64 - zoneIdleSinceMs >= zoneIdleWaitMs)
              return GrindState.SwapZone;
  
-@@ -501,6 +513,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -501,6 +515,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
  
      private async Task GoToZone()
      {
@@ -2026,7 +2156,7 @@ index 1f98ff8..0afc223 100644
          Status = $"Teleporting to {zone.Name}";
          Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
          var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
-@@ -516,6 +535,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -516,6 +537,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
          if (result == TerritoryTeleportResult.Blocked)
          {
              FaultIfCharacterStaysBlocked();
@@ -2035,7 +2165,7 @@ index 1f98ff8..0afc223 100644
              return;
          }
  
-@@ -579,7 +600,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -579,7 +602,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      {
          await EnsureConsumables();
          var keepingTwist = KeepingTwistOfFate();
@@ -2530,10 +2660,10 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..a2c3c1d
+index 0000000..f248a38
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,120 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Windows.Components;
 +using Dalamud.Bindings.ImGui;
@@ -2577,12 +2707,14 @@ index 0000000..a2c3c1d
 +        {
 +            SettingsRow.Draw("Own side", "Each character keeps its own side of the FATE and of the mob it walks to (from its character id), so several characters arrive and close in from different directions.",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadStandAngle, v => cfg.SpreadStandAngle = v, "##sp_side"));
-+            SettingsRow.Draw("Move away from crowds", "After arriving, when another player stands within 6 m, step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
++            SettingsRow.Draw("Move away from crowds", "When another player stands within 6 m after arriving, and every 10 s while out of combat (between FATEs, waiting for mobs), step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCrowdNudge, v => cfg.SpreadCrowdNudge = v, "##sp_crowd"));
 +            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge.",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadDodgeMargin, v => cfg.SpreadDodgeMargin = v, "##sp_dodge"));
 +            SettingsRow.Draw("Own fighting distance", "Melee fight on the target's hitbox; ranged jobs and healers hold their own distance between 12 and 20 m (per character).",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
++            SettingsRow.Draw("Step apart in fights", "A ranged job or healer with another player within 3 m steps to its own side of its target, only when no enemy nearby is casting and BossMod is not dodging. Melee and tanks stay on their target.",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadInCombat, v => cfg.SpreadInCombat = v, "##sp_fight"));
 +        }
 +
 +        var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
