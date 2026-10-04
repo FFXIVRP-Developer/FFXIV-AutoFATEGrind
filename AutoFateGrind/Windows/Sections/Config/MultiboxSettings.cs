@@ -43,7 +43,7 @@ internal static class MultiboxSettings
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadStandAngle, v => cfg.SpreadStandAngle = v, "##sp_side"));
             SettingsRow.Draw("Move away from crowds", "When another player stands within 6 m after arriving, and every 10 s while out of combat (between FATEs, waiting for mobs), step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCrowdNudge, v => cfg.SpreadCrowdNudge = v, "##sp_crowd"));
-            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge.",
+            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge. Steps aside when Settings → Humanizer → Combat movement is on (that rolls it per FATE).",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadDodgeMargin, v => cfg.SpreadDodgeMargin = v, "##sp_dodge"));
             SettingsRow.Draw("Own fighting distance", "Melee fight on the target's hitbox; ranged jobs and healers hold their own distance between 12 and 20 m (per character).",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));

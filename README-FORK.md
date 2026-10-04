@@ -193,7 +193,8 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     Crowd nudge: after arriving, another player within 6 m → the best of 30 spots 4-12 m away, scored like BOCCHI
     (`min(nearest, 25) - 5 x players within 8 m`), inside 85 % of the radius. Dodge margin: BossMod
     `NormalMovement.ForbiddenZoneCushion` Small or Medium. Fighting distance: `StayCloseToTarget.range` OnHitbox for
-    tanks/melee, 12-20 m for ranged and healers. Both go in as transient strategies when the preset is activated, and
+    tanks/melee, 12-20 m for ranged and healers (the dodge margin steps aside when upstream's Combat movement, v2.18,
+    Settings → Humanizer, is on: that rolls the cushion per FATE). Both go in as transient strategies when the preset is activated, and
     BossMod's accepted/REFUSED answer is logged. The bundled preset (revision 2) gains the StayCloseToTarget module.
     Kept apart after arriving too (`AutoFate.Spread.cs`): the crowd nudge runs every 10 s out of combat (between FATEs
     and waiting for mobs), and in combat a ranged job or healer with another player within 3 m steps up to 10 m to its

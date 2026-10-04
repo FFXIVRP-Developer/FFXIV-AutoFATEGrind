@@ -160,7 +160,8 @@ internal static class Spread
     /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
     public static string? DodgeMargin()
     {
-        if (!Plugin.Cfg.SpreadDodgeMargin) return null;
+        // Upstream's Combat movement (Settings → Humanizer, v2.18) rolls the same cushion per FATE: when it is on, it decides.
+        if (!Plugin.Cfg.SpreadDodgeMargin || Plugin.Cfg.CombatMovementEnabled) return null;
         EnsureSeed();
         return cushion;
     }
