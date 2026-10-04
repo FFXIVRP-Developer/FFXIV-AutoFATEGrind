@@ -1,5 +1,5 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..01c1de4 100644
+index efc08bd..1f92efb 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
@@ -17,7 +17,7 @@ index efc08bd..01c1de4 100644
          }
      }
  
-@@ -68,6 +72,25 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +72,26 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -33,6 +33,7 @@ index efc08bd..01c1de4 100644
 +    public bool SpreadDodgeMargin { get; set; } = true;
 +    public bool SpreadCombatRange { get; set; } = true;
 +    public bool SpreadInCombat { get; set; } = true;
++    public bool SpreadMeleePositional { get; set; } = true;
 +
 +    // Fork (item 21): with a leader on a tank job, slaves do not pull: they assist its target and stay near it.
 +    public bool TankLeaderAssist { get; set; } = true;
@@ -43,7 +44,7 @@ index efc08bd..01c1de4 100644
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +167,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +168,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -157,10 +158,10 @@ index 0000000..75b5f3d
 +}
 diff --git a/AutoFateGrind/Core/Fork/Spread.cs b/AutoFateGrind/Core/Fork/Spread.cs
 new file mode 100644
-index 0000000..2a9f50d
+index 0000000..22a60f2
 --- /dev/null
 +++ b/AutoFateGrind/Core/Fork/Spread.cs
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,176 @@
 +using System.Globalization;
 +using System.Numerics;
 +using AutoFateGrind.Core.Game.Fates;
@@ -199,6 +200,10 @@ index 0000000..2a9f50d
 +    private static float? groupAngle;
 +    private static string groupKey = "";
 +
++    /// <summary>This character's place in the connected group (0-based), or -1 when alone.</summary>
++    public static int GroupIndex { get { Side(); return groupIndexValue; } }
++    private static int groupIndexValue = -1;
++
 +    /// <summary>This character's side: an even share of the circle within the connected group, else its own random side.</summary>
 +    private static float Side()
 +    {
@@ -209,6 +214,7 @@ index 0000000..2a9f50d
 +            .Where(c => DateTime.UtcNow - c.UpdatedUtc <= Multibox.MultiboxLink.ClientFresh && c.ContentId != 0)
 +            .Select(c => c.ContentId).Distinct().OrderBy(id => id).ToList();
 +        var index = ids.IndexOf(seededFor);
++        groupIndexValue = ids.Count < 2 ? -1 : index;
 +        if (index < 0 || ids.Count < 2) { groupAngle = null; groupKey = ""; return angle; }
 +        var key = string.Join(',', ids);
 +        if (key != groupKey)
@@ -306,6 +312,15 @@ index 0000000..2a9f50d
 +    /// <summary>Another player stands within this many metres.</summary>
 +    public static bool SomeoneWithin(Vector3 me, float metres) => OtherPlayers().Any(o => Vector3.Distance(o, me) < metres);
 +
++    /// <summary>Fork (item 22): BossMod GoToPositional for a melee DPS (Rear or Flank by its place in the group), else null.</summary>
++    public static string? MeleePositional(byte role)
++    {
++        if (!Plugin.Cfg.SpreadMeleePositional || role != 2) return null;
++        EnsureSeed();
++        var slot = GroupIndex >= 0 ? GroupIndex : (int)(seededFor % 2);
++        return slot % 2 == 0 ? "Rear" : "Flank";
++    }
++
 +    /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
 +    public static string? DodgeMargin()
 +    {
@@ -324,7 +339,7 @@ index 0000000..2a9f50d
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
-index 08faec6..e6cbbd8 100644
+index 08faec6..2d19f5d 100644
 --- a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 +++ b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 @@ -3,6 +3,7 @@ using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
@@ -335,29 +350,34 @@ index 08faec6..e6cbbd8 100644
  using System;
  using System.Numerics;
  using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
-@@ -67,6 +68,21 @@ internal static unsafe class FateMobScanner
+@@ -67,6 +68,26 @@ internal static unsafe class FateMobScanner
              : new FateMobSurvey(liveCount, nearestPosition, nearestHitbox, nearestDistance, nearestVerticalDelta);
      }
  
-+    /// <summary>Fork (item 21): live mobs of the FATE not fighting anyone yet, within reach and in sight, nearest first.</summary>
-+    public static List<IBattleNpc> UnpulledMobs(uint fateId, Vector3 from, float maxDistanceToHitbox)
++    /// <summary>Fork (item 21): FATE mobs a tank should pull, within reach and in sight: first those fighting nobody yet
++    /// (nearest first), then "wrong pulls", mobs attacking a player who is not a tank (nearest first).</summary>
++    public static List<(IBattleNpc Mob, bool WrongPull)> PullCandidates(uint fateId, Vector3 from, float maxDistanceToHitbox)
 +    {
-+        var list = new List<IBattleNpc>();
++        var me = Svc.Objects.LocalPlayer?.GameObjectId ?? 0;
++        var fresh = new List<IBattleNpc>();
++        var wrong = new List<IBattleNpc>();
 +        foreach (var obj in Svc.Objects)
 +        {
 +            if (obj is not IBattleNpc npc || !IsLiveMobOfFate(npc, fateId)) continue;
-+            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) != 0) continue;
 +            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || !HasLineOfSight(from, npc.Position)) continue;
-+            list.Add(npc);
++            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) == 0) { fresh.Add(npc); continue; }
++            if (npc.TargetObjectId == me || npc.TargetObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter victim) continue;
++            if (victim.ClassJob.Value.Role != 1) wrong.Add(npc);
 +        }
-+        list.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
-+        return list;
++        fresh.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
++        wrong.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
++        return [.. fresh.Select(m => (m, false)), .. wrong.Select(m => (m, true))];
 +    }
 +
      public static bool TryGetTargetedMob(uint fateId, Vector3 from, out float distanceToHitbox)
      {
          var found = TryGetTarget(fateId, from, out var target);
-@@ -187,4 +203,21 @@ internal static unsafe class FateMobScanner
+@@ -187,4 +208,21 @@ internal static unsafe class FateMobScanner
  
      private static float DistanceToHitbox(Vector3 from, IBattleNpc npc)
          => MathF.Max(0f, Vector3.Distance(from, npc.Position) - npc.HitboxRadius);
@@ -521,7 +541,7 @@ index 0000000..f2ca3bb
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs b/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
-index 7f83980..aed466a 100644
+index 7f83980..32da678 100644
 --- a/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
 +++ b/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
 @@ -6,7 +6,9 @@ internal static class DefaultCombatPreset
@@ -530,8 +550,8 @@ index 7f83980..aed466a 100644
  
 -    public const int Revision = 1;
 +    // Fork: 2 added MiscAI.StayCloseToTarget (item 20, the fighting distance), 3 MiscAI.StayCloseToPartyRole (item 21,
-+    // slaves staying near a tank leader).
-+    public const int Revision = 3;
++    // slaves staying near a tank leader), 4 MiscAI.GoToPositional (item 22, melee DPS take Rear or Flank).
++    public const int Revision = 4;
  
      private const string Base64Brotli =
          "4YgOAWCc5ErO8zbnUraX8y98h5DuAagZYbHoXK2N6aRPiUwJNEIjld/bxzzxDUIjpMcWlWRSGomQm4jf" +
@@ -543,7 +563,7 @@ index 7f83980..aed466a 100644
 +    private const string NormalMovementKey = "\"BossMod.Autorotation.MiscAI.NormalMovement\": [";
 +
 +    public static string GetSerialized() => cached ??= Base64Brotli.FromBase64().Replace(
-+        NormalMovementKey, "\"BossMod.Autorotation.MiscAI.StayCloseToTarget\": [],\n    \"BossMod.Autorotation.MiscAI.StayCloseToPartyRole\": [],\n    " + NormalMovementKey);
++        NormalMovementKey, "\"BossMod.Autorotation.MiscAI.StayCloseToTarget\": [],\n    \"BossMod.Autorotation.MiscAI.StayCloseToPartyRole\": [],\n    \"BossMod.Autorotation.MiscAI.GoToPositional\": [],\n    " + NormalMovementKey);
  }
 diff --git a/AutoFateGrind/Core/Modes/BuiltInModes.cs b/AutoFateGrind/Core/Modes/BuiltInModes.cs
 index ef48ca1..19af71b 100644
@@ -1419,7 +1439,7 @@ index 35e0b04..12e3d78 100644
          {
              var now = Environment.TickCount64;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
-index d79e384..72c8f62 100644
+index d79e384..21c6ffe 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
 @@ -25,7 +25,8 @@ public sealed partial class AutoFate
@@ -1475,7 +1495,7 @@ index d79e384..72c8f62 100644
      }
  
      private void EnsureCombatPreset(string preset)
-@@ -323,9 +339,23 @@ public sealed partial class AutoFate
+@@ -323,9 +339,30 @@ public sealed partial class AutoFate
              return;
          }
          BossModIPC.Instance.AddTransientStrategy(preset, AutoTargetModule, "MaxTargets", PullSize().ToString());
@@ -1492,6 +1512,13 @@ index d79e384..72c8f62 100644
 +        if (Fork.Spread.DodgeMargin() is { } cushion)
 +            Diag($"Spread: dodge margin {cushion} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, normal, "ForbiddenZoneCushion", cushion) ? "accepted" : "REFUSED")}");
 +        var role = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
++        if (Fork.Spread.MeleePositional(role) is { } positional)
++        {
++            const string goToPositional = "BossMod.Autorotation.MiscAI.GoToPositional";
++            var ok = BossModIPC.Instance.AddTransientStrategy(preset, goToPositional, "Positional", positional)
++                   & BossModIPC.Instance.AddTransientStrategy(preset, goToPositional, "EdgeBuffer", "Small");
++            Diag($"Spread: melee positional {positional} → BossMod {(ok ? "accepted" : "REFUSED")}");
++        }
 +        if (Fork.Spread.CombatRange(role) is { } range)
 +            Diag($"Spread: fighting distance {range} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, stayClose, "range", range) ? "accepted" : "REFUSED")}");
 +    }
@@ -1897,10 +1924,10 @@ index 0000000..7714123
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TankAssist.cs b/AutoFateGrind/Core/Tasks/AutoFate.TankAssist.cs
 new file mode 100644
-index 0000000..7b87cbd
+index 0000000..ba19b3c
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.TankAssist.cs
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,97 @@
 +using System.Numerics;
 +using AutoFateGrind.Core.Ipc;
 +using AutoFateGrind.Core.Multibox;
@@ -1977,9 +2004,15 @@ index 0000000..7b87cbd
 +        if (on)
 +        {
 +            var myRole = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
-+            var range = myRole is 1 or 2 ? "3" : Fork.Spread.RangedDistance().ToString(System.Globalization.CultureInfo.InvariantCulture);
-+            role = BossModIPC.Instance.AddTransientStrategy(preset, StayCloseToPartyRoleModule, "Role", "Tank")
-+                 & BossModIPC.Instance.AddTransientStrategy(preset, StayCloseToPartyRoleModule, "range", range);
++            // Melee DPS stand at their positional on the tank's target (item 22), not next to the tank.
++            if (myRole == 2 && Plugin.Cfg.SpreadMeleePositional)
++                role = !BossModIPC.Instance.CanClearTransientStrategy || BossModIPC.Instance.ClearTransientStrategy(preset, StayCloseToPartyRoleModule, "Role");
++            else
++            {
++                var range = myRole is 1 or 2 ? "3" : Fork.Spread.RangedDistance().ToString(System.Globalization.CultureInfo.InvariantCulture);
++                role = BossModIPC.Instance.AddTransientStrategy(preset, StayCloseToPartyRoleModule, "Role", "Tank")
++                     & BossModIPC.Instance.AddTransientStrategy(preset, StayCloseToPartyRoleModule, "range", range);
++            }
 +        }
 +        else
 +        {
@@ -1994,10 +2027,10 @@ index 0000000..7b87cbd
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
 new file mode 100644
-index 0000000..1f3fa3b
+index 0000000..6e081c9
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,88 @@
 +using clib.Utils;
 +using AutoFateGrind.Core.Game.Fates;
 +using AutoFateGrind.Core.Ipc;
@@ -2009,7 +2042,7 @@ index 0000000..1f3fa3b
 +namespace AutoFateGrind.Core.Tasks;
 +
 +// Fork (README-FORK item 21): a leader on a tank job pulls the FATE to itself. FATE mobs within 20 m that are not fighting
-+// anyone yet each get its ranged attack (PLD Shield Lob, WAR Tomahawk, DRK Unmend, GNB Lightning Shot), nearest first,
++// anyone yet, then those attacking a non-tank (Provoke when it is up), each get its ranged attack (PLD Shield Lob, WAR Tomahawk, DRK Unmend, GNB Lightning Shot), nearest first,
 +// at most 8 per pass; BossMod is switched off for the pass so it does not fight over the target, then on again. The
 +// pass repeats every few seconds while untagged mobs are in reach, so the pack builds up and the slaves AoE it.
 +public sealed partial class AutoFate
@@ -2029,6 +2062,7 @@ index 0000000..1f3fa3b
 +        [37] = 16143,             // GNB: Lightning Shot
 +    };
 +
++    private const uint ProvokeAction = 7533; // role action, every tank
 +    private long nextTankPullMs;
 +
 +    private async Task TickTankPull(uint fateId, string preset)
@@ -2039,25 +2073,30 @@ index 0000000..1f3fa3b
 +        if (!Plugin.Cfg.TankLeaderPull || Multibox.MultiboxFollowerWatch.IsFollower) return;
 +        if (Svc.Objects.LocalPlayer is not { } me || !TankRangedAttack.TryGetValue(me.ClassJob.RowId, out var action)) return;
 +
-+        var mobs = FateMobScanner.UnpulledMobs(fateId, me.Position, TankPullReachMeters);
++        var mobs = FateMobScanner.PullCandidates(fateId, me.Position, TankPullReachMeters);
 +        if (mobs.Count == 0) return;
 +        var max = Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat] ? TankPullMaxInCombat : TankPullMaxPerPass;
-+        Diag($"Tank pull: {mobs.Count} FATE mob(s) within {TankPullReachMeters:F0} m not fighting yet; tagging up to {max}");
++        var wrongCount = mobs.Count(m => m.WrongPull);
++        Diag($"Tank pull: {mobs.Count - wrongCount} untagged and {wrongCount} on a non-tank within {TankPullReachMeters:F0} m; taking up to {max}");
 +
 +        BossModIPC.Instance.ClearActive();
 +        var tagged = 0;
++        var myId = me.GameObjectId;
 +        try
 +        {
-+            foreach (var mob in mobs.Take(max))
++            foreach (var (mob, wrongPull) in mobs.Take(max))
 +            {
 +                if (CancelToken.IsCancellationRequested || PublicEvent.GetFateById(fateId) is not { State: FFXIVClientStructs.FFXIV.Client.Game.Fate.FateState.Running }) break;
-+                if (mob.IsDead || (mob.StatusFlags & Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) != 0) continue;
++                if (mob.IsDead || mob.TargetObjectId == myId) continue;
++                if (!wrongPull && (mob.StatusFlags & Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) != 0) continue; // someone tagged it meanwhile
 +                Svc.Targets.Target = mob;
++                // A mob on a non-tank: Provoke when it is up (it forces the mob onto the tank), else the ranged attack.
++                var use = wrongPull && ActionReady(ProvokeAction, mob.GameObjectId) ? ProvokeAction : action;
 +                // The ranged attack is a GCD: wait until it can go on this mob (up to 3 s; out of range or sight: skip it).
-+                if (!await WaitUntilTimed(() => ActionReady(action, mob.GameObjectId), 3_000, "tank pull: action ready", 5)) continue;
-+                if (!UseActionOn(action, mob.GameObjectId)) continue;
++                if (!await WaitUntilTimed(() => ActionReady(use, mob.GameObjectId), 3_000, "tank pull: action ready", 5)) continue;
++                if (!UseActionOn(use, mob.GameObjectId)) continue;
 +                tagged++;
-+                await WaitUntilTimed(() => mob.IsDead || (mob.StatusFlags & Dalamud.Game.ClientState.Objects.Enums.StatusFlags.InCombat) != 0, 1_500, "tank pull: tagged", 5);
++                await WaitUntilTimed(() => mob.IsDead || mob.TargetObjectId == myId, 1_500, "tank pull: on the tank", 5);
 +            }
 +        }
 +        finally
@@ -3033,10 +3072,10 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..cfd27c9
+index 0000000..d4c3f27
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,131 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Windows.Components;
 +using Dalamud.Bindings.ImGui;
@@ -3088,6 +3127,8 @@ index 0000000..cfd27c9
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
 +            SettingsRow.Draw("Step apart in fights", "A ranged job or healer with another player within 3 m steps to its own side of its target, only when no enemy nearby is casting and BossMod is not dodging. Melee and tanks stay on their target.",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadInCombat, v => cfg.SpreadInCombat = v, "##sp_fight"));
++            SettingsRow.Draw("Melee positionals", "Melee DPS go to the target's Rear or Flank (alternating across the group, through BossMod's positional module) instead of standing in front with the tank.",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadMeleePositional, v => cfg.SpreadMeleePositional = v, "##sp_melee"));
 +        }
 +
 +        // Fork (item 21)
