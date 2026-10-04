@@ -1617,10 +1617,10 @@ index 0000000..f2b0001
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
-index a643c8e..6e73672 100644
+index a643c8e..26126a0 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
-@@ -66,6 +66,25 @@ public sealed partial class AutoFate
+@@ -66,6 +66,32 @@ public sealed partial class AutoFate
      private void CommitToFate(uint fateId) => varietyCommittedId = fateId;
  
      private PublicEvent? PickFate(Vector3 from)
@@ -1638,6 +1638,13 @@ index a643c8e..6e73672 100644
 +            return null;
 +        }
 +        var picked = PickFateOwn(from);
++        // Fork: the leader publishes its pick right away; the run loop (which publishes too) does not tick during the trip,
++        // so slaves only learned the FATE once the leader arrived (2026-10-04: 15-19 s late).
++        if (picked is not null && !Core.Multibox.MultiboxFollowerWatch.IsFollower)
++        {
++            Core.Multibox.MultiboxLink.CurrentFateId = picked.Id;
++            Core.Multibox.MultiboxLink.Publish(Svc.ClientState.TerritoryType, picked.Id);
++        }
 +        lastPickedFateId = picked?.Id ?? 0;
 +        return picked;
 +    }
