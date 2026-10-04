@@ -176,6 +176,18 @@ index 08faec6..1776ca3 100644
 +        return !BGCollisionModule.RaycastMaterialFilter(origin, offset / distance, out _, distance);
 +    }
  }
+diff --git a/AutoFateGrind/Core/Game/Watchers/PartyInviteWatcher.cs b/AutoFateGrind/Core/Game/Watchers/PartyInviteWatcher.cs
+index e267188..6612a96 100644
+--- a/AutoFateGrind/Core/Game/Watchers/PartyInviteWatcher.cs
++++ b/AutoFateGrind/Core/Game/Watchers/PartyInviteWatcher.cs
+@@ -70,6 +70,7 @@ internal sealed unsafe class PartyInviteWatcher : IDisposable
+         if (addon is null) return;
+         if (stage == Stage.DeclinePending) return;
+         if (stage == Stage.Idle && !DeclineArmed()) return;
++        if (stage == Stage.Idle && Core.Multibox.MultiboxParty.IsLeaderInvite()) return; // fork (item 19): a slave accepts its leader
+ 
+         EnsureTemplates();
+         var prompt = ReadPrompt(addon);
 diff --git a/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs b/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs
 index ad2be07..69735ab 100644
 --- a/AutoFateGrind/Core/Game/Yokai/YokaiProgress.cs
@@ -605,6 +617,114 @@ index 0000000..eeaa46f
 +            Svc.Log.Debug($"[AFG] Multibox: could not write {Path.GetFileName(path)}: {ex.Message}");
 +        }
 +    }
++}
+diff --git a/AutoFateGrind/Core/Multibox/MultiboxParty.cs b/AutoFateGrind/Core/Multibox/MultiboxParty.cs
+new file mode 100644
+index 0000000..b89f0aa
+--- /dev/null
++++ b/AutoFateGrind/Core/Multibox/MultiboxParty.cs
+@@ -0,0 +1,102 @@
++using Dalamud.Game.Addon.Lifecycle;
++using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
++using ECommons;
++using ECommons.DalamudServices;
++using ECommons.PartyFunctions;
++using FFXIVClientStructs.FFXIV.Client.UI.Info;
++using FFXIVClientStructs.FFXIV.Component.GUI;
++
++namespace AutoFateGrind.Core.Multibox;
++
++// Fork (README-FORK item 19): the leader and its slaves in one party, like AutoDuty's multibox (same game calls).
++//   leader, while its run is going: invites every connected slave that is not in the party (one try per slave every
++//     20 s, up to the 8-member cap); same world → InviteToParty, another world → InviteToPartyContentId.
++//   slave: accepts an invite from the leader (the game's own Yes/No, answered through the addon, never key presses);
++//     any other invite is left to the user (or to the auto-decline of Settings → Party invites). A slave already in a
++//     party with others is left alone.
++internal static unsafe class MultiboxParty
++{
++    private const int EveryMs = 5_000;
++    private const double RetrySeconds = 20;
++    private const int PartyCap = 8;
++
++    private static long nextMs;
++    private static readonly Dictionary<ulong, DateTime> lastInviteUtc = [];
++
++    public static void Start()
++    {
++        Svc.Framework.Update += Tick;
++        Svc.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnSelectYesno);
++    }
++
++    public static void Stop()
++    {
++        Svc.Framework.Update -= Tick;
++        Svc.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectYesno", OnSelectYesno);
++    }
++
++    /// <summary>The invite on screen comes from the leader (the auto-decline leaves it alone).</summary>
++    public static bool IsLeaderInvite()
++    {
++        if (Plugin.Cfg.MultiboxRole != MultiboxRole.Follower) return false;
++        var proxy = InfoProxyPartyInvite.Instance();
++        if (proxy is null || proxy->InviterWorldId == 0) return false;
++        var inviter = proxy->InviterName.ToString();
++        return inviter.Length > 0 && MultiboxLink.LeaderAnyWorld() is { } leader && leader.Name == inviter;
++    }
++
++    private static void Tick(Dalamud.Plugin.Services.IFramework _)
++    {
++        if (Environment.TickCount64 < nextMs) return;
++        nextMs = Environment.TickCount64 + EveryMs;
++        if (Plugin.Cfg.MultiboxRole != MultiboxRole.Leader || Plugin.Instance?.Controller.Running != true) return;
++        if (Svc.Objects.LocalPlayer is not { } me || Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
++         || Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BoundByDuty]) return;
++
++        var members = UniversalParty.Members;
++        if (members.Count >= PartyCap) return;
++        var inParty = members.Select(m => m.ContentID).ToHashSet();
++        var myWorld = me.CurrentWorld.ValueNullable?.Name.ExtractText() ?? "";
++        var free = PartyCap - Math.Max(1, members.Count);
++
++        foreach (var slave in MultiboxLink.Clients())
++        {
++            if (free <= 0) break;
++            if (slave.Role != MultiboxRole.Follower || DateTime.UtcNow - slave.UpdatedUtc > MultiboxLink.ClientFresh) continue;
++            if (slave.ContentId == 0 || inParty.Contains(slave.ContentId)) continue;
++            if (lastInviteUtc.TryGetValue(slave.ContentId, out var at) && (DateTime.UtcNow - at).TotalSeconds < RetrySeconds) continue;
++
++            lastInviteUtc[slave.ContentId] = DateTime.UtcNow;
++            free--;
++            try
++            {
++                var proxy = InfoProxyPartyInvite.Instance();
++                if (slave.World == myWorld && WorldId(slave.World) is { } worldId and not 0)
++                    proxy->InviteToParty(slave.ContentId, slave.Name, worldId);
++                else
++                    proxy->InviteToPartyContentId(slave.ContentId, 0);
++                Svc.Log.Info($"[AFG] Multibox: invited {slave.Name} to the party");
++            }
++            catch (Exception ex)
++            {
++                Svc.Log.Warning($"[AFG] Multibox: inviting {slave.Name} failed: {ex.Message}");
++            }
++        }
++    }
++
++    private static void OnSelectYesno(AddonEvent type, AddonArgs args)
++    {
++        if (!IsLeaderInvite() || UniversalParty.Length > 1) return;
++        var addon = (AtkUnitBase*)args.Addon.Address;
++        if (addon is null) return;
++        var inviter = InfoProxyPartyInvite.Instance()->InviterName.ToString();
++        // The prompt names the inviter; anything else on a SelectYesno is not this invite.
++        var yesno = new ECommons.UIHelpers.AddonMasterImplementations.AddonMaster.SelectYesno(addon);
++        if (!yesno.Text.Contains(inviter, StringComparison.Ordinal)) return;
++        Svc.Log.Info($"[AFG] Multibox: accepting the party invite from the leader {inviter}");
++        yesno.Yes();
++    }
++
++    private static ushort? WorldId(string name)
++        => (ushort?)Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.World>().FirstOrDefault(w => w.Name.ExtractText() == name).RowId;
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxPresence.cs b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 new file mode 100644
@@ -1891,10 +2011,10 @@ index 829167d..6305bc1 100644
      {
          var sheet = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..bec76d0 100644
+index 7ff8682..086daa6 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,14 @@ public sealed class Plugin : IDalamudPlugin
+@@ -85,8 +85,15 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
@@ -1902,6 +2022,7 @@ index 7ff8682..bec76d0 100644
 +        Core.Fork.ReloadResume.OnLoad(this); // Fork (item 17)
 +        Core.Multibox.MultiboxPresence.Start(); // Fork (item 16)
 +        Core.Multibox.MultiboxFollowerWatch.Start(); // Fork (item 18)
++        Core.Multibox.MultiboxParty.Start(); // Fork (item 19)
      }
  
 +    private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
@@ -1909,18 +2030,19 @@ index 7ff8682..bec76d0 100644
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +109,10 @@ public sealed class Plugin : IDalamudPlugin
+@@ -103,6 +110,11 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
 +        Core.Fork.ReloadResume.OnUnload(this); // Fork (item 17): before anything stops the run
 +        Core.Multibox.MultiboxPresence.Stop(); // Fork (item 16)
 +        Core.Multibox.MultiboxFollowerWatch.Stop(); // Fork (item 18)
++        Core.Multibox.MultiboxParty.Stop(); // Fork (item 19)
 +        ipcProvider.Dispose(); // Fork
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +163,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -153,7 +165,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
