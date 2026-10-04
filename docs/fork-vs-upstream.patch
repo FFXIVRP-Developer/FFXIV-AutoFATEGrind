@@ -309,41 +309,69 @@ index ef48ca1..36e2b74 100644
  }
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxLink.cs b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
 new file mode 100644
-index 0000000..3334906
+index 0000000..eeaa46f
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,143 @@
 +using System.IO;
 +using System.Text.Json;
 +using ECommons.DalamudServices;
++using FFXIVClientStructs.FFXIV.Client.Game.UI;
 +
 +namespace AutoFateGrind.Core.Multibox;
 +
-+// Fork (README-FORK item 16): multibox follow. The Leader publishes where it grinds (zone, FATE, world) to a small file
-+// every client of the same Windows user can read; a Follower goes to the leader's zone and takes the leader's FATE.
-+// No network, no party protocol: the clients share the disk. XIVProfiles' slave override sets every slave to Follower,
-+// so MAIN is the only leader without any setup there.
++// Fork (README-FORK item 16): multibox follow. The Leader publishes where it grinds (world, instance, zone, FATE) to a
++// small file every client of the same Windows user can read; a Follower goes to the leader's zone and takes the
++// leader's FATE. Every client also writes a status card (clients\<content id>.json) so the Multibox settings tab can
++// show who is connected, following or blocked, like AutoDuty's multibox list. No network: the clients share the disk.
++// XIVProfiles' slave override sets every slave to Follower, so MAIN is the only leader without any setup there.
 +public enum MultiboxRole
 +{
 +    Leader = 0,
 +    Follower = 1,
 +}
 +
-+internal sealed record LeaderState(uint World, uint Territory, uint FateId, float X, float Y, float Z, DateTime UpdatedUtc, string Name);
++internal sealed record LeaderState(uint World, uint Territory, uint FateId, float X, float Y, float Z, DateTime UpdatedUtc, string Name, uint Instance = 0);
 +
-+internal static class MultiboxLink
++internal sealed record ClientCard(ulong ContentId, string Name, string World, MultiboxRole Role, bool Running, uint Territory, string Zone,
++                                  uint Instance, uint FateId, string Fate, string Status, DateTime UpdatedUtc);
++
++internal static unsafe class MultiboxLink
 +{
 +    // Older than this, the leader is not grinding (stopped, crashed, logged out): followers go their own way.
-+    private static readonly TimeSpan Fresh = TimeSpan.FromSeconds(20);
++    public static readonly TimeSpan LeaderFresh = TimeSpan.FromSeconds(20);
++
++    // A client card older than this reads as disconnected; much older ones are not listed at all.
++    public static readonly TimeSpan ClientFresh = TimeSpan.FromSeconds(30);
++    public static readonly TimeSpan ClientListed = TimeSpan.FromMinutes(30);
++
 +    private const int PublishEveryMs = 1_000;
 +    private const int ReadEveryMs = 1_000;
 +
-+    private static readonly string FilePath = Path.Combine(
-+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AutoFateGrind-fork", "leader.json");
++    private static readonly string Root = Path.Combine(
++        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AutoFateGrind-fork");
++
++    private static readonly string LeaderPath = Path.Combine(Root, "leader.json");
++    private static readonly string ClientsFolder = Path.Combine(Root, "clients");
 +
 +    private static long nextPublishMs;
 +    private static long nextReadMs;
 +    private static LeaderState? lastRead;
++
++    /// <summary>The FATE this client fights or heads for (set by the run); 0 = none.</summary>
++    public static uint CurrentFateId { get; set; }
++
++    /// <summary>A follower's state in words ("following X", "blocked: ..."), set by the run.</summary>
++    public static string FollowerStatus { get; set; } = "";
++
++    public static uint CurrentInstance
++    {
++        get
++        {
++            var ui = UIState.Instance();
++            return ui is null ? 0 : ui->PublicInstance.InstanceId;
++        }
++    }
 +
 +    public static void Publish(uint territory, uint fateId)
 +    {
@@ -351,43 +379,128 @@ index 0000000..3334906
 +        nextPublishMs = Environment.TickCount64 + PublishEveryMs;
 +        var player = Svc.Objects.LocalPlayer;
 +        if (player is null) return;
-+        try
-+        {
-+            var state = new LeaderState(player.CurrentWorld.RowId, territory, fateId,
-+                                        player.Position.X, player.Position.Y, player.Position.Z, DateTime.UtcNow, player.Name.TextValue);
-+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-+            var temp = FilePath + ".tmp";
-+            File.WriteAllText(temp, JsonSerializer.Serialize(state));
-+            File.Move(temp, FilePath, overwrite: true); // whole file or nothing for a reader
-+        }
-+        catch (Exception ex)
-+        {
-+            Svc.Log.Debug($"[AFG] Multibox: could not publish the leader state: {ex.Message}");
-+        }
++        var state = new LeaderState(player.CurrentWorld.RowId, territory, fateId, player.Position.X, player.Position.Y, player.Position.Z,
++                                    DateTime.UtcNow, player.Name.TextValue, CurrentInstance);
++        WriteAtomic(LeaderPath, JsonSerializer.Serialize(state));
 +    }
 +
-+    /// <summary>The leader's state when fresh and on this client's world; null otherwise.</summary>
-+    public static LeaderState? Leader()
++    /// <summary>The leader's state when fresh (any world: the caller compares); null otherwise.</summary>
++    public static LeaderState? LeaderAnyWorld()
 +    {
 +        if (Environment.TickCount64 >= nextReadMs)
 +        {
 +            nextReadMs = Environment.TickCount64 + ReadEveryMs;
 +            try
 +            {
-+                lastRead = File.Exists(FilePath)
-+                    ? JsonSerializer.Deserialize<LeaderState>(File.ReadAllText(FilePath))
-+                    : null;
++                lastRead = File.Exists(LeaderPath) ? JsonSerializer.Deserialize<LeaderState>(File.ReadAllText(LeaderPath)) : null;
 +            }
 +            catch
 +            {
 +                // Mid-write or unreadable: keep the last good read for this second.
 +            }
 +        }
++        return lastRead is { } leader && DateTime.UtcNow - leader.UpdatedUtc <= LeaderFresh ? leader : null;
++    }
 +
-+        if (lastRead is not { } leader || DateTime.UtcNow - leader.UpdatedUtc > Fresh) return null;
++    /// <summary>The leader's state when fresh and on this client's world; null otherwise.</summary>
++    public static LeaderState? Leader()
++    {
++        if (LeaderAnyWorld() is not { } leader) return null;
 +        var world = Svc.Objects.LocalPlayer?.CurrentWorld.RowId ?? 0;
 +        return leader.World == world ? leader : null;
 +    }
++
++    public static void PublishClient(ClientCard card)
++        => WriteAtomic(Path.Combine(ClientsFolder, card.ContentId + ".json"), JsonSerializer.Serialize(card));
++
++    /// <summary>Every client card written in the last half hour, newest first.</summary>
++    public static List<ClientCard> Clients()
++    {
++        var cards = new List<ClientCard>();
++        try
++        {
++            if (!Directory.Exists(ClientsFolder)) return cards;
++            foreach (var file in Directory.EnumerateFiles(ClientsFolder, "*.json"))
++            {
++                try
++                {
++                    if (JsonSerializer.Deserialize<ClientCard>(File.ReadAllText(file)) is { } card && DateTime.UtcNow - card.UpdatedUtc <= ClientListed)
++                        cards.Add(card);
++                }
++                catch
++                {
++                    // One unreadable card (mid-write) does not hide the others.
++                }
++            }
++        }
++        catch
++        {
++            // Folder unreadable: an empty list.
++        }
++        cards.Sort((a, b) => b.UpdatedUtc.CompareTo(a.UpdatedUtc));
++        return cards;
++    }
++
++    private static void WriteAtomic(string path, string json)
++    {
++        try
++        {
++            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
++            var temp = path + ".tmp";
++            File.WriteAllText(temp, json);
++            File.Move(temp, path, overwrite: true); // whole file or nothing for a reader
++        }
++        catch (Exception ex)
++        {
++            Svc.Log.Debug($"[AFG] Multibox: could not write {Path.GetFileName(path)}: {ex.Message}");
++        }
++    }
++}
+diff --git a/AutoFateGrind/Core/Multibox/MultiboxPresence.cs b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
+new file mode 100644
+index 0000000..5b819ad
+--- /dev/null
++++ b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
+@@ -0,0 +1,40 @@
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Multibox;
++
++// Fork (README-FORK item 16): every client, running a run or not, writes its status card every 2 s while logged in, so
++// the Multibox tab lists who is connected. The run fills in the FATE and a follower's status (AutoFate.Multibox).
++internal static class MultiboxPresence
++{
++    private const int EveryMs = 2_000;
++    private static long nextMs;
++
++    public static void Start() => Svc.Framework.Update += Tick;
++
++    public static void Stop() => Svc.Framework.Update -= Tick;
++
++    private static void Tick(Dalamud.Plugin.Services.IFramework _)
++    {
++        if (Environment.TickCount64 < nextMs) return;
++        nextMs = Environment.TickCount64 + EveryMs;
++        var player = Svc.Objects.LocalPlayer;
++        if (player is null) return;
++
++        var running = Plugin.Instance?.Controller.Running ?? false;
++        var territory = Svc.ClientState.TerritoryType;
++        var zone = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
++        var fateId = running ? MultiboxLink.CurrentFateId : 0;
++        var fate = fateId == 0 ? "" : PublicEventName(fateId);
++        var role = Plugin.Cfg.MultiboxRole;
++        var status = !running ? "not running"
++                   : role == MultiboxRole.Leader ? "leading"
++                   : MultiboxLink.FollowerStatus;
++
++        MultiboxLink.PublishClient(new ClientCard(ECommons.GameHelpers.Player.CID, player.Name.TextValue,
++            player.CurrentWorld.ValueNullable?.Name.ExtractText() ?? "", role, running, territory, zone, MultiboxLink.CurrentInstance,
++            fateId, fate, status, DateTime.UtcNow));
++    }
++
++    private static string PublicEventName(uint fateId)
++        => Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Fate>().GetRowOrDefault(fateId)?.Name.ExtractText() ?? $"FATE {fateId}";
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
 index 840facc..19ee843 100644
@@ -673,10 +786,10 @@ index d79e384..ce80568 100644
      private void EnsureCombatPreset(string preset)
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
-index 0000000..89ae875
+index 0000000..45d2f29
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,79 @@
 +using AutoFateGrind.Core.Game.Fates;
 +using AutoFateGrind.Core.Multibox;
 +using clib.Utils;
@@ -694,27 +807,55 @@ index 0000000..89ae875
 +    /// <summary>Every state computation: the leader publishes; a follower moves its zone to the leader's.</summary>
 +    private void MultiboxTick()
 +    {
++        var current = PublicEvent.CurrentFate;
++        MultiboxLink.CurrentFateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
++
 +        if (Plugin.Cfg.MultiboxRole == MultiboxRole.Leader)
 +        {
-+            var current = PublicEvent.CurrentFate;
-+            var fateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
-+            MultiboxLink.Publish(Svc.ClientState.TerritoryType, fateId);
++            MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
 +            return;
 +        }
 +
-+        // Follower: the leader's zone, when it is one of this run's zones (same plan, the config comes from MAIN).
-+        if (MultiboxLink.Leader() is not { } leader || leader.Territory == zone.TerritoryId) return;
-+        for (var index = 0; index < zones.Count; index++)
++        // Follower: why it is (not) following, for the Multibox tab.
++        if (MultiboxLink.LeaderAnyWorld() is not { } leader)
 +        {
-+            if (zones[index].TerritoryId != leader.Territory) continue;
++            MultiboxLink.FollowerStatus = "blocked: leader not seen (not running?)";
++            return;
++        }
++        var myWorld = Svc.Objects.LocalPlayer?.CurrentWorld.RowId ?? 0;
++        if (leader.World != myWorld)
++        {
++            MultiboxLink.FollowerStatus = $"blocked: leader {leader.Name} is on another world";
++            return;
++        }
++
++        if (leader.Territory != zone.TerritoryId)
++        {
++            // The leader's zone, when it is one of this run's zones (same plan, the config comes from MAIN).
++            var index = -1;
++            for (var i = 0; i < zones.Count; i++)
++            {
++                if (zones[i].TerritoryId == leader.Territory) { index = i; break; }
++            }
++            if (index < 0)
++            {
++                MultiboxLink.FollowerStatus = $"blocked: leader {leader.Name} is in a zone not in my plan";
++                return;
++            }
 +            if (lastFollowedZone != leader.Territory)
 +            {
 +                Diag($"Multibox: the leader ({leader.Name}) is in {zones[index].Name}; following");
 +                lastFollowedZone = leader.Territory;
 +            }
 +            zoneIndex = index;
++            MultiboxLink.FollowerStatus = $"following {leader.Name} to {zones[index].Name}";
 +            return;
 +        }
++
++        var myInstance = MultiboxLink.CurrentInstance;
++        MultiboxLink.FollowerStatus = leader.Instance != myInstance && Svc.ClientState.TerritoryType == leader.Territory
++            ? $"blocked: leader {leader.Name} is in instance {leader.Instance}, I am in {myInstance}"
++            : $"following {leader.Name}";
 +    }
 +
 +    /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>
@@ -722,7 +863,8 @@ index 0000000..89ae875
 +    {
 +        if (Plugin.Cfg.MultiboxRole != MultiboxRole.Follower) return null;
 +        if (MultiboxLink.Leader() is not { FateId: not 0 } leader || leader.Territory != Svc.ClientState.TerritoryType) return null;
-+        if (PublicEvent.GetFateById(leader.FateId) is not { Progress: < 100 } fate) return null; // another instance, or done
++        if (leader.Instance != MultiboxLink.CurrentInstance) return null; // another instance: different FATEs
++        if (PublicEvent.GetFateById(leader.FateId) is not { Progress: < 100 } fate) return null;
 +        if (fate.State is FateState.Ended or FateState.Failed) return null;
 +        return fate;
 +    }
@@ -1458,15 +1600,16 @@ index 829167d..6305bc1 100644
      {
          var sheet = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..9fcc900 100644
+index 7ff8682..c2b31e2 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,12 @@ public sealed class Plugin : IDalamudPlugin
+@@ -85,8 +85,13 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
 +        ipcProvider = new Core.Ipc.AfgIpcProvider(this); // Fork
 +        Core.Fork.ReloadResume.OnLoad(this); // Fork (item 17)
++        Core.Multibox.MultiboxPresence.Start(); // Fork (item 16)
      }
  
 +    private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
@@ -1474,16 +1617,17 @@ index 7ff8682..9fcc900 100644
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +107,8 @@ public sealed class Plugin : IDalamudPlugin
+@@ -103,6 +108,9 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
 +        Core.Fork.ReloadResume.OnUnload(this); // Fork (item 17): before anything stops the run
++        Core.Multibox.MultiboxPresence.Stop(); // Fork (item 16)
 +        ipcProvider.Dispose(); // Fork
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +159,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -153,7 +161,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
@@ -1492,6 +1636,37 @@ index 7ff8682..9fcc900 100644
      {
          if (Controller.Running)
          {
+diff --git a/AutoFateGrind/Windows/Pages/SettingsPage.cs b/AutoFateGrind/Windows/Pages/SettingsPage.cs
+index 56ea3ea..1738d5b 100644
+--- a/AutoFateGrind/Windows/Pages/SettingsPage.cs
++++ b/AutoFateGrind/Windows/Pages/SettingsPage.cs
+@@ -11,7 +11,7 @@ namespace AutoFateGrind.Windows.Pages;
+ 
+ internal sealed class SettingsPage
+ {
+-    private enum Tab { General, Travel, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert }
++    private enum Tab { General, Travel, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert, Multibox }
+ 
+     private readonly record struct Entry(Tab Tab, LocString Label, FontAwesomeIcon Icon, LocString Subtitle);
+ 
+@@ -27,6 +27,9 @@ internal sealed class SettingsPage
+         new(Tab.Humanize,     L.Settings.CatHumanizer,    FontAwesomeIcon.Walking,    L.Settings.CatHumanizerSub),
+         new(Tab.PartyInvites, L.Settings.CatPartyInvites, FontAwesomeIcon.UserSlash,  L.Settings.CatPartyInvitesSub),
+         new(Tab.GmAlert,      L.Settings.CatGmAlert,      FontAwesomeIcon.UserSecret, L.Settings.CatGmAlertSub),
++        // Fork (item 16)
++        new(Tab.Multibox,     new LocString("fork.settings.multibox", "Multibox"), FontAwesomeIcon.Users,
++            new LocString("fork.settings.multiboxSub", "Leader and followers on this PC: who is connected, following or blocked.")),
+     ];
+ 
+     private Tab activeTab = Tab.General;
+@@ -107,6 +110,7 @@ internal sealed class SettingsPage
+             case Tab.Humanize: HumanizerSettings.Draw(cfg); break;
+             case Tab.PartyInvites: PartyInviteSettings.Draw(cfg); break;
+             case Tab.GmAlert: GmAlertSettings.Draw(cfg); break;
++            case Tab.Multibox: MultiboxSettings.Draw(cfg); break;
+         }
+     }
+ }
 diff --git a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
 index 8e1d186..57ffdfb 100644
 --- a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
@@ -1560,11 +1735,120 @@ index da8719c..5092dbe 100644
              using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentRose))
                  ImGui.TextWrapped(Loc.T(L.Settings.NoCities));
      }
+diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
+new file mode 100644
+index 0000000..c4abf30
+--- /dev/null
++++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
+@@ -0,0 +1,103 @@
++using AutoFateGrind.Core.Multibox;
++using AutoFateGrind.Windows.Components;
++using Dalamud.Bindings.ImGui;
++using Dalamud.Interface.Utility;
++using Dalamud.Interface.Utility.Raii;
++using System.Numerics;
++
++namespace AutoFateGrind.Windows.Sections.Config;
++
++// Fork (README-FORK item 16): the Multibox tab, like AutoDuty's multibox list: this client's role, the leader, and every
++// client of this PC with its zone, instance, FATE and whether it is following or blocked (and why). Literal English like
++// the other fork rows.
++internal static class MultiboxSettings
++{
++    private static readonly Vector4 Green = new(0.45f, 0.85f, 0.55f, 1f);
++    private static readonly Vector4 Amber = new(1f, 0.75f, 0.3f, 1f);
++    private static readonly Vector4 Red = new(0.95f, 0.45f, 0.45f, 1f);
++    private static readonly Vector4 Grey = new(0.55f, 0.55f, 0.55f, 1f);
++
++    public static void Draw(Configuration cfg)
++    {
++        using (SettingsGroup.Begin("This client"))
++        {
++            SettingsRow.Draw("Role",
++                "Leader: publishes the zone and FATE it grinds for the other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
++                SettingsControls.RowComboWidth,
++                () =>
++                {
++                    var role = (int)cfg.MultiboxRole;
++                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Follower"], SettingsControls.RowComboWidth))
++                    {
++                        cfg.MultiboxRole = (MultiboxRole)role;
++                        cfg.Save();
++                    }
++                });
++        }
++
++        var clients = MultiboxLink.Clients();
++        using (SettingsGroup.Begin("Leader"))
++        {
++            var leaders = clients.Where(c => c.Role == MultiboxRole.Leader && DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh).ToList();
++            if (leaders.Count == 0)
++            {
++                ImGui.TextColored(Amber, "No leader connected. Followers pick their FATEs on their own until one runs.");
++            }
++            else
++            {
++                foreach (var leader in leaders)
++                {
++                    ImGui.TextColored(leader.Running ? Green : Grey, $"{leader.Name} @ {leader.World}");
++                    ImGui.SameLine();
++                    ImGui.TextDisabled(leader.Running ? $"{leader.Zone} (instance {leader.Instance}) · {(leader.FateId == 0 ? "between FATEs" : leader.Fate)}" : "connected, not running");
++                }
++                if (leaders.Count > 1) ImGui.TextColored(Red, "More than one leader is connected: followers read whichever wrote last. Set the others to Follower.");
++            }
++        }
++
++        using (SettingsGroup.Begin("Clients"))
++        {
++            if (clients.Count == 0)
++            {
++                ImGui.TextDisabled("No client has reported yet (AFG writes a card every 2 s while logged in).");
++                return;
++            }
++
++            var scale = ImGuiHelpers.GlobalScale;
++            using var table = ImRaii.Table("##mb_clients", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingStretchProp);
++            if (!table) return;
++            ImGui.TableSetupColumn("Character", ImGuiTableColumnFlags.WidthStretch, 1.2f);
++            ImGui.TableSetupColumn("Role", ImGuiTableColumnFlags.WidthFixed, 70f * scale);
++            ImGui.TableSetupColumn("Zone", ImGuiTableColumnFlags.WidthStretch, 1.1f);
++            ImGui.TableSetupColumn("FATE", ImGuiTableColumnFlags.WidthStretch, 1.1f);
++            ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthStretch, 1.6f);
++            ImGui.TableSetupColumn("Seen", ImGuiTableColumnFlags.WidthFixed, 60f * scale);
++            ImGui.TableHeadersRow();
++
++            foreach (var client in clients)
++            {
++                var age = DateTime.UtcNow - client.UpdatedUtc;
++                var connected = age <= MultiboxLink.ClientFresh;
++                var status = !connected ? "disconnected" : client.Status;
++                var color = !connected ? Grey
++                          : status.StartsWith("blocked", StringComparison.Ordinal) ? Red
++                          : status.StartsWith("following", StringComparison.Ordinal) || status == "leading" ? Green
++                          : Amber;
++
++                ImGui.TableNextRow();
++                ImGui.TableNextColumn();
++                ImGui.TextColored(connected ? new Vector4(1, 1, 1, 1) : Grey, $"{client.Name} @ {client.World}");
++                ImGui.TableNextColumn();
++                ImGui.TextUnformatted(client.Role.ToString());
++                ImGui.TableNextColumn();
++                ImGui.TextUnformatted($"{client.Zone} · {client.Instance}");
++                ImGui.TableNextColumn();
++                ImGui.TextUnformatted(client.FateId == 0 ? "-" : client.Fate);
++                ImGui.TableNextColumn();
++                ImGui.TextColored(color, status);
++                ImGui.TableNextColumn();
++                ImGui.TextDisabled(age.TotalSeconds < 60 ? $"{age.TotalSeconds:F0}s" : $"{age.TotalMinutes:F0}m");
++            }
++        }
++    }
++}
 diff --git a/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs b/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
-index 4a2b0bb..cee3621 100644
+index 4a2b0bb..508007f 100644
 --- a/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
 +++ b/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
-@@ -126,6 +126,28 @@ internal static class TravelSettings
+@@ -126,6 +126,13 @@ internal static class TravelSettings
              () => SettingsControls.DrawToggle(cfg, () => cfg.KeepTwistOfFate, v => cfg.KeepTwistOfFate = v, "##travel_keeptwist"),
              SettingsRow.ToggleHeight);
  
@@ -1573,21 +1857,6 @@ index 4a2b0bb..cee3621 100644
 +            "Inside a FATE, a fight with a mob that is not part of the FATE is fought unsynced (/levelsync off). The sync comes back as soon as a FATE mob is targeted or the fight ends, and always before a Collect pickup or hand-in.",
 +            SettingsControls.ToggleWidth,
 +            () => SettingsControls.DrawToggle(cfg, () => cfg.UnsyncForNonFateMobs, v => cfg.UnsyncForNonFateMobs = v, "##travel_unsync_nonfate"),
-+            SettingsRow.ToggleHeight);
-+
-+        // Fork (item 16): multibox follow.
-+        SettingsRow.Draw("Multibox role",
-+            "Leader: publishes the zone and FATE it grinds for other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
-+            SettingsControls.RowComboWidth,
-+            () =>
-+            {
-+                var role = (int)cfg.MultiboxRole;
-+                if (SettingsControls.DrawPlainCombo("##travel_multibox_role", ref role, ["Leader", "Follower"], SettingsControls.RowComboWidth))
-+                {
-+                    cfg.MultiboxRole = (AutoFateGrind.Core.Multibox.MultiboxRole)role;
-+                    cfg.Save();
-+                }
-+            },
 +            SettingsRow.ToggleHeight);
 +
          SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
