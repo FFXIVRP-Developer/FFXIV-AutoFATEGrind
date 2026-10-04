@@ -1229,10 +1229,10 @@ index 0000000..5922e5d
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
-index a643c8e..58f8857 100644
+index a643c8e..6e73672 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
-@@ -66,6 +66,19 @@ public sealed partial class AutoFate
+@@ -66,6 +66,25 @@ public sealed partial class AutoFate
      private void CommitToFate(uint fateId) => varietyCommittedId = fateId;
  
      private PublicEvent? PickFate(Vector3 from)
@@ -1242,6 +1242,12 @@ index a643c8e..58f8857 100644
 +        {
 +            lastPickedFateId = leaderFate.Id;
 +            return leaderFate;
++        }
++        // Fork (item 18): a slave fights only the leader's FATE; while the leader is between FATEs it waits.
++        if (Core.Multibox.MultiboxFollowerWatch.IsFollower)
++        {
++            lastPickedFateId = 0;
++            return null;
 +        }
 +        var picked = PickFateOwn(from);
 +        lastPickedFateId = picked?.Id ?? 0;
@@ -1750,10 +1756,24 @@ index 48ea1e8..4f6e5c3 100644
          if (s.DidNothing) { s.Recorded = true; return; }
          s.Recorded = true;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.cs b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-index 481f303..92dc2d8 100644
+index 481f303..618de20 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-@@ -85,6 +85,7 @@ internal sealed partial class AutoFateController
+@@ -42,6 +42,13 @@ internal sealed partial class AutoFateController
+ 
+     public void RunAll(IEnumerable<ZoneInfo> zones)
+     {
++        // Fork (item 18): a slave does nothing without its leader; it starts by itself once the leader grinds.
++        if (Plugin.Cfg.MultiboxRole == Multibox.MultiboxRole.Follower && Multibox.MultiboxLink.Leader() is null)
++        {
++            Diag("Start refused: this client is a slave and no leader is grinding on this world.");
++            ECommons.DalamudServices.Svc.Chat.Print("[AFG] This client is a slave: it starts by itself when the leader starts a run.");
++            return;
++        }
+         activeZones = zones.ToList();
+         if (activeZones.Count == 0)
+         {
+@@ -85,6 +92,7 @@ internal sealed partial class AutoFateController
          }
  
          session = s;
@@ -1761,7 +1781,7 @@ index 481f303..92dc2d8 100644
          Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
  
          ApplyStartingClass();
-@@ -93,17 +94,20 @@ internal sealed partial class AutoFateController
+@@ -93,17 +101,20 @@ internal sealed partial class AutoFateController
  
      private bool PlanYokaiZones(AutoFateSession owningSession)
      {
@@ -2433,6 +2453,24 @@ index 0000000..2dc07eb
 +    private static string ZoneName(uint territory)
 +        => ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
 +}
+diff --git a/AutoFateGrind/Windows/Shell/ActionDock.cs b/AutoFateGrind/Windows/Shell/ActionDock.cs
+index db3ea9c..fc739fb 100644
+--- a/AutoFateGrind/Windows/Shell/ActionDock.cs
++++ b/AutoFateGrind/Windows/Shell/ActionDock.cs
+@@ -71,8 +71,11 @@ internal static class ActionDock
+         var watchMissing = yokai && !YokaiOps.OwnsWatch();
+         var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);
+         var itemReason = ItemGoalReason(cfg);
+-        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null;
+-        var reason = !depsOk ? Loc.T(L.Grind.ReasonInstall)
++        // Fork (item 18): a slave starts with its leader, never on its own.
++        var slaveWaiting = cfg.MultiboxRole == Core.Multibox.MultiboxRole.Follower && Core.Multibox.MultiboxLink.Leader() is null;
++        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null && !slaveWaiting;
++        var reason = slaveWaiting ? "Slave: starts by itself when the leader starts a run"
++            : !depsOk ? Loc.T(L.Grind.ReasonInstall)
+             : watchMissing ? Loc.T(L.Grind.ReasonNoWatch)
+             : ranksMaxed ? Loc.T(L.Grind.ReasonRanksMaxed)
+             : itemReason is not null ? itemReason
 diff --git a/ECommons b/ECommons
 index f1656e8..62cd604 160000
 --- a/ECommons
