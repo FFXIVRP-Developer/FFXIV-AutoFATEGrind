@@ -1,17 +1,20 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..785f656 100644
+index efc08bd..4aeb902 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
-@@ -68,6 +68,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +68,11 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
 +    // Fork: inside a FATE, fight a non-FATE mob unsynced and sync again for the FATE (AutoFate.TargetSync).
 +    public bool UnsyncForNonFateMobs { get; set; } = true;
++    // Fork: multibox follow (item 16). Leader publishes its zone and FATE; Follower (set on slaves by the XIVProfiles override)
++    // goes to the leader's zone and takes its FATE.
++    public AutoFateGrind.Core.Multibox.MultiboxRole MultiboxRole { get; set; } = AutoFateGrind.Core.Multibox.MultiboxRole.Leader;
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +146,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +149,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -200,6 +203,88 @@ index ef48ca1..36e2b74 100644
 +
 +    public string ZoneDoneReason(uint territoryId) => "no yo-kai that still needs medals drops here";
  }
+diff --git a/AutoFateGrind/Core/Multibox/MultiboxLink.cs b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
+new file mode 100644
+index 0000000..3334906
+--- /dev/null
++++ b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
+@@ -0,0 +1,76 @@
++using System.IO;
++using System.Text.Json;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Multibox;
++
++// Fork (README-FORK item 16): multibox follow. The Leader publishes where it grinds (zone, FATE, world) to a small file
++// every client of the same Windows user can read; a Follower goes to the leader's zone and takes the leader's FATE.
++// No network, no party protocol: the clients share the disk. XIVProfiles' slave override sets every slave to Follower,
++// so MAIN is the only leader without any setup there.
++public enum MultiboxRole
++{
++    Leader = 0,
++    Follower = 1,
++}
++
++internal sealed record LeaderState(uint World, uint Territory, uint FateId, float X, float Y, float Z, DateTime UpdatedUtc, string Name);
++
++internal static class MultiboxLink
++{
++    // Older than this, the leader is not grinding (stopped, crashed, logged out): followers go their own way.
++    private static readonly TimeSpan Fresh = TimeSpan.FromSeconds(20);
++    private const int PublishEveryMs = 1_000;
++    private const int ReadEveryMs = 1_000;
++
++    private static readonly string FilePath = Path.Combine(
++        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AutoFateGrind-fork", "leader.json");
++
++    private static long nextPublishMs;
++    private static long nextReadMs;
++    private static LeaderState? lastRead;
++
++    public static void Publish(uint territory, uint fateId)
++    {
++        if (Environment.TickCount64 < nextPublishMs) return;
++        nextPublishMs = Environment.TickCount64 + PublishEveryMs;
++        var player = Svc.Objects.LocalPlayer;
++        if (player is null) return;
++        try
++        {
++            var state = new LeaderState(player.CurrentWorld.RowId, territory, fateId,
++                                        player.Position.X, player.Position.Y, player.Position.Z, DateTime.UtcNow, player.Name.TextValue);
++            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
++            var temp = FilePath + ".tmp";
++            File.WriteAllText(temp, JsonSerializer.Serialize(state));
++            File.Move(temp, FilePath, overwrite: true); // whole file or nothing for a reader
++        }
++        catch (Exception ex)
++        {
++            Svc.Log.Debug($"[AFG] Multibox: could not publish the leader state: {ex.Message}");
++        }
++    }
++
++    /// <summary>The leader's state when fresh and on this client's world; null otherwise.</summary>
++    public static LeaderState? Leader()
++    {
++        if (Environment.TickCount64 >= nextReadMs)
++        {
++            nextReadMs = Environment.TickCount64 + ReadEveryMs;
++            try
++            {
++                lastRead = File.Exists(FilePath)
++                    ? JsonSerializer.Deserialize<LeaderState>(File.ReadAllText(FilePath))
++                    : null;
++            }
++            catch
++            {
++                // Mid-write or unreadable: keep the last good read for this second.
++            }
++        }
++
++        if (lastRead is not { } leader || DateTime.UtcNow - leader.UpdatedUtc > Fresh) return null;
++        var world = Svc.Objects.LocalPlayer?.CurrentWorld.RowId ?? 0;
++        return leader.World == world ? leader : null;
++    }
++}
 diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
 index 840facc..19ee843 100644
 --- a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
@@ -482,6 +567,86 @@ index d79e384..ce80568 100644
      }
  
      private void EnsureCombatPreset(string preset)
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
+new file mode 100644
+index 0000000..89ae875
+--- /dev/null
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
+@@ -0,0 +1,50 @@
++using AutoFateGrind.Core.Game.Fates;
++using AutoFateGrind.Core.Multibox;
++using clib.Utils;
++using FFXIVClientStructs.FFXIV.Client.Game.Fate;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Tasks;
++
++// Fork (README-FORK item 16): the run's side of multibox follow (see MultiboxLink).
++public sealed partial class AutoFate
++{
++    private uint lastPickedFateId;
++    private uint lastFollowedZone;
++
++    /// <summary>Every state computation: the leader publishes; a follower moves its zone to the leader's.</summary>
++    private void MultiboxTick()
++    {
++        if (Plugin.Cfg.MultiboxRole == MultiboxRole.Leader)
++        {
++            var current = PublicEvent.CurrentFate;
++            var fateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
++            MultiboxLink.Publish(Svc.ClientState.TerritoryType, fateId);
++            return;
++        }
++
++        // Follower: the leader's zone, when it is one of this run's zones (same plan, the config comes from MAIN).
++        if (MultiboxLink.Leader() is not { } leader || leader.Territory == zone.TerritoryId) return;
++        for (var index = 0; index < zones.Count; index++)
++        {
++            if (zones[index].TerritoryId != leader.Territory) continue;
++            if (lastFollowedZone != leader.Territory)
++            {
++                Diag($"Multibox: the leader ({leader.Name}) is in {zones[index].Name}; following");
++                lastFollowedZone = leader.Territory;
++            }
++            zoneIndex = index;
++            return;
++        }
++    }
++
++    /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>
++    private PublicEvent? LeaderFate()
++    {
++        if (Plugin.Cfg.MultiboxRole != MultiboxRole.Follower) return null;
++        if (MultiboxLink.Leader() is not { FateId: not 0 } leader || leader.Territory != Svc.ClientState.TerritoryType) return null;
++        if (PublicEvent.GetFateById(leader.FateId) is not { Progress: < 100 } fate) return null; // another instance, or done
++        if (fate.State is FateState.Ended or FateState.Failed) return null;
++        return fate;
++    }
++}
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
+index a643c8e..58f8857 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
+@@ -66,6 +66,19 @@ public sealed partial class AutoFate
+     private void CommitToFate(uint fateId) => varietyCommittedId = fateId;
+ 
+     private PublicEvent? PickFate(Vector3 from)
++    {
++        // Fork (item 16): a follower takes the leader's FATE when it is here.
++        if (LeaderFate() is { } leaderFate)
++        {
++            lastPickedFateId = leaderFate.Id;
++            return leaderFate;
++        }
++        var picked = PickFateOwn(from);
++        lastPickedFateId = picked?.Id ?? 0;
++        return picked;
++    }
++
++    private PublicEvent? PickFateOwn(Vector3 from)
+     {
+         varietyConsideredIds.Clear();
+         if (!Pacing.PickVarietyActive || returnToFateId is not null)
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs b/AutoFateGrind/Core/Tasks/AutoFate.TargetSync.cs
 new file mode 100644
 index 0000000..9c097da
@@ -840,7 +1005,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..16ad1e4 100644
+index 1f98ff8..99e94ea 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -852,7 +1017,15 @@ index 1f98ff8..16ad1e4 100644
      private const int   EngageRepositionWatchdogMs = 40_000;
      private const float EngageMeleeApproachToleranceMeters  = 2.5f;
      private const float EngageRangedApproachToleranceMeters = 15f;
-@@ -501,6 +503,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -384,6 +386,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+     private GrindState ComputeState()
+     {
+         RefreshPendingCollectReward();
++        MultiboxTick(); // fork (item 16)
+ 
+         if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
+             abandonedFateId = null;
+@@ -501,6 +504,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
  
      private async Task GoToZone()
      {
@@ -866,7 +1039,7 @@ index 1f98ff8..16ad1e4 100644
          Status = $"Teleporting to {zone.Name}";
          Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
          var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
-@@ -516,6 +525,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -516,6 +526,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
          if (result == TerritoryTeleportResult.Blocked)
          {
              FaultIfCharacterStaysBlocked();
@@ -1264,10 +1437,10 @@ index da8719c..5092dbe 100644
                  ImGui.TextWrapped(Loc.T(L.Settings.NoCities));
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs b/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
-index 4a2b0bb..508007f 100644
+index 4a2b0bb..cee3621 100644
 --- a/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
 +++ b/AutoFateGrind/Windows/Sections/Config/TravelSettings.cs
-@@ -126,6 +126,13 @@ internal static class TravelSettings
+@@ -126,6 +126,28 @@ internal static class TravelSettings
              () => SettingsControls.DrawToggle(cfg, () => cfg.KeepTwistOfFate, v => cfg.KeepTwistOfFate = v, "##travel_keeptwist"),
              SettingsRow.ToggleHeight);
  
@@ -1276,6 +1449,21 @@ index 4a2b0bb..508007f 100644
 +            "Inside a FATE, a fight with a mob that is not part of the FATE is fought unsynced (/levelsync off). The sync comes back as soon as a FATE mob is targeted or the fight ends, and always before a Collect pickup or hand-in.",
 +            SettingsControls.ToggleWidth,
 +            () => SettingsControls.DrawToggle(cfg, () => cfg.UnsyncForNonFateMobs, v => cfg.UnsyncForNonFateMobs = v, "##travel_unsync_nonfate"),
++            SettingsRow.ToggleHeight);
++
++        // Fork (item 16): multibox follow.
++        SettingsRow.Draw("Multibox role",
++            "Leader: publishes the zone and FATE it grinds for other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
++            SettingsControls.RowComboWidth,
++            () =>
++            {
++                var role = (int)cfg.MultiboxRole;
++                if (SettingsControls.DrawPlainCombo("##travel_multibox_role", ref role, ["Leader", "Follower"], SettingsControls.RowComboWidth))
++                {
++                    cfg.MultiboxRole = (AutoFateGrind.Core.Multibox.MultiboxRole)role;
++                    cfg.Save();
++                }
++            },
 +            SettingsRow.ToggleHeight);
 +
          SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
