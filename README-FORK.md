@@ -156,6 +156,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     slave to this mode. The role decides the mode (`Configuration.ActiveMode`): a Leader / Slave switch tops the first
     page (`Windows/Sections/MultiboxPanel.cs`); a slave sees only its panel (leader, status, parking spot) and always
     runs Follow the leader, which is not among the goal cards; a leader picks its goal as usual and gets the slave list.
+    A leader never needs slaves. A slave needs its leader for everything: `RunAll` refuses to start it (and its Start
+    button is off) while no leader grinds on its world, and it fights only the leader's FATE (`PickFate` returns null
+    for a slave otherwise: it waits while the leader is between FATEs instead of picking its own).
 
 19. **Leader and slaves in one party** (`Core/Multibox/MultiboxParty.cs`, AutoDuty's game calls). While its run is
     going, the leader invites every connected slave that is not in the party (one try per slave every 20 s, up to the 8

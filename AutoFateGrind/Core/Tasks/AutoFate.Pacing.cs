@@ -73,6 +73,12 @@ public sealed partial class AutoFate
             lastPickedFateId = leaderFate.Id;
             return leaderFate;
         }
+        // Fork (item 18): a slave fights only the leader's FATE; while the leader is between FATEs it waits.
+        if (Core.Multibox.MultiboxFollowerWatch.IsFollower)
+        {
+            lastPickedFateId = 0;
+            return null;
+        }
         var picked = PickFateOwn(from);
         lastPickedFateId = picked?.Id ?? 0;
         return picked;

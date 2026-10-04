@@ -42,6 +42,13 @@ internal sealed partial class AutoFateController
 
     public void RunAll(IEnumerable<ZoneInfo> zones)
     {
+        // Fork (item 18): a slave does nothing without its leader; it starts by itself once the leader grinds.
+        if (Plugin.Cfg.MultiboxRole == Multibox.MultiboxRole.Follower && Multibox.MultiboxLink.Leader() is null)
+        {
+            Diag("Start refused: this client is a slave and no leader is grinding on this world.");
+            ECommons.DalamudServices.Svc.Chat.Print("[AFG] This client is a slave: it starts by itself when the leader starts a run.");
+            return;
+        }
         activeZones = zones.ToList();
         if (activeZones.Count == 0)
         {

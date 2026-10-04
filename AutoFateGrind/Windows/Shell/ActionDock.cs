@@ -71,8 +71,11 @@ internal static class ActionDock
         var watchMissing = yokai && !YokaiOps.OwnsWatch();
         var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);
         var itemReason = ItemGoalReason(cfg);
-        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null;
-        var reason = !depsOk ? Loc.T(L.Grind.ReasonInstall)
+        // Fork (item 18): a slave starts with its leader, never on its own.
+        var slaveWaiting = cfg.MultiboxRole == Core.Multibox.MultiboxRole.Follower && Core.Multibox.MultiboxLink.Leader() is null;
+        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null && !slaveWaiting;
+        var reason = slaveWaiting ? "Slave: starts by itself when the leader starts a run"
+            : !depsOk ? Loc.T(L.Grind.ReasonInstall)
             : watchMissing ? Loc.T(L.Grind.ReasonNoWatch)
             : ranksMaxed ? Loc.T(L.Grind.ReasonRanksMaxed)
             : itemReason is not null ? itemReason
