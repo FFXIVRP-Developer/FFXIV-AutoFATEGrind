@@ -21,12 +21,15 @@ internal static class MultiboxPresence
         if (player is null) return;
 
         var running = Plugin.Instance?.Controller.Running ?? false;
+        // The leader publishes while its run is going, breaks included (the run's own publish only runs while it picks
+        // FATEs: a humanizer break went stale and parked the followers).
+        if (running && !MultiboxFollowerWatch.IsFollower) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
         var territory = Svc.ClientState.TerritoryType;
         var zone = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
         var fateId = running ? MultiboxLink.CurrentFateId : 0;
         var fate = fateId == 0 ? "" : PublicEventName(fateId);
-        var role = Plugin.Cfg.MultiboxRole;
-        var status = !running ? "not running"
+        var role = MultiboxFollowerWatch.IsFollower ? MultiboxRole.Follower : MultiboxRole.Leader;
+        var status = !running ? (MultiboxFollowerWatch.Parked ? "parked (leader stopped)" : "not running")
                    : role == MultiboxRole.Leader ? "leading"
                    : MultiboxLink.FollowerStatus;
 

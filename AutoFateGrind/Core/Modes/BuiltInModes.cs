@@ -104,3 +104,17 @@ public sealed class YokaiMedalsMode : IFateGrindMode
 
     public string ZoneDoneReason(uint territoryId) => "no yo-kai that still needs medals drops here";
 }
+
+// Fork (README-FORK item 18): a slave's mode. It plans every FATE zone so the leader's is always in the plan, never
+// rotates on its own (MultiboxTick moves it to the leader's zone, PickFate takes the leader's FATE), has no goal of its
+// own, and is started and stopped with the leader by MultiboxFollowerWatch (parking at the humanizer break location).
+public sealed class FollowLeaderMode : IFateGrindMode
+{
+    public const string ModeId = "followleader";
+    public string Id => ModeId;
+    public string DisplayName => "Follow the leader";
+    public string Description => "For the other clients of this PC: goes where the leader grinds and fights its FATE, starts when the leader starts, and when the leader stops finishes its FATE and parks at the break location (Settings → Humanizer).";
+    public bool IsComplete(ModeContext ctx) => false;
+    public bool PlansZones => true;
+    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => AutoFateGrind.Core.Zones.ZoneRegistry.Zones;
+}

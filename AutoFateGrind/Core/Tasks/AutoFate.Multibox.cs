@@ -19,7 +19,7 @@ public sealed partial class AutoFate
         var current = PublicEvent.CurrentFate;
         MultiboxLink.CurrentFateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
 
-        if (Plugin.Cfg.MultiboxRole == MultiboxRole.Leader)
+        if (!MultiboxFollowerWatch.IsFollower)
         {
             MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
             return;
@@ -84,7 +84,7 @@ public sealed partial class AutoFate
 
     /// <summary>ComputeState, when not in a FATE: hop to the leader's instance now?</summary>
     private bool WantsInstanceHop()
-        => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower && instanceHopTarget != 0 && Environment.TickCount64 >= nextInstanceHopMs
+        => MultiboxFollowerWatch.IsFollower && instanceHopTarget != 0 && Environment.TickCount64 >= nextInstanceHopMs
         && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat];
 
     private async Task HopToLeaderInstance()
@@ -159,7 +159,7 @@ public sealed partial class AutoFate
     /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>
     private PublicEvent? LeaderFate()
     {
-        if (Plugin.Cfg.MultiboxRole != MultiboxRole.Follower) return null;
+        if (!MultiboxFollowerWatch.IsFollower) return null;
         if (MultiboxLink.Leader() is not { FateId: not 0 } leader || leader.Territory != Svc.ClientState.TerritoryType) return null;
         if (leader.Instance != MultiboxLink.CurrentInstance) return null; // another instance: different FATEs
         if (PublicEvent.GetFateById(leader.FateId) is not { Progress: < 100 } fate) return null;

@@ -146,6 +146,15 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     BeforeBoat, OnBoat, AfterBoat): BoatRunner starts its fillers again itself. Item 6 was removed for fighting BoatRunner;
     this one only resumes a run that was really going and stays out of the boat. Off: AFG never starts on its own.
 
+18. **"Follow the leader" mode** (`FollowLeaderMode` in `BuiltInModes.cs`, `Core/Multibox/MultiboxFollowerWatch.cs`; the two
+    zone-swap checks in `AutoFate.cs` skip it). A slave's mode on AFG's first page: it plans every FATE zone (so the
+    leader's is always in the plan), never rotates zones itself, has no goal, and acts as a follower (item 16) whatever
+    the role setting says. It starts when the leader starts (or is already going when it loads), and when the leader
+    stops (its file stale for 30 s) it finishes its FATE and parks at the humanizer break location (Inn / Apartment /
+    Private house / FC house via Lifestream; City = stays). A follower stopped by hand stays stopped until the leader's
+    next start. The leader now publishes whenever its run is going, humanizer breaks included. XIVProfiles sets every
+    slave to this mode (`overrides/XIVLauncher/pluginConfigs/AutoFateGrind.json`: `ModeId` `followleader`).
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |

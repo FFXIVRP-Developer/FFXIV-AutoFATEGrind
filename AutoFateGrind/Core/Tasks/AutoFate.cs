@@ -482,7 +482,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(Math.Clamp(Plugin.Cfg.SwapZoneWaitSec, 0, MaxSwapWaitSec) * 1000);
         }
 
-        if (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !KeepingTwistOfFate()
+        if (Plugin.Cfg.SwapZonesWhenEmpty && Plugin.Cfg.ActiveMode is not AutoFateGrind.Core.Modes.FollowLeaderMode /* fork (item 18): only where the leader goes */ && zones.Count > 1 && !KeepingTwistOfFate()
          && Environment.TickCount64 - zoneIdleSinceMs >= zoneIdleWaitMs)
             return GrindState.SwapZone;
 
@@ -600,7 +600,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     {
         await EnsureConsumables();
         var keepingTwist = KeepingTwistOfFate();
-        var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !keepingTwist;
+        var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && Plugin.Cfg.ActiveMode is not AutoFateGrind.Core.Modes.FollowLeaderMode /* fork (item 18): only where the leader goes */ && zones.Count > 1 && !keepingTwist;
         TryIdleMount();
         var remainingSec = Math.Max(0L, zoneIdleWaitMs - (Environment.TickCount64 - zoneIdleSinceMs)) / 1000;
         Status = swapPending

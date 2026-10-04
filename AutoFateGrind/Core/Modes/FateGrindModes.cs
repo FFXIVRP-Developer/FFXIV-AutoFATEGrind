@@ -24,6 +24,7 @@ public static class FateGrindModes
         }
 
         modes.Add(new YokaiMedalsMode());
+        modes.Add(new FollowLeaderMode()); // fork (item 18)
         return modes;
     }
 
