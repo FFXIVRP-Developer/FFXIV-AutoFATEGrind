@@ -76,7 +76,10 @@ public sealed partial class AutoFate
             var myRole = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
             // Melee DPS stand at their positional on the tank's target (item 22), not next to the tank.
             if (myRole == 2 && Plugin.Cfg.SpreadMeleePositional)
-                role = !BossModIPC.Instance.CanClearTransientStrategy || BossModIPC.Instance.ClearTransientStrategy(preset, StayCloseToPartyRoleModule, "Role");
+            {
+                if (BossModIPC.Instance.CanClearTransientStrategy) BossModIPC.Instance.ClearTransientStrategy(preset, StayCloseToPartyRoleModule, "Role");
+                role = true; // nothing to apply: "false" from the clear only means none was set
+            }
             else
             {
                 var range = myRole is 1 or 2 ? "3" : Fork.Spread.RangedDistance().ToString(System.Globalization.CultureInfo.InvariantCulture);
