@@ -89,6 +89,7 @@ public sealed class Plugin : IDalamudPlugin
         Core.Fork.ReloadResume.OnLoad(this); // Fork (item 17)
         Core.Multibox.MultiboxPresence.Start(); // Fork (item 16)
         Core.Multibox.MultiboxFollowerWatch.Start(); // Fork (item 18)
+        Core.Multibox.MultiboxParty.Start(); // Fork (item 19)
     }
 
     private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
@@ -112,6 +113,7 @@ public sealed class Plugin : IDalamudPlugin
         Core.Fork.ReloadResume.OnUnload(this); // Fork (item 17): before anything stops the run
         Core.Multibox.MultiboxPresence.Stop(); // Fork (item 16)
         Core.Multibox.MultiboxFollowerWatch.Stop(); // Fork (item 18)
+        Core.Multibox.MultiboxParty.Stop(); // Fork (item 19)
         ipcProvider.Dispose(); // Fork
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 

@@ -70,6 +70,7 @@ internal sealed unsafe class PartyInviteWatcher : IDisposable
         if (addon is null) return;
         if (stage == Stage.DeclinePending) return;
         if (stage == Stage.Idle && !DeclineArmed()) return;
+        if (stage == Stage.Idle && Core.Multibox.MultiboxParty.IsLeaderInvite()) return; // fork (item 19): a slave accepts its leader
 
         EnsureTemplates();
         var prompt = ReadPrompt(addon);
