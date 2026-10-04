@@ -16,9 +16,20 @@ internal sealed class GrindPage
         var ctrl = plugin.Controller;
         var running = ctrl.Running;
 
+        // Fork (item 18): Leader / Slave on top. A slave has no goal of its own: only its panel while idle.
+        MultiboxPanel.DrawRoleSwitch(cfg, running);
+        Styling.VSpace(12f);
+
         using var reveal = Motion.PushSwitch("##afg_grind_state", running, SwitchRevealMs);
         if (running) RunningPanel.Draw(cfg, ctrl);
+        else if (cfg.MultiboxRole == Core.Multibox.MultiboxRole.Follower) MultiboxPanel.DrawSlave(cfg);
         else DrawIdle(plugin, window, cfg, ctrl);
+
+        if (cfg.MultiboxRole == Core.Multibox.MultiboxRole.Leader)
+        {
+            Styling.VSpace(16f);
+            MultiboxPanel.DrawSlaveList();
+        }
     }
 
     private static void DrawIdle(Plugin plugin, AppWindow window, Configuration cfg, AutoFateController ctrl)

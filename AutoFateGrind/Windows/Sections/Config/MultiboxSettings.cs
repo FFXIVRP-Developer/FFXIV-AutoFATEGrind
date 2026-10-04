@@ -27,7 +27,7 @@ internal static class MultiboxSettings
                 () =>
                 {
                     var role = (int)cfg.MultiboxRole;
-                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Follower"], SettingsControls.RowComboWidth))
+                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Slave"], SettingsControls.RowComboWidth))
                     {
                         cfg.MultiboxRole = (MultiboxRole)role;
                         cfg.Save();

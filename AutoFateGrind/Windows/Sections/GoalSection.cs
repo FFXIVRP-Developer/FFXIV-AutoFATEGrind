@@ -94,7 +94,7 @@ internal static class GoalSection
         var all = FateGrindModes.All;
         for (var index = 0; index < all.Count; index++)
         {
-            if (CategoryOf(all[index].Id) == category)
+            if (all[index] is not FollowLeaderMode && CategoryOf(all[index].Id) == category) // fork (item 18): the Slave role
             {
                 cardScratch.Add(all[index]);
             }

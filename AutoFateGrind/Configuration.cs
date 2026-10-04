@@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
     {
         get
         {
+            // Fork (item 18): the role decides. A slave always runs Follow the leader; a leader never does (its own goal).
+            if (MultiboxRole == Core.Multibox.MultiboxRole.Follower)
+                return FateGrindModes.GetById(FollowLeaderMode.ModeId)!;
             if (string.IsNullOrEmpty(ModeId))
                 ModeId = FateGrindModes.IdForLegacy(Mode);
-            return FateGrindModes.GetById(ModeId) ?? FateGrindModes.Default;
+            var mode = FateGrindModes.GetById(ModeId);
+            return mode is null or FollowLeaderMode ? FateGrindModes.Default : mode;
         }
     }
 

@@ -153,7 +153,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     stops (its file stale for 30 s) it finishes its FATE and parks at the humanizer break location (Inn / Apartment /
     Private house / FC house via Lifestream; City = stays). A follower stopped by hand stays stopped until the leader's
     next start. The leader now publishes whenever its run is going, humanizer breaks included. XIVProfiles sets every
-    slave to this mode (`overrides/XIVLauncher/pluginConfigs/AutoFateGrind.json`: `ModeId` `followleader`).
+    slave to this mode. The role decides the mode (`Configuration.ActiveMode`): a Leader / Slave switch tops the first
+    page (`Windows/Sections/MultiboxPanel.cs`); a slave sees only its panel (leader, status, parking spot) and always
+    runs Follow the leader, which is not among the goal cards; a leader picks its goal as usual and gets the slave list.
 
 ## Verified in game
 
