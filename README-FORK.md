@@ -183,7 +183,11 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     TerritoryIntendedUse 2), else at its Grand Company city's inn (`/li inn 1` Limsa / `2` Ul'dah / `3` Gridania by
     Lifestream's sorted InnData; plain `/li inn` without a company), always on the world it is on (a break
     location such as an apartment is on the home world and world-travelled the slaves away) and leaves any party left.
-    A slave whose leader grinds on another world travels there first (`Lifestream.ChangeWorld`, one try per 2 min). A slave that logs in
+    A slave whose leader grinds on another world travels there first (`Lifestream.ChangeWorld`, one try per 2 min).
+    Once parked a slave is dormant (`MultiboxFollowerWatch.Dormant`): no travel, no party accepts, no re-parking, so other
+    plugins can use the client. It wakes on the leader's next new run (the leader gone, then back) once it is idle: not
+    in a duty or a loading screen and none of AutoDuty, BOCCHI, Saucy, BoatRunner, ICE, Questionable, AutoRetainer,
+    Artisan, GatherBuddy, Lifestream busy (it keeps checking while the leader runs). A slave that logs in
     to no leader and no party also parks after 60 s.
 
 20. **Natural spreading** (`Core/Fork/Spread.cs`; Settings → Multibox → Spreading, four switches, on by default), after

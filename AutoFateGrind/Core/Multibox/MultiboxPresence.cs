@@ -41,7 +41,7 @@ internal static class MultiboxPresence
         var fateId = running ? MultiboxLink.CurrentFateId : 0;
         var fate = fateId == 0 ? "" : PublicEventName(fateId);
         var role = MultiboxFollowerWatch.IsFollower ? MultiboxRole.Follower : MultiboxRole.Leader;
-        var status = !running ? (MultiboxFollowerWatch.Parked ? (MultiboxFollowerWatch.Blocked is { } why ? $"parked: {why}" : "parked (leader stopped)") : "not running")
+        var status = !running ? (MultiboxFollowerWatch.Parked ? (MultiboxFollowerWatch.Blocked is { } why ? $"parked: {why}" : "parked (leader stopped)") + (MultiboxFollowerWatch.Dormant ? ", left alone until the leader's next run" : "") : "not running")
                    : role == MultiboxRole.Leader ? "leading"
                    : MultiboxLink.FollowerStatus;
 

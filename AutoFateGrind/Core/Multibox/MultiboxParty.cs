@@ -96,7 +96,7 @@ internal static unsafe class MultiboxParty
     {
         if (Environment.TickCount64 < nextAcceptMs) return;
         nextAcceptMs = Environment.TickCount64 + 1_000;
-        if (!IsLeaderInvite() || UniversalParty.Length > 1) return;
+        if (MultiboxFollowerWatch.Dormant || !IsLeaderInvite() || UniversalParty.Length > 1) return; // dormant: busy with other things
         var proxy = InfoProxyPartyInvite.Instance();
         Svc.Log.Info($"[AFG] Multibox: accepting the party invite from the leader {proxy->InviterName}");
         proxy->RespondToInvitation(proxy->InviterName.StringPtr, true);

@@ -67,6 +67,26 @@ internal static class MultiboxFollowerWatch
 
         var now = Environment.TickCount64;
 
+        // Parked = dormant: no travel, no party, no parking, so the slave can do other things with other plugins
+        // (2026-10-04). It wakes on the leader's next new run (the leader gone, then back) once it is idle.
+        if (Dormant)
+        {
+            var leaderNow = MultiboxLink.LeaderAnyWorld() is not null;
+            if (!leaderNow) dormantSawLeaderGone = true;
+            if (!leaderNow || !dormantSawLeaderGone || plugin.Controller.Running) return;
+            if (BusyElsewhere() is { } busy)
+            {
+                if (busy != lastBusyLogged) Svc.Log.Info($"[AFG] Multibox: the leader started a new run; waiting, busy with {busy}");
+                lastBusyLogged = busy;
+                return;
+            }
+            Svc.Log.Info("[AFG] Multibox: the leader started a new run and this client is idle; following again");
+            Dormant = false;
+            dormantSawLeaderGone = false;
+            lastBusyLogged = null;
+            leaderWasRunning = false; // counts as the leader starting now (the random start delay applies)
+        }
+
         // The leader grinds on another world: an idle slave travels there first (Lifestream), then follows as usual.
         if (!plugin.Controller.Running && MultiboxLink.LeaderAnyWorld() is { } far
             && Svc.Objects.LocalPlayer is { } self && far.World != self.CurrentWorld.RowId)
@@ -156,6 +176,35 @@ internal static class MultiboxFollowerWatch
         }
     }
 
+    /// <summary>Parked and left alone until the leader's next new run finds this client idle.</summary>
+    public static bool Dormant { get; private set; }
+    private static bool dormantSawLeaderGone;
+    private static string? lastBusyLogged;
+
+    // Plugins that run activities of their own: (display name, IPC function returning true while busy).
+    private static readonly (string Name, string Ipc)[] OtherActivities =
+    [
+        ("AutoDuty", "AutoDuty.IsBusy"), ("BOCCHI", "BOCCHI.IsBusy"), ("Saucy", "Saucy.IsBusy"), ("BoatRunner", "BoatRunner.IsBusy"),
+        ("ICE", "ICE.IsRunning"), ("Questionable", "Questionable.IsRunning"), ("AutoRetainer", "AutoRetainer.PluginState.IsBusy"),
+        ("Artisan", "Artisan.IsListRunning"), ("GatherBuddy", "GatherBuddyReborn.IsAutoGatherEnabled"), ("Lifestream", "Lifestream.IsBusy"),
+    ];
+
+    /// <summary>What keeps this client from rejoining: a duty, a loading screen, or another plugin busy; null when idle.</summary>
+    private static string? BusyElsewhere()
+    {
+        if (Svc.Condition[ConditionFlag.BoundByDuty] || Svc.Condition[ConditionFlag.BetweenAreas]) return "a duty or a loading screen";
+        foreach (var (name, ipc) in OtherActivities)
+        {
+            try
+            {
+                var gate = Svc.PluginInterface.GetIpcSubscriber<bool>(ipc);
+                if (gate.HasFunction && gate.InvokeFunc()) return name;
+            }
+            catch { /* not loaded or another signature: not busy */ }
+        }
+        return null;
+    }
+
     /// <summary>The current zone is an inn room: TerritoryIntendedUse 2 is exactly the 8 city inn rooms.</summary>
     private static bool InInnRoom()
         => Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.TerritoryIntendedUse.RowId == 2;
@@ -179,6 +228,8 @@ internal static class MultiboxFollowerWatch
     private static void Park()
     {
         Parked = true;
+        Dormant = true;              // from here on the slave is left alone (other plugins may use it)
+        dormantSawLeaderGone = false;
         if (Blocked is null) MultiboxParty.LeaveAsSlave(); // the leader stopped (a blocked slave stays in the party)
         // Already in an inn room (any of them): it is parked, no trip (2026-10-04).
         if (InInnRoom())
