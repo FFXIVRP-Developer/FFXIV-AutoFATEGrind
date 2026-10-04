@@ -171,6 +171,16 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     with `InfoProxyPartyInvite.RespondToInvitation` (as Henchman; no window is clicked) when not in a party with others;
     the run's auto-decline (`PartyInviteWatcher`) skips the leader's invite. Following does not wait for the party.
 
+20. **Natural spreading** (`Core/Fork/Spread.cs`; Settings → Multibox → Spreading, four switches, on by default), after
+    BOCCHI's critical encounter parking. Values are rolled per character from its content id (stable, different per
+    character). Own side: the arrival point (`MoveToFate`, 20-50 % of the radius at its angle ±25°) and the in-fight
+    walks to a mob (`RepositionToFateMob`, hitbox + 1.5 m on its side) and to the centre (`SeekFateCentre`, 8 m out).
+    Crowd nudge: after arriving, another player within 6 m → the best of 30 spots 4-12 m away, scored like BOCCHI
+    (`min(nearest, 25) - 5 x players within 8 m`), inside 85 % of the radius. Dodge margin: BossMod
+    `NormalMovement.ForbiddenZoneCushion` Small or Medium. Fighting distance: `StayCloseToTarget.range` OnHitbox for
+    tanks/melee, 12-20 m for ranged and healers. Both go in as transient strategies when the preset is activated, and
+    BossMod's accepted/REFUSED answer is logged. The bundled preset (revision 2) gains the StayCloseToTarget module.
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |

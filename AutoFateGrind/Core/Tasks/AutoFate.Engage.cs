@@ -449,7 +449,7 @@ public sealed partial class AutoFate
         var goal = sightBlocked?.Position ?? survey.NearestPosition;
         var goalHitbox = sightBlocked?.HitboxRadius ?? survey.NearestHitboxRadius;
         var goalDistance = sightBlocked?.DistanceToHitbox ?? survey.NearestDistanceToHitbox;
-        var dest = goal.OnMesh();
+        var dest = Fork.Spread.AroundPoint(goal, goalHitbox + 1.5f).OnMesh(); // fork (item 20): this character's side of the mob
         // Already inside the ranged approach distance and still not fighting means the ground in between is the
         // problem, so close in like a melee; clib ends a move that starts within its tolerance without moving.
         // Fork: a blocked line of sight is the same problem at any distance.
@@ -488,7 +488,7 @@ public sealed partial class AutoFate
         Status = $"Searching {fateName}";
         Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
 
-        var dest = FateGround.Project(centre) ?? centre;
+        var dest = Fork.Spread.AroundPoint(FateGround.Project(centre) ?? centre, 8f); // fork (item 20): its own side of the centre
         var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
 
         bool MobSeenOrGone()

@@ -36,6 +36,19 @@ internal static class MultiboxSettings
         }
 
         // Connected clients only, leader first, then by name (file order changes every 2 s as the cards are rewritten).
+        // Fork (item 20): natural spreading, for every character (leader and slaves alike).
+        using (SettingsGroup.Begin("Spreading"))
+        {
+            SettingsRow.Draw("Own side", "Each character keeps its own side of the FATE and of the mob it walks to (from its character id), so several characters arrive and close in from different directions.",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadStandAngle, v => cfg.SpreadStandAngle = v, "##sp_side"));
+            SettingsRow.Draw("Move away from crowds", "After arriving, when another player stands within 6 m, step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCrowdNudge, v => cfg.SpreadCrowdNudge = v, "##sp_crowd"));
+            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge.",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadDodgeMargin, v => cfg.SpreadDodgeMargin = v, "##sp_dodge"));
+            SettingsRow.Draw("Own fighting distance", "Melee fight on the target's hitbox; ranged jobs and healers hold their own distance between 12 and 20 m (per character).",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
+        }
+
         var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
             .OrderBy(c => c.Role).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
         using (SettingsGroup.Begin("Leader"))

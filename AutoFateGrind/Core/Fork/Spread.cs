@@ -1,0 +1,122 @@
+using System.Globalization;
+using System.Numerics;
+using AutoFateGrind.Core.Game.Fates;
+using Dalamud.Game.ClientState.Objects.SubKinds;
+using ECommons.DalamudServices;
+
+namespace AutoFateGrind.Core.Fork;
+
+// Fork (README-FORK item 20): characters spread out naturally in a FATE, like BOCCHI's critical encounter parking.
+// Every character rolls its own values from its content id, so the leader and each slave keep the same personal
+// side and distances (stable, not re-rolled every walk) while being different from each other:
+//   1. stand angle   its own side of the FATE / mob: the arrival point, the walk to a mob, the walk to the centre
+//   2. crowd nudge   after arriving, someone within 6 m → a nearby spot with more room (BOCCHI's scoring)
+//   3. dodge margin  BossMod's ForbiddenZoneCushion: Small or Medium per character (was none)
+//   4. combat range  BossMod's StayCloseToTarget range: melee on the hitbox, ranged/healers 12-20 m per character
+internal static class Spread
+{
+    private const float CrowdRadius = 6f;       // a nudge when another player stands this close
+    private const float ScoreCrowdRadius = 8f;  // BOCCHI: -5 per player within 8 m
+    private const float NearestCap = 25f;
+    private const float CrowdPenalty = 5f;
+    private const int NudgeSamples = 30;
+    private const float NudgeMinStep = 4f, NudgeMaxStep = 12f;
+
+    private static ulong seededFor;
+    private static float angle;            // radians, this character's side
+    private static string cushion = "Small";
+    private static float rangedRange = 15f;
+    private static readonly Random jitter = new();
+
+    private static void EnsureSeed()
+    {
+        var cid = ECommons.GameHelpers.Player.CID;
+        if (cid == 0 || cid == seededFor) return;
+        seededFor = cid;
+        var rng = new Random(unchecked((int)(cid ^ (cid >> 32))));
+        angle = rng.NextSingle() * MathF.Tau;
+        cushion = rng.Next(2) == 0 ? "Small" : "Medium";
+        rangedRange = MathF.Round(12f + rng.NextSingle() * 8f, 1);
+        Svc.Log.Info($"[AFG] Spread: side {angle * 180f / MathF.PI:F0}°, dodge margin {cushion}, ranged distance {rangedRange:F1} m");
+    }
+
+    private static Vector3 Dir(float radians) => new(MathF.Cos(radians), 0f, MathF.Sin(radians));
+
+    /// <summary>1. Arrival: a point on this character's side, 20-50 % of the radius out; null when off.</summary>
+    public static Vector3? ArrivalPoint(Vector3 centre, float radius)
+    {
+        if (!Plugin.Cfg.SpreadStandAngle) return null;
+        EnsureSeed();
+        var a = angle + (jitter.NextSingle() * 2f - 1f) * 0.45f; // ±25°
+        var r = radius * (0.2f + jitter.NextSingle() * 0.3f);
+        return centre + Dir(a) * r;
+    }
+
+    /// <summary>1. In the fight: this character's side of a point (a mob, the FATE centre), standoff metres out.</summary>
+    public static Vector3 AroundPoint(Vector3 point, float standoff)
+    {
+        if (!Plugin.Cfg.SpreadStandAngle || standoff <= 0f) return point;
+        EnsureSeed();
+        var a = angle + (jitter.NextSingle() * 2f - 1f) * 0.35f; // ±20°
+        var p = point + Dir(a) * standoff;
+        return FateGround.Project(p) ?? point;
+    }
+
+    /// <summary>2. A nearby spot with more room when another player stands within 6 m; null = stay.</summary>
+    public static Vector3? CrowdNudge(Vector3 me, Vector3 fateCentre, float fateRadius)
+    {
+        if (!Plugin.Cfg.SpreadCrowdNudge) return null;
+        var others = OtherPlayers();
+        if (!others.Any(o => Vector3.Distance(o, me) < CrowdRadius)) return null;
+
+        var current = Score(me, others);
+        Vector3? best = null;
+        var bestScore = current;
+        for (var i = 0; i < NudgeSamples; i++)
+        {
+            var step = NudgeMinStep + jitter.NextSingle() * (NudgeMaxStep - NudgeMinStep);
+            var candidate = me + Dir(jitter.NextSingle() * MathF.Tau) * step;
+            if (FateGround.HorizontalDistance(candidate, fateCentre) > fateRadius * 0.85f) continue;
+            if (FateGround.Project(candidate) is not { } onMesh || Vector3.Distance(onMesh, candidate) > 2f) continue;
+            var score = Score(onMesh, others);
+            if (score > bestScore) { bestScore = score; best = onMesh; }
+        }
+        return best;
+    }
+
+    private static float Score(Vector3 at, List<Vector3> others)
+    {
+        if (others.Count == 0) return NearestCap;
+        var nearest = others.Min(o => Vector3.Distance(o, at));
+        var crowd = others.Count(o => Vector3.Distance(o, at) < ScoreCrowdRadius);
+        return MathF.Min(nearest, NearestCap) - CrowdPenalty * crowd;
+    }
+
+    private static List<Vector3> OtherPlayers()
+    {
+        var me = Svc.Objects.LocalPlayer;
+        var list = new List<Vector3>();
+        foreach (var obj in Svc.Objects)
+        {
+            if (obj is IPlayerCharacter pc && (me is null || pc.GameObjectId != me.GameObjectId)) list.Add(pc.Position);
+        }
+        return list;
+    }
+
+    /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
+    public static string? DodgeMargin()
+    {
+        if (!Plugin.Cfg.SpreadDodgeMargin) return null;
+        EnsureSeed();
+        return cushion;
+    }
+
+    /// <summary>4. BossMod StayCloseToTarget range for this character's role, or null when off.</summary>
+    public static string? CombatRange(byte role)
+    {
+        if (!Plugin.Cfg.SpreadCombatRange) return null;
+        EnsureSeed();
+        // ClassJob.Role: 1 tank, 2 melee, 3 ranged, 4 healer.
+        return role is 1 or 2 ? "OnHitbox" : rangedRange.ToString(CultureInfo.InvariantCulture);
+    }
+}

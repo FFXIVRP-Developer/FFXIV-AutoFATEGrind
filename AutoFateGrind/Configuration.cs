@@ -77,6 +77,12 @@ public sealed class Configuration : IPluginConfiguration
     // Fork: multibox follow (item 16). Leader publishes its zone and FATE; Follower (set on slaves by the XIVProfiles override)
     // goes to the leader's zone and takes its FATE.
     public AutoFateGrind.Core.Multibox.MultiboxRole MultiboxRole { get; set; } = AutoFateGrind.Core.Multibox.MultiboxRole.Leader;
+
+    // Fork (item 20): natural spreading in FATEs (Settings → Multibox → Spreading).
+    public bool SpreadStandAngle { get; set; } = true;
+    public bool SpreadCrowdNudge { get; set; } = true;
+    public bool SpreadDodgeMargin { get; set; } = true;
+    public bool SpreadCombatRange { get; set; } = true;
     // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
     public bool ResumeAfterReload { get; set; } = true;
     public bool ResumeAfterReloadPending { get; set; }

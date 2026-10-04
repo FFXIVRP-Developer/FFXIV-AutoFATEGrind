@@ -25,7 +25,8 @@ public sealed partial class AutoFate
         await WaitForNavmeshReady(NavmeshReadyWaitMs, 60);
         await GenerateObstacleMap(fate);
 
-        var rnd = RandomPointInsideRadius(fate.Position, fate.Radius * 0.5f);
+        // Fork (item 20): this character's own side of the FATE, not a fresh random point shared by nobody.
+        var rnd = Fork.Spread.ArrivalPoint(fate.Position, fate.Radius) ?? RandomPointInsideRadius(fate.Position, fate.Radius * 0.5f);
         var projected = FateGround.Project(rnd) ?? FateGround.Project(fate.Position);
         var dest = projected ?? rnd;
         if (projected is null)
@@ -178,7 +179,19 @@ public sealed partial class AutoFate
         // Clean arrival. clib only dismounts when it lands inside tolerance; a flying mount routinely
         // stops a few metres ABOVE the point (the Y gap), so it would otherwise enter the FATE still mounted.
         await SafeDismount($"dismount-{targetId}");
+        await NudgeFromCrowd(targetId);
         return MoveStopReason.None;
+    }
+
+    // Fork (item 20): arrived next to another player (a slave, the leader, anyone): step to a spot with more room.
+    private async Task NudgeFromCrowd(uint fateId)
+    {
+        if (PublicEvent.GetFateById(fateId) is not { } fate || Svc.Objects.LocalPlayer is not { } me) return;
+        if (Svc.Condition[ConditionFlag.InCombat]) return;
+        if (Fork.Spread.CrowdNudge(me.Position, fate.Position, fate.Radius) is not { } spot) return;
+        Diag($"Spread: someone is standing within 6 m; moving {Vector3.Distance(me.Position, spot):F0} m to a spot with more room");
+        bool Stop() => Svc.Condition[ConditionFlag.InCombat] || PublicEvent.GetFateById(fateId) is not { State: FateState.Running };
+        await WalkWithBossModParked(spot, MovementConfig.Default.WithTolerance(1.5f), Stop, $"spread-nudge-{fateId}");
     }
 
     private async Task TryTeleportShortcut(Vector3 fatePos, uint fateId, string fateName)
@@ -326,7 +339,21 @@ public sealed partial class AutoFate
             return;
         }
         BossModIPC.Instance.AddTransientStrategy(preset, AutoTargetModule, "MaxTargets", PullSize().ToString());
+        ApplySpreadStrategies(preset);
         BossModFateHelper.SyncChocobo(preset, reapply: true);
+    }
+
+    // Fork (item 20): this character's dodge margin and fighting distance; BossMod's answer is logged (it says false
+    // when a module or option is unknown to the BossMod build in use).
+    private void ApplySpreadStrategies(string preset)
+    {
+        const string normal = "BossMod.Autorotation.MiscAI.NormalMovement";
+        const string stayClose = "BossMod.Autorotation.MiscAI.StayCloseToTarget";
+        if (Fork.Spread.DodgeMargin() is { } cushion)
+            Diag($"Spread: dodge margin {cushion} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, normal, "ForbiddenZoneCushion", cushion) ? "accepted" : "REFUSED")}");
+        var role = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
+        if (Fork.Spread.CombatRange(role) is { } range)
+            Diag($"Spread: fighting distance {range} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, stayClose, "range", range) ? "accepted" : "REFUSED")}");
     }
 
     private static unsafe void SyncToFate(uint fateId)
