@@ -76,6 +76,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
     // Cap on fighting off a mob that aggroed mid-travel, so an unkillable add can't park the run.
     private const int   CombatClearTimeoutMs = 30_000;
     private const int   RaiseWaitMs = 30_000;
+    private const int   RaiseWaitWithHealerMs = 60_000; // fork: a living healer in the party gets time to reach and raise
     private const int   ReleaseTransitionWaitMs = 60_000;
     private const int   DefaultSwapWaitMs = 30_000;
     private const int   MaxSwapWaitSec = 300;

@@ -223,6 +223,13 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     positional; nothing moved melee there before. A melee slave of a tank leader then skips StayCloseToPartyRole. The
     BossMod Reborn config is identical on every profile (synced), so this was not a sync difference.
 
+23. **Deaths in a party** (`AutoFate.Recovery.cs`, `ApplySpreadStrategies`). A healer's BossMod healer AI gets
+    `Raise = Slowcast` (Swiftcast when up, else a hard cast; the default None raised nobody). A KO'd character accepts
+    a raise only when one is pending on it (statuses 148 / 1140 / 2648; the accept used to fire with nothing offered
+    and count as success, so a party KO sat through two revive timeouts before going home). It waits 60 s for a raise
+    with a living healer in the party, 30 s otherwise, then returns home and the run (or the slave's follow) carries on.
+    A slave that stopped itself because it was blocked starts again once the leader is somewhere it can follow.
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |

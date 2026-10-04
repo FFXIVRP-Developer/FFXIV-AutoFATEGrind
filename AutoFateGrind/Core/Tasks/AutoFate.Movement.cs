@@ -352,6 +352,10 @@ public sealed partial class AutoFate
         if (Fork.Spread.DodgeMargin() is { } cushion)
             Diag($"Spread: dodge margin {cushion} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, normal, "ForbiddenZoneCushion", cushion) ? "accepted" : "REFUSED")}");
         var role = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
+        // A healer raises dead party members (BossMod's healer AI defaults to Raise = None, so nobody was raised: 2026-10-04).
+        // Slowcast: Swiftcast when it is up, else a hard cast.
+        if (role == 4)
+            Diag($"Healer: raising party members → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, "BossMod.Autorotation.xan.HealerAI", "Raise", "Slowcast") ? "accepted" : "REFUSED")}");
         if (Fork.Spread.MeleePositional(role) is { } positional)
         {
             const string goToPositional = "BossMod.Autorotation.MiscAI.GoToPositional";

@@ -94,7 +94,9 @@ internal static class MultiboxFollowerWatch
         // Blocked while idle (e.g. the leader started in a zone above this slave): waits like a parked slave, so it starts
         // once the leader moves somewhere it can follow.
         if (leaderRunning && blocked is not null && !running) Parked = true;
-        var wantStart = leaderRunning && blocked is null && !running && (leaderStarted || Parked || startAtMs != 0);
+        // stopAskedByUs: it stopped itself (blocked, e.g. the leader passed through a zone it has not unlocked) and the
+        // leader is somewhere it can follow again: start, do not sit idle (2026-10-04 slave7 stayed stopped).
+        var wantStart = leaderRunning && blocked is null && !running && (leaderStarted || Parked || startAtMs != 0 || stopAskedByUs);
         if (!wantStart) startAtMs = 0;
         else if (startAtMs == 0)
         {

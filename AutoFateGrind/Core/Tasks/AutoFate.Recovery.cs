@@ -29,7 +29,7 @@ public sealed partial class AutoFate
 
         var soloWait = Svc.Party.Length == 0;
         Status = soloWait ? "KO — releasing" : "KO — waiting for raise";
-        Diag(soloWait ? "Solo KO: returning home." : "Party KO: waiting up to 30s for a raise.");
+        Diag(soloWait ? "Solo KO: returning home." : $"Party KO: waiting up to {(LivingHealerInParty() ? RaiseWaitWithHealerMs : RaiseWaitMs) / 1000}s for a raise.");
 
         var returningHome = soloWait;
         if (soloWait)
@@ -40,7 +40,7 @@ public sealed partial class AutoFate
         }
         else
         {
-            var raiseDeadline = Environment.TickCount64 + RaiseWaitMs;
+            var raiseDeadline = Environment.TickCount64 + (LivingHealerInParty() ? RaiseWaitWithHealerMs : RaiseWaitMs);
             var accepted = false;
             while (Environment.TickCount64 < raiseDeadline)
             {
@@ -112,8 +112,21 @@ public sealed partial class AutoFate
         }
     }
 
+    // Fork: the raise statuses on a dead player while a raise is offered (BossMod RaiseUtil: Raise 148, 1140, 2648). The
+    // accept used to fire at once with nothing offered and count as success, so a party KO waited out two revive timeouts
+    // before going home (2026-10-04).
+    private static readonly uint[] RaisePendingStatuses = [148, 1140, 2648];
+
+    private static bool RaiseOffered()
+        => Svc.Objects.LocalPlayer is { } me && me.StatusList.Any(s => RaisePendingStatuses.Contains(s.StatusId));
+
+    /// <summary>A living healer in the party (it may still raise): the raise wait is longer.</summary>
+    private static bool LivingHealerInParty()
+        => Svc.Party.Any(m => m.ClassJob.ValueNullable?.Role == 4 && m.CurrentHP > 0 && (ulong)m.ContentId != ECommons.GameHelpers.Player.CID);
+
     private static bool TryAcceptRaisePrompt()
     {
+        if (!RaiseOffered()) return false;
         // No reliable raise-prompt addon check that's API-stable across patches; accept-attempt is a no-op
         // unless the prompt is showing, so we can spam it without side effects.
         return TryExecuteReviveCommand(ReviveParamAccept);
