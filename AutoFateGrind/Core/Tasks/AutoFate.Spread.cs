@@ -12,13 +12,15 @@ using System.Threading.Tasks;
 namespace AutoFateGrind.Core.Tasks;
 
 // Fork (README-FORK item 20): keeping characters apart after they arrived (Spread.cs has the values).
-//   idle nudge  out of combat (between FATEs, waiting for mobs), every 10 s: the crowd nudge again
+//   idle nudge  out of combat (between FATEs, waiting for mobs): the crowd nudge again, damped so a crowd does not
+//               shuffle in sync: the crowd must last 8 s, each check (every 4-7 s) moves only on a coin flip (one of a
+//               close pair usually moves, not both), and after a move the next one is 15-30 s away
+//               (2026-10-04: every 10 s, all five nudged in the same second)
 //   fight step  in combat, a ranged job or healer with another player within 3 m steps to its own side of its target,
 //               at its own distance; only when no enemy within 40 m is casting, it is not casting itself, and it has
 //               stood still for 1.5 s (BossMod is not moving it: no dodge going on). At most every 12 s, 10 m at most.
 public sealed partial class AutoFate
 {
-    private const int IdleNudgeEveryMs = 10_000;
     private const int FightStepEveryMs = 12_000;
     private const int FightCheckEveryMs = 2_000;
     private const float FightStepCrowdMeters = 3f;
@@ -26,6 +28,21 @@ public sealed partial class AutoFate
     private const int StillForMs = 1_500;
 
     private long nextIdleNudgeMs;
+    private long crowdSeenSinceMs;
+    private static readonly Random spreadRng = new();
+
+    private bool IdleNudgeDue(Vector3 me)
+    {
+        var now = Environment.TickCount64;
+        if (now < nextIdleNudgeMs) return false;
+        nextIdleNudgeMs = now + spreadRng.Next(4_000, 7_000);
+        if (!Fork.Spread.SomeoneWithin(me, 6f)) { crowdSeenSinceMs = 0; return false; }
+        if (crowdSeenSinceMs == 0) { crowdSeenSinceMs = now; return false; }
+        if (now - crowdSeenSinceMs < 8_000 || spreadRng.Next(2) == 0) return false;
+        crowdSeenSinceMs = 0;
+        nextIdleNudgeMs = now + spreadRng.Next(15_000, 30_000);
+        return true;
+    }
     private long nextFightStepMs;
     private Vector3 lastSpreadPos;
     private long stillSinceMs;
@@ -34,10 +51,9 @@ public sealed partial class AutoFate
     private async Task TickIdleNudge(GrindState state)
     {
         if (state is not (GrindState.BetweenFates or GrindState.WaitingForFates)) return;
-        if (Environment.TickCount64 < nextIdleNudgeMs) return;
-        nextIdleNudgeMs = Environment.TickCount64 + IdleNudgeEveryMs;
         if (!Plugin.Cfg.SpreadCrowdNudge || Svc.Condition[ConditionFlag.InCombat] || Svc.Condition[ConditionFlag.BetweenAreas]) return;
-        if (Svc.Objects.LocalPlayer is not { } me || Fork.Spread.CrowdNudge(me.Position) is not { } spot) return;
+        if (Svc.Objects.LocalPlayer is not { } me || !IdleNudgeDue(me.Position)) return;
+        if (Fork.Spread.CrowdNudge(me.Position) is not { } spot) return;
         Diag($"Spread: waiting with someone within 6 m; moving {Vector3.Distance(me.Position, spot):F0} m to a spot with more room");
         await WalkWithBossModParked(spot, MovementConfig.Default.WithTolerance(1.5f),
             () => Svc.Condition[ConditionFlag.InCombat] || CancelToken.IsCancellationRequested, "spread-idle-nudge");
@@ -52,9 +68,7 @@ public sealed partial class AutoFate
 
         if (!Svc.Condition[ConditionFlag.InCombat])
         {
-            if (now < nextIdleNudgeMs) return;
-            nextIdleNudgeMs = now + IdleNudgeEveryMs;
-            await NudgeFromCrowd(fateId);
+            if (Plugin.Cfg.SpreadCrowdNudge && IdleNudgeDue(me.Position)) await NudgeFromCrowd(fateId);
             return;
         }
 
