@@ -118,10 +118,10 @@ index ad2be07..69735ab 100644
  
 diff --git a/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
 new file mode 100644
-index 0000000..b80e9a8
+index 0000000..f2ca3bb
 --- /dev/null
 +++ b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,61 @@
 +using Dalamud.Plugin.Ipc;
 +using ECommons.DalamudServices;
 +
@@ -135,11 +135,14 @@ index 0000000..b80e9a8
 +//   AutoFateGrind.Phase        () -> string  Idle, Grinding, Repairing, Trading, Humanizing, Finishing, Paused
 +//   AutoFateGrind.IsBusy       () -> bool    the local plugins' standard "doing something" (a run, incl. finishing the
 +//                                            FATE after StopWhenSafe); callers wait for false
++//   AutoFateGrind.GoalReached  () -> bool    the last run ended because its goal was met (e.g. every Yo-kai zone done),
++//                                            not a stop or a fault: restarting it would end again at once
 +internal sealed class AfgIpcProvider : IDisposable
 +{
 +    private const string Prefix = "AutoFateGrind";
 +
 +    private readonly ICallGateProvider<bool> isBusy;
++    private readonly ICallGateProvider<bool> goalReached;
 +    private readonly ICallGateProvider<bool> isRunning;
 +    private readonly ICallGateProvider<bool> start;
 +    private readonly ICallGateProvider<object> stopWhenSafe;
@@ -156,6 +159,8 @@ index 0000000..b80e9a8
 +
 +        isBusy       = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsBusy");
 +        isBusy.RegisterFunc(() => plugin.Controller.Running);
++        goalReached  = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.GoalReached");
++        goalReached.RegisterFunc(() => !plugin.Controller.Running && plugin.Controller.LastRunGoalReached);
 +        isRunning.RegisterFunc(() => plugin.Controller.Running);
 +        start.RegisterFunc(() =>
 +        {
@@ -170,6 +175,7 @@ index 0000000..b80e9a8
 +    public void Dispose()
 +    {
 +        isBusy.UnregisterFunc();
++        goalReached.UnregisterFunc();
 +        isRunning.UnregisterFunc();
 +        start.UnregisterFunc();
 +        stopWhenSafe.UnregisterAction();
@@ -899,11 +905,37 @@ index 924cdf3..97580da 100644
          var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
          var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
          var minutes = rng.Next(minMin, maxMin + 1);
+diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
+index 48ea1e8..4f6e5c3 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
+@@ -46,8 +46,13 @@ internal sealed partial class AutoFateController
+     // Writes a finished run to history exactly once. Idempotent (guarded by session.Recorded) so the many
+     // terminal hand-off paths and an explicit Stop can all call it without double-counting. Purely additive
+     // — never touches grind control flow, so a history failure can't wedge automation.
++    // Fork (README-FORK item 15): the last run ended because its goal was met (every zone done / stop condition), not a
++    // stop or a fault. Read by the AutoFateGrind.GoalReached IPC so BoatRunner moves on instead of restarting it.
++    public bool LastRunGoalReached { get; private set; }
++
+     private void FinalizeRun(AutoFateSession? s)
+     {
++        if (s is not null) LastRunGoalReached = s.CompletedByStopCondition;
+         if (s is null || s.Recorded) return;
+         if (s.DidNothing) { s.Recorded = true; return; }
+         s.Recorded = true;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.cs b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-index 481f303..6ecbf77 100644
+index 481f303..92dc2d8 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-@@ -93,17 +93,20 @@ internal sealed partial class AutoFateController
+@@ -85,6 +85,7 @@ internal sealed partial class AutoFateController
+         }
+ 
+         session = s;
++        LastRunGoalReached = false; // fork: a new run
+         Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
+ 
+         ApplyStartingClass();
+@@ -93,17 +94,20 @@ internal sealed partial class AutoFateController
  
      private bool PlanYokaiZones(AutoFateSession owningSession)
      {
