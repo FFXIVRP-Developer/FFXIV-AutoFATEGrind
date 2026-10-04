@@ -951,10 +951,10 @@ index 0000000..b7bff18
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxPresence.cs b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 new file mode 100644
-index 0000000..82ebc2d
+index 0000000..6f78085
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,55 @@
 +using ECommons.DalamudServices;
 +
 +namespace AutoFateGrind.Core.Multibox;
@@ -965,6 +965,8 @@ index 0000000..82ebc2d
 +{
 +    private const int EveryMs = 2_000;
 +    private static long nextMs;
++    private const int PositionEveryMs = 30_000;
++    private static long nextPositionMs;
 +
 +    public static void Start() => Svc.Framework.Update += Tick;
 +
@@ -978,6 +980,16 @@ index 0000000..82ebc2d
 +        if (player is null) return;
 +
 +        var running = Plugin.Instance?.Controller.Running ?? false;
++        // Fork (item 20): a position line every 30 s of a run, to check the spreading from the logs.
++        if (running && Environment.TickCount64 >= nextPositionMs)
++        {
++            nextPositionMs = Environment.TickCount64 + PositionEveryMs;
++            var nearest = Svc.Objects.OfType<Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter>()
++                .Where(pc => pc.GameObjectId != player.GameObjectId)
++                .Select(pc => System.Numerics.Vector3.Distance(pc.Position, player.Position))
++                .DefaultIfEmpty(-1f).Min();
++            Svc.Log.Info($"[AFG] POSITION ({player.Position.X:F0},{player.Position.Y:F0},{player.Position.Z:F0}) fate={MultiboxLink.CurrentFateId} combat={Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat]} nearest player {(nearest < 0 ? "none" : $"{nearest:F0} m")}");
++        }
 +        // The leader publishes while its run is going, breaks included (the run's own publish only runs while it picks
 +        // FATEs: a humanizer break went stale and parked the followers).
 +        if (running && !MultiboxFollowerWatch.IsFollower) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
@@ -1039,10 +1051,23 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..7f8b9ed 100644
+index 35e0b04..8492dcd 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-@@ -153,6 +153,7 @@ public sealed partial class AutoFate
+@@ -39,7 +39,11 @@ public sealed partial class AutoFate
+         var pickedId = fate.Id;
+         var pickedName = fate.Name;
+         Status = $"Moving to {fate.Name}";
+-        Diag($"Picked FATE {fate.Id} ({fate.Name}) at {fate.Position}");
++        // Fork: the same pick again within 10 s is not logged again (a follower re-picking the same FATE).
++        if (fate.Id != lastLoggedPickId || Environment.TickCount64 - lastLoggedPickMs > 10_000)
++            Diag($"Picked FATE {fate.Id} ({fate.Name}) at {fate.Position}");
++        lastLoggedPickId = fate.Id;
++        lastLoggedPickMs = Environment.TickCount64;
+ 
+         var moveResult = await MoveToFate(fate);
+         if (CancelToken.IsCancellationRequested) return ExitReason.Quit;
+@@ -153,6 +157,7 @@ public sealed partial class AutoFate
  
          var preset = Plugin.Cfg.CombatPresetName;
          EnsureCombatPreset(preset);
@@ -1050,7 +1075,7 @@ index 35e0b04..7f8b9ed 100644
          SyncToFate(fateId);
          AssertPresetActive(preset);
          ResetEngageOverrides(preset);
-@@ -211,6 +212,7 @@ public sealed partial class AutoFate
+@@ -211,6 +216,7 @@ public sealed partial class AutoFate
                      lastProgress = fate.Progress;
                      lastProgressAtMs = Environment.TickCount64;
                      combatStallBounces = 0;
@@ -1058,7 +1083,7 @@ index 35e0b04..7f8b9ed 100644
                  }
                  else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                        && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
-@@ -246,13 +248,14 @@ public sealed partial class AutoFate
+@@ -246,13 +252,14 @@ public sealed partial class AutoFate
                      AssertPresetActive(preset);
                  }
  
@@ -1075,7 +1100,7 @@ index 35e0b04..7f8b9ed 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -269,12 +272,16 @@ public sealed partial class AutoFate
+@@ -269,12 +276,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -1092,7 +1117,7 @@ index 35e0b04..7f8b9ed 100644
              BossModIPC.Instance.ClearActive();
              if (isCollect) DisableTextAdvance();
          }
-@@ -331,7 +338,7 @@ public sealed partial class AutoFate
+@@ -331,7 +342,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -1101,7 +1126,7 @@ index 35e0b04..7f8b9ed 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +392,9 @@ public sealed partial class AutoFate
+@@ -385,7 +396,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -1112,7 +1137,7 @@ index 35e0b04..7f8b9ed 100644
          {
              return false;
          }
-@@ -409,28 +418,43 @@ public sealed partial class AutoFate
+@@ -409,28 +422,43 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -1165,7 +1190,7 @@ index 35e0b04..7f8b9ed 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -464,7 +488,7 @@ public sealed partial class AutoFate
+@@ -464,7 +492,7 @@ public sealed partial class AutoFate
          Status = $"Searching {fateName}";
          Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
  
@@ -1174,7 +1199,7 @@ index 35e0b04..7f8b9ed 100644
          var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
  
          bool MobSeenOrGone()
-@@ -518,8 +542,31 @@ public sealed partial class AutoFate
+@@ -518,8 +546,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
      {
@@ -1207,7 +1232,7 @@ index 35e0b04..7f8b9ed 100644
              EndRingChase(preset);
              return false;
          }
-@@ -643,6 +690,8 @@ public sealed partial class AutoFate
+@@ -643,6 +694,8 @@ public sealed partial class AutoFate
          ringChaseTargetId = 0;
          ringChaseFailures = 0;
          ringChaseGivenUpTargetId = 0;
@@ -1216,7 +1241,7 @@ index 35e0b04..7f8b9ed 100644
          collectPullsHeld = false;
          if (!BossModIPC.Instance.CanClearTransientStrategy)
          {
-@@ -741,7 +790,7 @@ public sealed partial class AutoFate
+@@ -741,7 +794,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -1225,7 +1250,7 @@ index 35e0b04..7f8b9ed 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -779,6 +828,12 @@ public sealed partial class AutoFate
+@@ -779,6 +832,12 @@ public sealed partial class AutoFate
  
      private bool  ringChaseParked;
      private ulong ringChaseTargetId;
@@ -1238,7 +1263,7 @@ index 35e0b04..7f8b9ed 100644
      private int   ringChaseFailures;
      private ulong ringChaseGivenUpTargetId;
  
-@@ -792,7 +847,7 @@ public sealed partial class AutoFate
+@@ -792,7 +851,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -1247,7 +1272,7 @@ index 35e0b04..7f8b9ed 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +857,15 @@ public sealed partial class AutoFate
+@@ -802,11 +861,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -1347,10 +1372,10 @@ index d79e384..72c8f62 100644
          var mgr = CSFateManager.Instance();
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
-index 0000000..bc48579
+index 0000000..9f6bc24
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,189 @@
 +using AutoFateGrind.Core.Game.Fates;
 +using AutoFateGrind.Core.Multibox;
 +using clib.Utils;
@@ -1364,13 +1389,20 @@ index 0000000..bc48579
 +public sealed partial class AutoFate
 +{
 +    private uint lastPickedFateId;
++    private uint lastLoggedPickId;
++    private long lastLoggedPickMs;
 +    private uint lastFollowedZone;
 +
 +    /// <summary>Every state computation: the leader publishes; a follower moves its zone to the leader's.</summary>
 +    private void MultiboxTick()
 +    {
++        // The FATE this client picked (where it is going or fighting); the one it stands in only when it picked none.
++        // Overlapping FATEs made the published id flicker between the one picked and the one walked through, and a slave
++        // restarted its move on every flip (2026-10-04: FATEs 811/812, eight restarts in a second).
 +        var current = PublicEvent.CurrentFate;
-+        MultiboxLink.CurrentFateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
++        MultiboxLink.CurrentFateId = lastPickedFateId != 0 && PublicEvent.GetFateById(lastPickedFateId) is { State: not (FateState.Ended or FateState.Failed) }
++            ? lastPickedFateId
++            : current is { State: FateState.Running } ? current.Id : 0;
 +
 +        if (!MultiboxFollowerWatch.IsFollower)
 +        {
