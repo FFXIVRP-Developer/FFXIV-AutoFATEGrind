@@ -361,7 +361,7 @@ internal static class L
         public static readonly LocString Installing = new("plugins.installing", "Installing…");
         public static readonly LocString RepoHint = new("plugins.repoHint", "Repo: {0}\nLeft-click to open repo URL · right-click to copy");
         public static readonly LocString TextAdvanceDisabled = new("plugins.textAdvanceDisabled",
-            "Loaded, but TextAdvance's own \"Enable plugin\" toggle is off.\nFATE turn-ins still work (AFG drives them directly), but gemstone\nauto-trade relies on this toggle to clear the trader's dialogue.\nTurn it on in TextAdvance's settings window (/xlplugins -> TextAdvance).");
+            "Loaded, but TextAdvance's own \"Enable plugin\" toggle is off.\nAFG doesn't need it: FATE turn-ins and trader dialogue are driven directly.\nTurn it on in TextAdvance's settings window (/xlplugins -> TextAdvance)\nas a fallback if a Collect FATE turn-in stalls.");
         public static readonly LocString Footer = new("plugins.footer",
             "Install adds the plugin's source repository to Dalamud and queues an install. If one-click install fails (URL drift, network), right-click a plugin name to copy its repo URL and add it manually via /xlsettings -> Experimental -> Custom Plugin Repositories.");
         public static readonly LocString PurposeVnavmesh = new("plugins.purpose.vnavmesh", "Pathfinding and movement to FATEs.");
@@ -715,7 +715,6 @@ internal static class L
         public static readonly LocString AutoTrade = new("settings.gems.autoTrade", "Auto-trade at threshold");
         public static readonly LocString AutoTradeHelp = new("settings.gems.autoTradeHelp", "When your Bicolor Gemstone inventory reaches the threshold below, the plugin teleports to a trader and buys the item.");
         public static readonly LocString AutoTradeOff = new("settings.gems.autoTradeOff", "Auto-trade is off. Enable it to configure the trade.");
-        public static readonly LocString TradeTextAdvanceNote = new("settings.gems.textAdvanceNote", "TextAdvance is installed but disabled. Auto-trade may stall at the trader's dialogue; turn on TextAdvance's \"Enable plugin\" toggle for reliable trading.");
         public static readonly LocString Threshold = new("settings.gems.threshold", "Trade threshold");
         public static readonly LocString ThresholdHelp = new("settings.gems.thresholdHelp", "Gem count that triggers the trade. Game cap is 1500. Lower values trade more often so fewer FATEs are wasted near cap.");
         public static readonly LocString GemsFormat = new("settings.gems.gemsFormat", "%d gems");

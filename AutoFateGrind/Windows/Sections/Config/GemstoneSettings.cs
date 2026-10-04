@@ -1,4 +1,3 @@
-using AutoFateGrind.Core.External;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Trading;
 using AutoFateGrind.Windows.Components;
@@ -52,11 +51,6 @@ internal static class GemstoneSettings
         {
             SettingsRow.Note(Loc.T(L.Settings.AutoTradeOff));
             return;
-        }
-
-        if (ExternalPlugins.IsInstalledButDisabled(ExternalPlugin.TextAdvance))
-        {
-            SettingsRow.Note(Loc.T(L.Settings.TradeTextAdvanceNote), Styling.AccentAmber);
         }
 
         SettingsRow.Draw(Loc.T(L.Settings.Threshold),
