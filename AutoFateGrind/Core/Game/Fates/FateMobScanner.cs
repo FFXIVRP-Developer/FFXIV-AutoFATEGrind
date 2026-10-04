@@ -68,6 +68,21 @@ internal static unsafe class FateMobScanner
             : new FateMobSurvey(liveCount, nearestPosition, nearestHitbox, nearestDistance, nearestVerticalDelta);
     }
 
+    /// <summary>Fork (item 21): live mobs of the FATE not fighting anyone yet, within reach and in sight, nearest first.</summary>
+    public static List<IBattleNpc> UnpulledMobs(uint fateId, Vector3 from, float maxDistanceToHitbox)
+    {
+        var list = new List<IBattleNpc>();
+        foreach (var obj in Svc.Objects)
+        {
+            if (obj is not IBattleNpc npc || !IsLiveMobOfFate(npc, fateId)) continue;
+            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) != 0) continue;
+            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || !HasLineOfSight(from, npc.Position)) continue;
+            list.Add(npc);
+        }
+        list.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
+        return list;
+    }
+
     public static bool TryGetTargetedMob(uint fateId, Vector3 from, out float distanceToHitbox)
     {
         var found = TryGetTarget(fateId, from, out var target);

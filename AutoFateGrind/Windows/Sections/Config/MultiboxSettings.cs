@@ -56,6 +56,8 @@ internal static class MultiboxSettings
         {
             SettingsRow.Draw("Slaves assist a tank leader", "When the leader is on a tank job, slaves do not pull: they take the leader's target, stay near the tank (melee 3 m, ranged at their own distance) and fight the pack it holds with their own rotation and AoE. A leader on any other job: everyone pulls for themselves as before.",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.TankLeaderAssist, v => cfg.TankLeaderAssist = v, "##tank_assist"));
+            SettingsRow.Draw("Tank pulls with its ranged attack", "A leader on a tank job hits every FATE mob within 20 m that is not fighting yet with its ranged attack (Shield Lob, Tomahawk, Unmend, Lightning Shot), up to 8 per pass, so they come to it.",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.TankLeaderPull, v => cfg.TankLeaderPull = v, "##tank_pull"));
         }
 
         var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)

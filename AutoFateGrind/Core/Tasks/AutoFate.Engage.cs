@@ -260,6 +260,7 @@ public sealed partial class AutoFate
 
                 TickTargetSync(fateId); // Fork: was SyncToFate(fateId); unsyncs for a non-FATE foe
                 TickTankAssist(preset); // fork (item 21): a slave with a tank leader assists it
+                await TickTankPull(fateId, preset); // fork (item 21): a tank leader tags the FATE's mobs with its ranged attack
 
                 if (isCollect)
                 {

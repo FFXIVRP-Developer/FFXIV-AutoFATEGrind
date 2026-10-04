@@ -87,6 +87,7 @@ public sealed class Configuration : IPluginConfiguration
 
     // Fork (item 21): with a leader on a tank job, slaves do not pull: they assist its target and stay near it.
     public bool TankLeaderAssist { get; set; } = true;
+    public bool TankLeaderPull { get; set; } = true;
     // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
     public bool ResumeAfterReload { get; set; } = true;
     public bool ResumeAfterReloadPending { get; set; }
