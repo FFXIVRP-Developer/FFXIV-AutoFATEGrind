@@ -29,11 +29,21 @@ internal static class ActionDock
         ImGui.SetCursorScreenPos(new Vector2(origin.X + padX, origin.Y + (size.Y - buttonHeight) * 0.5f));
 
         var ctrl = plugin.Controller;
-        if (ctrl.Running) DrawRunControls(plugin, innerWidth);
+        // Fork (item 18): a slave has no Start, Pause or Stop: it runs at its leader's will.
+        if (plugin.Configuration.MultiboxRole == Core.Multibox.MultiboxRole.Follower) DrawSlaveLine(ctrl);
+        else if (ctrl.Running) DrawRunControls(plugin, innerWidth);
         else DrawStart(plugin, innerWidth);
 
         ImGui.SetCursorScreenPos(origin);
         ImGui.Dummy(size);
+    }
+
+    private static void DrawSlaveLine(Core.Tasks.AutoFateController ctrl)
+    {
+        var line = ctrl.Running ? $"Slave · {Core.Multibox.MultiboxLink.FollowerStatus}"
+            : Core.Multibox.MultiboxFollowerWatch.Parked ? "Slave · parked: starts again when the leader does"
+            : "Slave · starts and stops with the leader";
+        ImGui.TextDisabled(line);
     }
 
     private static void DrawRunControls(Plugin plugin, float innerWidth)
@@ -71,11 +81,8 @@ internal static class ActionDock
         var watchMissing = yokai && !YokaiOps.OwnsWatch();
         var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);
         var itemReason = ItemGoalReason(cfg);
-        // Fork (item 18): a slave starts with its leader, never on its own.
-        var slaveWaiting = cfg.MultiboxRole == Core.Multibox.MultiboxRole.Follower && Core.Multibox.MultiboxLink.Leader() is null;
-        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null && !slaveWaiting;
-        var reason = slaveWaiting ? "Slave: starts by itself when the leader starts a run"
-            : !depsOk ? Loc.T(L.Grind.ReasonInstall)
+        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null;
+        var reason = !depsOk ? Loc.T(L.Grind.ReasonInstall)
             : watchMissing ? Loc.T(L.Grind.ReasonNoWatch)
             : ranksMaxed ? Loc.T(L.Grind.ReasonRanksMaxed)
             : itemReason is not null ? itemReason
