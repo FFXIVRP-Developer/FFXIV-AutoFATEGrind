@@ -11,6 +11,15 @@ namespace AutoFateGrind.Core.Tasks;
 public sealed partial class AutoFate
 {
     private uint lastPickedFateId;
+
+    // Slave follow delay: each slave sets off for the leader's FATE after its own random 3-15 s, counted from the later of
+    // leaving combat and the leader's pick, so they leave and arrive at different times instead of all at once.
+    private const int FollowDelayMinMs = 3_000, FollowDelayMaxMs = 15_000;
+    private static readonly Random followRng = new();
+    private long outOfCombatSinceMs;
+    private uint followDelayFateId;
+    private long followDelayFromMs;
+    private int followDelayMs;
     private uint lastLoggedPickId;
     private long lastLoggedPickMs;
     private uint lastFollowedZone;
@@ -21,6 +30,9 @@ public sealed partial class AutoFate
         // The FATE this client picked (where it is going or fighting); the one it stands in only when it picked none.
         // Overlapping FATEs made the published id flicker between the one picked and the one walked through, and a slave
         // restarted its move on every flip (2026-10-04: FATEs 811/812, eight restarts in a second).
+        // When this client left combat (the follow delay counts from it).
+        if (Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat]) outOfCombatSinceMs = 0;
+        else if (outOfCombatSinceMs == 0) outOfCombatSinceMs = Environment.TickCount64;
         var current = PublicEvent.CurrentFate;
         MultiboxLink.CurrentFateId = lastPickedFateId != 0 && PublicEvent.GetFateById(lastPickedFateId) is { State: not (FateState.Ended or FateState.Failed) }
             ? lastPickedFateId
@@ -182,6 +194,24 @@ public sealed partial class AutoFate
         if (level > 0 && fate.Level > level + Plugin.Cfg.MaxLevelAbove)
         {
             MultiboxLink.FollowerStatus = $"blocked: the leader's FATE is Lv {fate.Level}, I am Lv {level} (max {Plugin.Cfg.MaxLevelAbove} above)";
+            return null;
+        }
+
+        // The follow delay: each new FATE from the leader gets a fresh random delay, counted from the later of leaving
+        // combat and the leader's pick (a slave idle for a while does not leave the moment the leader picks).
+        var now = Environment.TickCount64;
+        if (Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat] || outOfCombatSinceMs == 0) return null;
+        if (followDelayFateId != fate.Id)
+        {
+            followDelayFateId = fate.Id;
+            followDelayFromMs = Math.Max(outOfCombatSinceMs, now);
+            followDelayMs = followRng.Next(FollowDelayMinMs, FollowDelayMaxMs);
+            Diag($"Multibox: the leader's next FATE is {fate.Id} ({fate.Name}); setting off in {followDelayMs / 1000.0:F1}s");
+        }
+        var from = Math.Max(followDelayFromMs, outOfCombatSinceMs);
+        if (now - from < followDelayMs)
+        {
+            MultiboxLink.FollowerStatus = $"following {leader.Name}: setting off in {(followDelayMs - (now - from)) / 1000.0:F0}s";
             return null;
         }
         return fate;

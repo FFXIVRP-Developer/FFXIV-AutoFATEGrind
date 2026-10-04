@@ -79,6 +79,7 @@ public sealed partial class AutoFate
         if (now - stillSinceMs < StillForMs) return;                                   // BossMod is moving it (a dodge)
         if (Svc.Targets.Target is not IBattleChara target || target.IsDead) return;
         if (!Fork.Spread.SomeoneWithin(me.Position, FightStepCrowdMeters)) return;
+        if (spreadRng.Next(2) == 0) return;                                           // one of a close pair, not both at once
         if (EnemyCastingNear(me.Position, 40f)) return;                                // something may be coming: no step
 
         var distance = MathF.Min(Fork.Spread.RangedDistance() * 0.8f, Vector3.Distance(me.Position, target.Position));

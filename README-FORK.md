@@ -164,6 +164,8 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     the zone not unlocked = no aetheryte attuned) finishes its FATE and parks, and starts again once the leader is
     somewhere it can follow; it skips a leader's FATE above its level + MaxLevelAbove. Each slave starts 5-30 s after the
     leader (random per slave), and a slave does not use resume-after-reload (the watcher starts it with the leader).
+    For every new FATE of the leader a slave waits its own random 3-15 s before setting off (`LeaderFate`), counted
+    from the later of leaving combat and the leader's pick, so slaves leave and arrive at different times.
 
 19. **Leader and slaves in one party** (`Core/Multibox/MultiboxParty.cs`, AutoDuty's game calls). While its run is
     going, the leader invites every connected slave that is not in the party (one try per slave every 20 s, up to the 8
