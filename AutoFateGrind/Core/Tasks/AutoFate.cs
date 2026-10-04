@@ -212,6 +212,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         {
             DisableTextAdvance();
             BossModFateHelper.ReleaseChocobo();
+            BossModMovementTuning.Release();
         }
     }
 

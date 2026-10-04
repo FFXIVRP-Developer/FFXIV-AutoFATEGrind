@@ -423,6 +423,7 @@ internal static class L
             new("changelog.r21800.2", "Fixed FATEs whose center lies below the ground, like the ones at The Imperious in Kozama'uka: the flight there no longer dives into the floor and stalls on arrival. Reported in issue #82"),
             new("changelog.r21800.3", "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82"),
             new("changelog.r21800.4", "Split Settings > General in two: mount choice, economy mode, zone swaps, Twist of Fate and Collect hand-ins now live in the new Settings > Travel tab, while General keeps language, window and run options"),
+            new("changelog.r21800.5", "Added the Vary dodging in combat option under Settings > Humanizer: each FATE picks its own dodge delay, movement delay and extra room from danger from ranges you set, so dodging looks less mechanical. Off by default. Contributed by blackappleD"),
         ];
 
         public static readonly LocString[] Release21700 =
@@ -829,6 +830,23 @@ internal static class L
         public static readonly LocString ReactionDelayHelp = new("settings.humanizer.reactionDelayHelp", "How long to wait after a FATE ends or a new one appears before moving on. Rolls lean toward the short end, and now and then a longer pause is added.");
         public static readonly LocString PickVariety = new("settings.humanizer.pickVariety", "Vary FATE choice");
         public static readonly LocString PickVarietyHelp = new("settings.humanizer.pickVarietyHelp", "When a few FATEs rank about the same, head to a random one of them instead of always the top pick. AFG users nearby then spread out, at the cost of slightly longer trips.");
+        public static readonly LocString CombatMovement = new("settings.humanizer.combatMovement", "Combat movement");
+        public static readonly LocString CombatMovementEnable = new("settings.humanizer.combatMovementEnable", "Vary dodging in combat");
+        public static readonly LocString CombatMovementEnableHelp = new("settings.humanizer.combatMovementEnableHelp", "BossMod steps out of an AoE the moment it is telegraphed and stops right at its edge, so every AFG user in a FATE dodges on the same frame to the same spot. When on, each FATE rolls a dodge delay, a movement delay and a preference for extra room from the ranges below. Your combat preset itself is never changed.");
+        public static readonly LocString CombatMovementOff = new("settings.humanizer.combatMovementOff", "Combat movement variation is off. BossMod dodges the way your combat preset is set up.");
+        public static readonly LocString CombatMovementNoModule = new("settings.humanizer.combatMovementNoModule", "The combat preset '{0}' has no Automatic movement (AI) module, so these settings do nothing. Add that module to the preset in BossMod, or switch back to the bundled Auto FATE Grind preset.");
+        public static readonly LocString DodgeDelay = new("settings.humanizer.dodgeDelay", "Dodge delay");
+        public static readonly LocString DodgeDelayHelp = new("settings.humanizer.dodgeDelayHelp", "How long BossMod waits before stepping out of a telegraphed AoE. One value is rolled per FATE from this range. Longer delays mean getting hit more often, more deaths, and more FATEs auto-blacklisted for deaths. Casters may also see more hard casts cancelled.");
+        public static readonly LocString MoveDelay = new("settings.humanizer.moveDelay", "Movement delay");
+        public static readonly LocString MoveDelayHelp = new("settings.humanizer.moveDelayHelp", "How long BossMod waits before regular repositioning, such as closing in on a target. It only applies when starting to move from standing still. Most users can leave this at None.");
+        public static readonly LocString DangerRoom = new("settings.humanizer.dangerRoom", "Prefer extra room from danger");
+        public static readonly LocString DangerRoomHelp = new("settings.humanizer.dangerRoomHelp", "Asks BossMod to prefer spots further inside safe ground rather than the very edge of an AoE. This is a soft preference, not a guaranteed distance: it depends on BossMod's map resolution, and the lower levels may change nothing in large FATEs.");
+        public static readonly LocString MovementLevelNone = new("settings.humanizer.levelNone", "None");
+        public static readonly LocString DelayShort = new("settings.humanizer.delayShort", "0.5 s");
+        public static readonly LocString DelayLong = new("settings.humanizer.delayLong", "1 s");
+        public static readonly LocString RoomSmall = new("settings.humanizer.roomSmall", "Small");
+        public static readonly LocString RoomMedium = new("settings.humanizer.roomMedium", "Medium");
+        public static readonly LocString RoomLarge = new("settings.humanizer.roomLarge", "Large");
 
         public static readonly LocString InvitesDecline = new("settings.invites.decline", "Decline");
         public static readonly LocString AutoDecline = new("settings.invites.autoDecline", "Auto-decline party invites");
