@@ -3,6 +3,7 @@ using AutoFateGrind.Core.Multibox;
 using clib.Utils;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using ECommons.DalamudServices;
+using System.Threading.Tasks;
 
 namespace AutoFateGrind.Core.Tasks;
 
@@ -61,9 +62,98 @@ public sealed partial class AutoFate
         }
 
         var myInstance = MultiboxLink.CurrentInstance;
-        MultiboxLink.FollowerStatus = leader.Instance != myInstance && Svc.ClientState.TerritoryType == leader.Territory
-            ? $"blocked: leader {leader.Name} is in instance {leader.Instance}, I am in {myInstance}"
-            : $"following {leader.Name}";
+        if (leader.Instance != myInstance && leader.Instance != 0 && myInstance != 0 && Svc.ClientState.TerritoryType == leader.Territory)
+        {
+            MultiboxLink.FollowerStatus = Environment.TickCount64 < nextInstanceHopMs
+                ? $"blocked: leader {leader.Name} is in instance {leader.Instance}, I am in {myInstance} (next try in {(nextInstanceHopMs - Environment.TickCount64) / 1000}s)"
+                : $"changing to instance {leader.Instance} (leader {leader.Name})";
+            instanceHopTarget = leader.Instance;
+            return;
+        }
+        instanceHopTarget = 0;
+        MultiboxLink.FollowerStatus = $"following {leader.Name}";
+    }
+
+    // ---- Following the leader into its instance --------------------------------------------------------------
+    // A follower in another instance of the leader's zone sees other FATEs: it finishes its own FATE, teleports to the
+    // zone's aetheryte and has Lifestream change the instance there (Lifestream.ChangeInstance needs an aetheryte in
+    // reach). At most one try every 90 s: a full instance or a refused change does not turn into a loop.
+    private const int InstanceHopRetryMs = 90_000;
+    private uint instanceHopTarget;
+    private long nextInstanceHopMs;
+
+    /// <summary>ComputeState, when not in a FATE: hop to the leader's instance now?</summary>
+    private bool WantsInstanceHop()
+        => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower && instanceHopTarget != 0 && Environment.TickCount64 >= nextInstanceHopMs
+        && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat];
+
+    private async Task HopToLeaderInstance()
+    {
+        var target = instanceHopTarget;
+        nextInstanceHopMs = Environment.TickCount64 + InstanceHopRetryMs;
+        if (!LifestreamFunc<bool>("Lifestream.CanChangeInstance", out _, quiet: true) && !LifestreamFunc<int>("Lifestream.GetCurrentInstance", out _, quiet: true))
+        {
+            Diag("Multibox: Lifestream is not loaded; cannot change the instance");
+            return;
+        }
+
+        Status = $"Following the leader into instance {target}";
+        if (!(LifestreamFunc<bool>("Lifestream.CanChangeInstance", out var canNow) && canNow))
+        {
+            // Not at an aetheryte: to the zone's own (a teleport inside the zone lands next to it).
+            var aetheryte = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.Aetheryte.RowId ?? 0;
+            if (aetheryte == 0)
+            {
+                Diag("Multibox: this zone has no aetheryte to change the instance at");
+                return;
+            }
+            Diag($"Multibox: teleporting to aetheryte {aetheryte} to change to instance {target}");
+            if (!TeleportToAetheryte(aetheryte))
+            {
+                Diag("Multibox: the teleport to the aetheryte was refused");
+                return;
+            }
+            await WaitUntilTimed(() => Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas], 15_000, "instance hop: teleport start");
+            await WaitUntilTimed(() => !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas] && Svc.Objects.LocalPlayer is not null, 60_000, "instance hop: teleport end");
+            if (!await WaitUntilTimed(() => LifestreamFunc<bool>("Lifestream.CanChangeInstance", out var can, quiet: true) && can, 15_000, "instance hop: at the aetheryte"))
+            {
+                Diag("Multibox: at the aetheryte, but Lifestream cannot change the instance here");
+                return;
+            }
+        }
+
+        Diag($"Multibox: changing to instance {target} (Lifestream)");
+        try { Svc.PluginInterface.GetIpcSubscriber<int, object>("Lifestream.ChangeInstance").InvokeAction((int)target); }
+        catch (Exception ex) { Diag($"Multibox: Lifestream.ChangeInstance failed: {ex.Message}"); return; }
+
+        if (await WaitUntilTimed(() => MultiboxLink.CurrentInstance == target && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas], 90_000, "instance hop: in the leader's instance"))
+        {
+            Diag($"Multibox: in instance {target} with the leader");
+            instanceHopTarget = 0;
+        }
+    }
+
+    private static unsafe bool TeleportToAetheryte(uint aetheryte)
+    {
+        var telepo = FFXIVClientStructs.FFXIV.Client.Game.UI.Telepo.Instance();
+        return telepo is not null && telepo->Teleport(aetheryte, 0);
+    }
+
+    private static bool LifestreamFunc<T>(string name, out T value, bool quiet = false)
+    {
+        value = default!;
+        try
+        {
+            var gate = Svc.PluginInterface.GetIpcSubscriber<T>(name);
+            if (!gate.HasFunction) return false;
+            value = gate.InvokeFunc();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (!quiet) Svc.Log.Debug($"[AFG] {name} failed: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>

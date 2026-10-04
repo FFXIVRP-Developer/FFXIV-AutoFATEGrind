@@ -155,6 +155,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
         BetweenFates,         // Have a target FATE; move (or activate prep NPC) and arrive.
         Engaging,             // CurrentFate is set; fight until it ends or we KO.
         WaitingForFates,      // No eligible FATE; idle-scan with optional zone swap.
+        InstanceHop,          // Fork (item 16): a follower changes to the leader's instance (out of a FATE).
     }
 
     private GrindState lastObservedState = GrindState.Idle;
@@ -262,6 +263,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 case GrindState.YokaiAdvance:
                     await HandOffToNextYokai();
                     return;
+
+                case GrindState.InstanceHop: // fork (item 16)
+                    await HopToLeaderInstance();
+                    break;
 
                 case GrindState.GoalZoneDone:
                     if (await LeaveDoneZone() is ExitReason.Quit) return;
@@ -439,6 +444,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                 followUpFateId = null;
             return GrindState.Engaging;
         }
+
+        // Fork (item 16): out of a FATE (the Engaging check above returned for one), a follower joins the leader's instance.
+        if (WantsInstanceHop())
+            return GrindState.InstanceHop;
 
         if (ShouldWaitForFollowUp())
             return GrindState.WaitingForFollowUp;
