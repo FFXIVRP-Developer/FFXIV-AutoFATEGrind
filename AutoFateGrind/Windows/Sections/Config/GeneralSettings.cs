@@ -35,6 +35,13 @@ internal static class GeneralSettings
             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoShowOnLogin, v => cfg.AutoShowOnLogin = v, "##gen_autoshow"),
             SettingsRow.ToggleHeight);
 
+        // Fork (item 17): literal English like the other fork rows.
+        SettingsRow.Draw("Resume the run after a reload",
+            "A run going when AFG unloads (a rebuild, a crash, a game restart) starts again on the next load, once in the world and out of a duty. Not while BoatRunner is busy with the boat. Off: AFG never starts on its own.",
+            SettingsControls.ToggleWidth,
+            () => SettingsControls.DrawToggle(cfg, () => cfg.ResumeAfterReload, v => cfg.ResumeAfterReload = v, "##gen_resume_reload"),
+            SettingsRow.ToggleHeight);
+
         SettingsRow.Draw(Loc.T(L.Settings.LivePopout),
             Loc.T(L.Settings.LivePopoutHelp),
             SettingsControls.ToggleWidth,

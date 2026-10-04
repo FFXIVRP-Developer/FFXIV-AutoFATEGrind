@@ -73,6 +73,9 @@ public sealed class Configuration : IPluginConfiguration
     // Fork: multibox follow (item 16). Leader publishes its zone and FATE; Follower (set on slaves by the XIVProfiles override)
     // goes to the leader's zone and takes its FATE.
     public AutoFateGrind.Core.Multibox.MultiboxRole MultiboxRole { get; set; } = AutoFateGrind.Core.Multibox.MultiboxRole.Leader;
+    // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
+    public bool ResumeAfterReload { get; set; } = true;
+    public bool ResumeAfterReloadPending { get; set; }
     public bool MountWhileWaitingForFates { get; set; } = false;
     public uint PreferredMountId { get; set; } = 0;
     public bool EconomyTravel { get; set; } = false;

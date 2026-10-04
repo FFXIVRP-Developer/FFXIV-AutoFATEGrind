@@ -86,6 +86,7 @@ public sealed class Plugin : IDalamudPlugin
         Svc.ClientState.Login += OnLogin;
         if (Svc.ClientState.IsLoggedIn) OnLogin();
         ipcProvider = new Core.Ipc.AfgIpcProvider(this); // Fork
+        Core.Fork.ReloadResume.OnLoad(this); // Fork (item 17)
     }
 
     private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
@@ -106,6 +107,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        Core.Fork.ReloadResume.OnUnload(this); // Fork (item 17): before anything stops the run
         ipcProvider.Dispose(); // Fork
         TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
 

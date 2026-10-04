@@ -131,6 +131,13 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     is still going; otherwise it picks as usual. A FATE it is in is never left for the leader's. XIVProfiles sets every
     slave to Follower (`overrides/XIVLauncher/pluginConfigs/AutoFateGrind.json`), so MAIN is the only leader.
 
+17. **Resume the run after a reload** (`Core/Fork/ReloadResume.cs`, a hook at the start of `Plugin.Dispose` and one after
+    the IPC provider in the constructor; Settings → General, on by default, saved as `ResumeAfterReload`). A run going
+    when AFG unloads (a rebuild, a crash, a game restart) starts again on the next load, once logged in, out of a loading
+    screen and out of a duty (retried for ten minutes), once. Not while BoatRunner's phase is a boat one (StoppingFillers,
+    BeforeBoat, OnBoat, AfterBoat): BoatRunner starts its fillers again itself. Item 6 was removed for fighting BoatRunner;
+    this one only resumes a run that was really going and stays out of the boat. Off: AFG never starts on its own.
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |
