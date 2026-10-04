@@ -85,6 +85,7 @@ internal sealed partial class AutoFateController
         }
 
         session = s;
+        LastRunGoalReached = false; // fork: a new run
         Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
 
         ApplyStartingClass();

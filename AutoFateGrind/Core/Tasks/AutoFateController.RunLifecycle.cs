@@ -46,8 +46,13 @@ internal sealed partial class AutoFateController
     // Writes a finished run to history exactly once. Idempotent (guarded by session.Recorded) so the many
     // terminal hand-off paths and an explicit Stop can all call it without double-counting. Purely additive
     // — never touches grind control flow, so a history failure can't wedge automation.
+    // Fork (README-FORK item 15): the last run ended because its goal was met (every zone done / stop condition), not a
+    // stop or a fault. Read by the AutoFateGrind.GoalReached IPC so BoatRunner moves on instead of restarting it.
+    public bool LastRunGoalReached { get; private set; }
+
     private void FinalizeRun(AutoFateSession? s)
     {
+        if (s is not null) LastRunGoalReached = s.CompletedByStopCondition;
         if (s is null || s.Recorded) return;
         if (s.DidNothing) { s.Recorded = true; return; }
         s.Recorded = true;

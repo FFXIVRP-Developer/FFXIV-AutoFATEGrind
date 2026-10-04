@@ -11,11 +11,14 @@ namespace AutoFateGrind.Core.Ipc;
 //   AutoFateGrind.Phase        () -> string  Idle, Grinding, Repairing, Trading, Humanizing, Finishing, Paused
 //   AutoFateGrind.IsBusy       () -> bool    the local plugins' standard "doing something" (a run, incl. finishing the
 //                                            FATE after StopWhenSafe); callers wait for false
+//   AutoFateGrind.GoalReached  () -> bool    the last run ended because its goal was met (e.g. every Yo-kai zone done),
+//                                            not a stop or a fault: restarting it would end again at once
 internal sealed class AfgIpcProvider : IDisposable
 {
     private const string Prefix = "AutoFateGrind";
 
     private readonly ICallGateProvider<bool> isBusy;
+    private readonly ICallGateProvider<bool> goalReached;
     private readonly ICallGateProvider<bool> isRunning;
     private readonly ICallGateProvider<bool> start;
     private readonly ICallGateProvider<object> stopWhenSafe;
@@ -32,6 +35,8 @@ internal sealed class AfgIpcProvider : IDisposable
 
         isBusy       = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsBusy");
         isBusy.RegisterFunc(() => plugin.Controller.Running);
+        goalReached  = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.GoalReached");
+        goalReached.RegisterFunc(() => !plugin.Controller.Running && plugin.Controller.LastRunGoalReached);
         isRunning.RegisterFunc(() => plugin.Controller.Running);
         start.RegisterFunc(() =>
         {
@@ -46,6 +51,7 @@ internal sealed class AfgIpcProvider : IDisposable
     public void Dispose()
     {
         isBusy.UnregisterFunc();
+        goalReached.UnregisterFunc();
         isRunning.UnregisterFunc();
         start.UnregisterFunc();
         stopWhenSafe.UnregisterAction();

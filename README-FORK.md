@@ -117,6 +117,11 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     run goes, finishing the FATE after `StopWhenSafe` included. Every local fork and own plugin has
     `<InternalName>.IsBusy`; BoatRunner waits on it.
 
+15. **`AutoFateGrind.GoalReached`** (`AutoFateController.LastRunGoalReached`, set in `FinalizeRun` from the
+    session's `CompletedByStopCondition`, reset when a run starts; `AfgIpcProvider.cs`): true while AFG is stopped and
+    its last run ended because the goal was met (every Yo-kai zone done, item goal met), not a stop or a fault. BoatRunner
+    then hands the wait to its next filler instead of restarting AFG every 2 minutes (each restart would end again at once).
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |
