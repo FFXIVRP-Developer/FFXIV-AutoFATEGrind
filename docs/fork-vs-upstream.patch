@@ -1924,10 +1924,10 @@ index 0000000..7714123
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TankAssist.cs b/AutoFateGrind/Core/Tasks/AutoFate.TankAssist.cs
 new file mode 100644
-index 0000000..ba19b3c
+index 0000000..50b1eb3
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.TankAssist.cs
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,100 @@
 +using System.Numerics;
 +using AutoFateGrind.Core.Ipc;
 +using AutoFateGrind.Core.Multibox;
@@ -2006,7 +2006,10 @@ index 0000000..ba19b3c
 +            var myRole = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
 +            // Melee DPS stand at their positional on the tank's target (item 22), not next to the tank.
 +            if (myRole == 2 && Plugin.Cfg.SpreadMeleePositional)
-+                role = !BossModIPC.Instance.CanClearTransientStrategy || BossModIPC.Instance.ClearTransientStrategy(preset, StayCloseToPartyRoleModule, "Role");
++            {
++                if (BossModIPC.Instance.CanClearTransientStrategy) BossModIPC.Instance.ClearTransientStrategy(preset, StayCloseToPartyRoleModule, "Role");
++                role = true; // nothing to apply: "false" from the clear only means none was set
++            }
 +            else
 +            {
 +                var range = myRole is 1 or 2 ? "3" : Fork.Spread.RangedDistance().ToString(System.Globalization.CultureInfo.InvariantCulture);
