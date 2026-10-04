@@ -1,8 +1,8 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..4aeb902 100644
+index efc08bd..fb85384 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
-@@ -68,6 +68,11 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +68,14 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -11,10 +11,13 @@ index efc08bd..4aeb902 100644
 +    // Fork: multibox follow (item 16). Leader publishes its zone and FATE; Follower (set on slaves by the XIVProfiles override)
 +    // goes to the leader's zone and takes its FATE.
 +    public AutoFateGrind.Core.Multibox.MultiboxRole MultiboxRole { get; set; } = AutoFateGrind.Core.Multibox.MultiboxRole.Leader;
++    // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
++    public bool ResumeAfterReload { get; set; } = true;
++    public bool ResumeAfterReloadPending { get; set; }
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +149,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +152,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -23,6 +26,107 @@ index efc08bd..4aeb902 100644
      // TerritoryIds from Core.Zones.CityCatalog; defaults to every expansion's main hub.
      public HashSet<uint> HumanizerCities { get; set; } = [129, 132, 1185, Core.Zones.CityCatalog.SolutionNineTerritoryId];
  
+diff --git a/AutoFateGrind/Core/Fork/ReloadResume.cs b/AutoFateGrind/Core/Fork/ReloadResume.cs
+new file mode 100644
+index 0000000..8734578
+--- /dev/null
++++ b/AutoFateGrind/Core/Fork/ReloadResume.cs
+@@ -0,0 +1,95 @@
++using System.Threading;
++using Dalamud.Game.ClientState.Conditions;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Fork;
++
++// Fork (README-FORK item 17): "Resume the run after a reload" (Settings → General, saved). A run going when the plugin
++// unloads (a rebuild, a crash, a game restart) starts again on the next load, once in the world, out of a duty, and not
++// while BoatRunner is busy with the boat. Item 6 did this before and was removed because it fought BoatRunner by
++// restarting AFG when BoatRunner did not want it; this one only resumes a run that was really going, once, and holds
++// back during BoatRunner's boat phases. Off: never starts on its own.
++internal static class ReloadResume
++{
++    private static readonly TimeSpan FirstTry = TimeSpan.FromSeconds(10);
++    private static readonly TimeSpan Retry = TimeSpan.FromSeconds(5);
++    private const int MaxTries = 120; // ten minutes of loading screens, logins and duties
++
++    private static readonly HashSet<string> BoatPhases = ["StoppingFillers", "BeforeBoat", "OnBoat", "AfterBoat"];
++
++    private static CancellationTokenSource? lifetime;
++
++    public static void OnLoad(Plugin plugin)
++    {
++        if (!Plugin.Cfg.ResumeAfterReload || !Plugin.Cfg.ResumeAfterReloadPending)
++        {
++            Clear();
++            return;
++        }
++        lifetime = new CancellationTokenSource();
++        var token = lifetime.Token;
++        Svc.Framework.RunOnTick(() => TryResume(plugin, 1, token), FirstTry, cancellationToken: token);
++    }
++
++    public static void OnUnload(Plugin plugin)
++    {
++        lifetime?.Cancel();
++        lifetime = null;
++        var pending = Plugin.Cfg.ResumeAfterReload && plugin.Controller.Running;
++        if (Plugin.Cfg.ResumeAfterReloadPending == pending) return;
++        Plugin.Cfg.ResumeAfterReloadPending = pending;
++        Plugin.Cfg.Save();
++    }
++
++    private static void TryResume(Plugin plugin, int attempt, CancellationToken token)
++    {
++        if (token.IsCancellationRequested) return;
++        if (!Plugin.Cfg.ResumeAfterReload)
++        {
++            Clear();
++            return;
++        }
++
++        if (BoatRunnerBusy())
++        {
++            // The boat comes first; BoatRunner starts its fillers again afterwards.
++            Svc.Log.Info("[AFG] Resume after reload: BoatRunner is busy with the boat; not resuming.");
++            Clear();
++            return;
++        }
++
++        var ready = Svc.ClientState.IsLoggedIn && Svc.Objects.LocalPlayer is not null
++                 && !Svc.Condition[ConditionFlag.BetweenAreas] && !Svc.Condition[ConditionFlag.BoundByDuty];
++        if (!ready)
++        {
++            if (attempt < MaxTries) Svc.Framework.RunOnTick(() => TryResume(plugin, attempt + 1, token), Retry, cancellationToken: token);
++            else Clear();
++            return;
++        }
++
++        Clear();
++        if (plugin.Controller.Running) return;
++        Svc.Chat.Print("[AFG] Resuming the run that was going before the reload (Settings → General → Resume the run after a reload).");
++        plugin.StartFromCommand();
++    }
++
++    private static void Clear()
++    {
++        if (!Plugin.Cfg.ResumeAfterReloadPending) return;
++        Plugin.Cfg.ResumeAfterReloadPending = false;
++        Plugin.Cfg.Save();
++    }
++
++    private static bool BoatRunnerBusy()
++    {
++        try
++        {
++            var gate = Svc.PluginInterface.GetIpcSubscriber<string>("BoatRunner.Phase");
++            return gate.HasFunction && BoatPhases.Contains(gate.InvokeFunc());
++        }
++        catch
++        {
++            return false;
++        }
++    }
++}
 diff --git a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 index 08faec6..1776ca3 100644
 --- a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
@@ -1354,14 +1458,15 @@ index 829167d..6305bc1 100644
      {
          var sheet = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..47e9b9d 100644
+index 7ff8682..9fcc900 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,11 @@ public sealed class Plugin : IDalamudPlugin
+@@ -85,8 +85,12 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
 +        ipcProvider = new Core.Ipc.AfgIpcProvider(this); // Fork
++        Core.Fork.ReloadResume.OnLoad(this); // Fork (item 17)
      }
  
 +    private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
@@ -1369,15 +1474,16 @@ index 7ff8682..47e9b9d 100644
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +106,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -103,6 +107,8 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
++        Core.Fork.ReloadResume.OnUnload(this); // Fork (item 17): before anything stops the run
 +        ipcProvider.Dispose(); // Fork
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +157,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -153,7 +159,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
@@ -1386,6 +1492,24 @@ index 7ff8682..47e9b9d 100644
      {
          if (Controller.Running)
          {
+diff --git a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
+index 8e1d186..57ffdfb 100644
+--- a/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
++++ b/AutoFateGrind/Windows/Sections/Config/GeneralSettings.cs
+@@ -35,6 +35,13 @@ internal static class GeneralSettings
+             () => SettingsControls.DrawToggle(cfg, () => cfg.AutoShowOnLogin, v => cfg.AutoShowOnLogin = v, "##gen_autoshow"),
+             SettingsRow.ToggleHeight);
+ 
++        // Fork (item 17): literal English like the other fork rows.
++        SettingsRow.Draw("Resume the run after a reload",
++            "A run going when AFG unloads (a rebuild, a crash, a game restart) starts again on the next load, once in the world and out of a duty. Not while BoatRunner is busy with the boat. Off: AFG never starts on its own.",
++            SettingsControls.ToggleWidth,
++            () => SettingsControls.DrawToggle(cfg, () => cfg.ResumeAfterReload, v => cfg.ResumeAfterReload = v, "##gen_resume_reload"),
++            SettingsRow.ToggleHeight);
++
+         SettingsRow.Draw(Loc.T(L.Settings.LivePopout),
+             Loc.T(L.Settings.LivePopoutHelp),
+             SettingsControls.ToggleWidth,
 diff --git a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
 index da8719c..5092dbe 100644
 --- a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
