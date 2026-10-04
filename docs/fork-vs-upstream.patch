@@ -1,5 +1,5 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..1f92efb 100644
+index 28c999b..1b5a25f 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
@@ -44,7 +44,7 @@ index efc08bd..1f92efb 100644
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +168,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -153,6 +177,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -158,10 +158,10 @@ index 0000000..75b5f3d
 +}
 diff --git a/AutoFateGrind/Core/Fork/Spread.cs b/AutoFateGrind/Core/Fork/Spread.cs
 new file mode 100644
-index 0000000..22a60f2
+index 0000000..241f838
 --- /dev/null
 +++ b/AutoFateGrind/Core/Fork/Spread.cs
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,177 @@
 +using System.Globalization;
 +using System.Numerics;
 +using AutoFateGrind.Core.Game.Fates;
@@ -324,7 +324,8 @@ index 0000000..22a60f2
 +    /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
 +    public static string? DodgeMargin()
 +    {
-+        if (!Plugin.Cfg.SpreadDodgeMargin) return null;
++        // Upstream's Combat movement (Settings → Humanizer, v2.18) rolls the same cushion per FATE: when it is on, it decides.
++        if (!Plugin.Cfg.SpreadDodgeMargin || Plugin.Cfg.CombatMovementEnabled) return null;
 +        EnsureSeed();
 +        return cushion;
 +    }
@@ -1199,7 +1200,7 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..12e3d78 100644
+index 893ff8e..1738389 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 @@ -39,7 +39,11 @@ public sealed partial class AutoFate
@@ -1223,7 +1224,7 @@ index 35e0b04..12e3d78 100644
          SyncToFate(fateId);
          AssertPresetActive(preset);
          ResetEngageOverrides(preset);
-@@ -200,6 +205,12 @@ public sealed partial class AutoFate
+@@ -201,6 +206,12 @@ public sealed partial class AutoFate
                      break;
                  }
  
@@ -1236,7 +1237,7 @@ index 35e0b04..12e3d78 100644
                  // A Collect FATE at 100% is won; its row lingers as the hand-in window (leftovers go in below), not a stall.
                  if (isCollect && fate.Progress >= 100) break;
  
-@@ -211,6 +222,7 @@ public sealed partial class AutoFate
+@@ -212,6 +223,7 @@ public sealed partial class AutoFate
                      lastProgress = fate.Progress;
                      lastProgressAtMs = Environment.TickCount64;
                      combatStallBounces = 0;
@@ -1244,7 +1245,7 @@ index 35e0b04..12e3d78 100644
                  }
                  else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                        && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
-@@ -246,13 +258,16 @@ public sealed partial class AutoFate
+@@ -247,13 +259,16 @@ public sealed partial class AutoFate
                      AssertPresetActive(preset);
                  }
  
@@ -1263,7 +1264,7 @@ index 35e0b04..12e3d78 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -260,6 +275,7 @@ public sealed partial class AutoFate
+@@ -261,6 +276,7 @@ public sealed partial class AutoFate
                  }
  
                  var chasing = await TickRingChase(fateId, idle, preset);
@@ -1271,7 +1272,7 @@ index 35e0b04..12e3d78 100644
                  if (!chasing && !isCollect && await TickEngagementWatchdog(fateId, fate, idle))
                  {
                      break;
-@@ -269,12 +285,16 @@ public sealed partial class AutoFate
+@@ -270,12 +286,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -1288,7 +1289,7 @@ index 35e0b04..12e3d78 100644
              BossModIPC.Instance.ClearActive();
              if (isCollect) DisableTextAdvance();
          }
-@@ -331,7 +351,7 @@ public sealed partial class AutoFate
+@@ -332,7 +352,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -1297,7 +1298,7 @@ index 35e0b04..12e3d78 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +405,9 @@ public sealed partial class AutoFate
+@@ -386,7 +406,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -1308,7 +1309,7 @@ index 35e0b04..12e3d78 100644
          {
              return false;
          }
-@@ -409,28 +431,44 @@ public sealed partial class AutoFate
+@@ -410,28 +432,44 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -1362,7 +1363,7 @@ index 35e0b04..12e3d78 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -464,7 +502,7 @@ public sealed partial class AutoFate
+@@ -465,7 +503,7 @@ public sealed partial class AutoFate
          Status = $"Searching {fateName}";
          Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
  
@@ -1371,7 +1372,7 @@ index 35e0b04..12e3d78 100644
          var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
  
          bool MobSeenOrGone()
-@@ -518,8 +556,31 @@ public sealed partial class AutoFate
+@@ -519,8 +557,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
      {
@@ -1404,7 +1405,7 @@ index 35e0b04..12e3d78 100644
              EndRingChase(preset);
              return false;
          }
-@@ -643,6 +704,8 @@ public sealed partial class AutoFate
+@@ -644,6 +705,8 @@ public sealed partial class AutoFate
          ringChaseTargetId = 0;
          ringChaseFailures = 0;
          ringChaseGivenUpTargetId = 0;
@@ -1413,7 +1414,7 @@ index 35e0b04..12e3d78 100644
          collectPullsHeld = false;
          if (!BossModIPC.Instance.CanClearTransientStrategy)
          {
-@@ -741,7 +804,7 @@ public sealed partial class AutoFate
+@@ -742,7 +805,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -1422,7 +1423,7 @@ index 35e0b04..12e3d78 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -779,6 +842,12 @@ public sealed partial class AutoFate
+@@ -780,6 +843,12 @@ public sealed partial class AutoFate
  
      private bool  ringChaseParked;
      private ulong ringChaseTargetId;
@@ -1435,7 +1436,7 @@ index 35e0b04..12e3d78 100644
      private int   ringChaseFailures;
      private ulong ringChaseGivenUpTargetId;
  
-@@ -792,7 +861,7 @@ public sealed partial class AutoFate
+@@ -793,7 +862,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -1444,7 +1445,7 @@ index 35e0b04..12e3d78 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +871,15 @@ public sealed partial class AutoFate
+@@ -803,11 +872,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -2586,7 +2587,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..856da08 100644
+index 8dad4b4..0c549e4 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -2614,7 +2615,7 @@ index 1f98ff8..856da08 100644
      }
  
      private GrindState lastObservedState = GrindState.Idle;
-@@ -244,6 +248,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -245,6 +249,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                  LogHeartbeat(state);
              }
  
@@ -2623,7 +2624,7 @@ index 1f98ff8..856da08 100644
              switch (state)
              {
                  case GrindState.AllDone:
-@@ -261,6 +267,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -262,6 +268,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                      await HandOffToNextYokai();
                      return;
  
@@ -2634,7 +2635,7 @@ index 1f98ff8..856da08 100644
                  case GrindState.GoalZoneDone:
                      if (await LeaveDoneZone() is ExitReason.Quit) return;
                      break;
-@@ -384,6 +394,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -385,6 +395,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      private GrindState ComputeState()
      {
          RefreshPendingCollectReward();
@@ -2642,7 +2643,7 @@ index 1f98ff8..856da08 100644
  
          if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
              abandonedFateId = null;
-@@ -428,7 +439,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -429,7 +440,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              // fight in it, so the reward is tracked and the grind moves on to the next FATE in the zone.
              TrackCollectReward(current);
          }
@@ -2651,7 +2652,7 @@ index 1f98ff8..856da08 100644
          {
              if (current.Progress >= 100)
                  StartFollowUpWatch(current.Id);
-@@ -437,6 +448,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -438,6 +449,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              return GrindState.Engaging;
          }
  
@@ -2662,7 +2663,7 @@ index 1f98ff8..856da08 100644
          if (ShouldWaitForFollowUp())
              return GrindState.WaitingForFollowUp;
  
-@@ -470,7 +485,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -471,7 +486,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(Math.Clamp(Plugin.Cfg.SwapZoneWaitSec, 0, MaxSwapWaitSec) * 1000);
          }
  
@@ -2671,7 +2672,7 @@ index 1f98ff8..856da08 100644
           && Environment.TickCount64 - zoneIdleSinceMs >= zoneIdleWaitMs)
              return GrindState.SwapZone;
  
-@@ -501,6 +516,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -502,6 +517,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
  
      private async Task GoToZone()
      {
@@ -2685,7 +2686,7 @@ index 1f98ff8..856da08 100644
          Status = $"Teleporting to {zone.Name}";
          Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
          var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
-@@ -516,6 +538,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -517,6 +539,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
          if (result == TerritoryTeleportResult.Blocked)
          {
              FaultIfCharacterStaysBlocked();
@@ -2694,7 +2695,7 @@ index 1f98ff8..856da08 100644
              return;
          }
  
-@@ -579,7 +603,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -580,7 +604,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      {
          await EnsureConsumables();
          var keepingTwist = KeepingTwistOfFate();
@@ -3023,7 +3024,7 @@ index 829167d..6305bc1 100644
      {
          var sheet = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..086daa6 100644
+index 0929b02..1810b4b 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
 @@ -85,8 +85,15 @@ public sealed class Plugin : IDalamudPlugin
@@ -3054,7 +3055,7 @@ index 7ff8682..086daa6 100644
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +165,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -154,7 +166,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
@@ -3138,10 +3139,10 @@ index 8e1d186..57ffdfb 100644
              Loc.T(L.Settings.LivePopoutHelp),
              SettingsControls.ToggleWidth,
 diff --git a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
-index da8719c..5092dbe 100644
+index 6377e9a..a453708 100644
 --- a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
 +++ b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
-@@ -94,7 +94,7 @@ internal static class HumanizerSettings
+@@ -164,7 +164,7 @@ internal static class HumanizerSettings
              SettingsControls.RangeInlineWidth(),
              () => SettingsControls.DrawRangeInline(cfg, "##hum_pause_min", "##hum_pause_max",
                  () => cfg.HumanizerPauseMinSec, v => cfg.HumanizerPauseMinSec = v,
@@ -3150,7 +3151,7 @@ index da8719c..5092dbe 100644
  
          SettingsRow.Draw(Loc.T(L.Settings.WalkDistance),
              Loc.T(L.Settings.WalkDistanceHelp),
-@@ -104,10 +104,27 @@ internal static class HumanizerSettings
+@@ -174,10 +174,27 @@ internal static class HumanizerSettings
                  () => cfg.HumanizerWanderMaxMeters, v => cfg.HumanizerWanderMaxMeters = v, 200, 5, Loc.T(L.Settings.MetersFormat)));
      }
  
@@ -3178,7 +3179,7 @@ index da8719c..5092dbe 100644
          SettingsRow.DrawBlock(Loc.T(L.Settings.AllowedCities),
              Loc.T(L.Settings.AllowedCitiesHelp),
              () => DrawHumanizerCityList(cfg));
-@@ -139,7 +156,7 @@ internal static class HumanizerSettings
+@@ -209,7 +226,7 @@ internal static class HumanizerSettings
              ImGui.Spacing();
          }
  
@@ -3189,7 +3190,7 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..d4c3f27
+index 0000000..c5fd7f4
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 @@ -0,0 +1,131 @@
@@ -3238,7 +3239,7 @@ index 0000000..d4c3f27
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadStandAngle, v => cfg.SpreadStandAngle = v, "##sp_side"));
 +            SettingsRow.Draw("Move away from crowds", "When another player stands within 6 m after arriving, and every 10 s while out of combat (between FATEs, waiting for mobs), step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCrowdNudge, v => cfg.SpreadCrowdNudge = v, "##sp_crowd"));
-+            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge.",
++            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge. Steps aside when Settings → Humanizer → Combat movement is on (that rolls it per FATE).",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadDodgeMargin, v => cfg.SpreadDodgeMargin = v, "##sp_dodge"));
 +            SettingsRow.Draw("Own fighting distance", "Melee fight on the target's hitbox; ranged jobs and healers hold their own distance between 12 and 20 m (per character).",
 +                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
