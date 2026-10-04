@@ -339,7 +339,7 @@ index 0000000..22a60f2
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
-index 08faec6..2d19f5d 100644
+index 08faec6..54883e6 100644
 --- a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 +++ b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
 @@ -3,6 +3,7 @@ using DalamudStatusFlags = Dalamud.Game.ClientState.Objects.Enums.StatusFlags;
@@ -356,7 +356,7 @@ index 08faec6..2d19f5d 100644
  
 +    /// <summary>Fork (item 21): FATE mobs a tank should pull, within reach and in sight: first those fighting nobody yet
 +    /// (nearest first), then "wrong pulls", mobs attacking a player who is not a tank (nearest first).</summary>
-+    public static List<(IBattleNpc Mob, bool WrongPull)> PullCandidates(uint fateId, Vector3 from, float maxDistanceToHitbox)
++    public static List<(IBattleNpc Mob, bool WrongPull)> PullCandidates(uint fateId, Vector3 from, float maxDistanceToHitbox, bool requireSight = true)
 +    {
 +        var me = Svc.Objects.LocalPlayer?.GameObjectId ?? 0;
 +        var fresh = new List<IBattleNpc>();
@@ -364,7 +364,7 @@ index 08faec6..2d19f5d 100644
 +        foreach (var obj in Svc.Objects)
 +        {
 +            if (obj is not IBattleNpc npc || !IsLiveMobOfFate(npc, fateId)) continue;
-+            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || !HasLineOfSight(from, npc.Position)) continue;
++            if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || (requireSight && !HasLineOfSight(from, npc.Position))) continue;
 +            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) == 0) { fresh.Add(npc); continue; }
 +            if (npc.TargetObjectId == me || npc.TargetObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter victim) continue;
 +            if (victim.ClassJob.Value.Role != 1) wrong.Add(npc);
@@ -2030,10 +2030,13 @@ index 0000000..50b1eb3
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
 new file mode 100644
-index 0000000..6e081c9
+index 0000000..675f030
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,123 @@
++using System.Numerics;
++using clib.TaskSystem;
++using AutoFateGrind.Core.Game.Ops;
 +using clib.Utils;
 +using AutoFateGrind.Core.Game.Fates;
 +using AutoFateGrind.Core.Ipc;
@@ -2050,11 +2053,22 @@ index 0000000..6e081c9
 +// pass repeats every few seconds while untagged mobs are in reach, so the pack builds up and the slaves AoE it.
 +public sealed partial class AutoFate
 +{
++    // Pulling is the tank's top priority (2026-10-04: every 3 s + 6 s rest left mobs on the slaves; 20 m left farther FATE
++    // mobs alone; Shield Lob without the tank stance did not hold them).
 +    private const float TankPullReachMeters = 20f;
++    private const float TankPullApproachMeters = 120f; // farther FATE mobs: walk until they are in reach
 +    private const int TankPullMaxPerPass = 8;
-+    private const int TankPullMaxInCombat = 4; // already holding a pack: BossMod (mitigation, dodges) is off for less time
-+    private const int TankPullCheckEveryMs = 3_000;
-+    private const int TankPullAfterPassMs = 6_000;
++    private const int TankPullCheckEveryMs = 1_000;
++    private const int TankPullAfterPassMs = 1_000;
++
++    // ClassJob row → (tank stance action, its status): without it a ranged attack hardly holds a mob.
++    private static readonly Dictionary<uint, (uint Action, uint Status)> TankStance = new()
++    {
++        [1] = (28, 79), [19] = (28, 79),         // GLA / PLD: Iron Will
++        [3] = (48, 91), [21] = (48, 91),         // MRD / WAR: Defiance
++        [32] = (3629, 743),                      // DRK: Grit
++        [37] = (16142, 1833),                    // GNB: Royal Guard
++    };
 +
 +    // ClassJob row → its ranged attack (the base class has it too).
 +    private static readonly Dictionary<uint, uint> TankRangedAttack = new()
@@ -2076,9 +2090,30 @@ index 0000000..6e081c9
 +        if (!Plugin.Cfg.TankLeaderPull || Multibox.MultiboxFollowerWatch.IsFollower) return;
 +        if (Svc.Objects.LocalPlayer is not { } me || !TankRangedAttack.TryGetValue(me.ClassJob.RowId, out var action)) return;
 +
++        // The tank stance first: a ranged attack without it hardly draws a mob off a DPS.
++        if (TankStance.TryGetValue(me.ClassJob.RowId, out var stance) && !me.StatusList.Any(s => s.StatusId == stance.Status)
++            && ActionReady(stance.Action, me.GameObjectId) && UseActionOn(stance.Action, me.GameObjectId))
++            Diag("Tank pull: the tank stance was off; turned it on");
++
 +        var mobs = FateMobScanner.PullCandidates(fateId, me.Position, TankPullReachMeters);
-+        if (mobs.Count == 0) return;
-+        var max = Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat] ? TankPullMaxInCombat : TankPullMaxPerPass;
++        if (mobs.Count == 0)
++        {
++            // Nothing in reach: walk toward the nearest FATE mob not on the tank (the pack follows), then pull it.
++            var far = FateMobScanner.PullCandidates(fateId, me.Position, TankPullApproachMeters, requireSight: false);
++            if (far.Count == 0) return;
++            var (target, _) = far[0];
++            var targetId = target.GameObjectId;
++            Diag($"Tank pull: nearest FATE mob not on me is {Vector3.Distance(me.Position, target.Position):F0} m away; walking into reach");
++            // In reach but out of sight (behind a wall or a slope): close in until it can be seen, not just into reach.
++            var blocked = Vector3.Distance(me.Position, target.Position) - target.HitboxRadius <= TankPullReachMeters;
++            await WalkWithBossModParked(target.Position, MovementConfig.Default.WithTolerance(target.HitboxRadius + (blocked ? 5f : TankPullReachMeters - 3f)),
++                () => target.IsDead || target.TargetObjectId == me.GameObjectId || PublicEvent.GetFateById(fateId) is not { State: FFXIVClientStructs.FFXIV.Client.Game.Fate.FateState.Running }
++                   || FateMobScanner.PullCandidates(fateId, Svc.Objects.LocalPlayer?.Position ?? me.Position, TankPullReachMeters).Count > 0,
++                $"tank-pull-approach-{targetId}");
++            nextTankPullMs = 0; // pull right away
++            return;
++        }
++        var max = TankPullMaxPerPass;
 +        var wrongCount = mobs.Count(m => m.WrongPull);
 +        Diag($"Tank pull: {mobs.Count - wrongCount} untagged and {wrongCount} on a non-tank within {TankPullReachMeters:F0} m; taking up to {max}");
 +
@@ -2099,7 +2134,7 @@ index 0000000..6e081c9
 +                if (!await WaitUntilTimed(() => ActionReady(use, mob.GameObjectId), 3_000, "tank pull: action ready", 5)) continue;
 +                if (!UseActionOn(use, mob.GameObjectId)) continue;
 +                tagged++;
-+                await WaitUntilTimed(() => mob.IsDead || mob.TargetObjectId == myId, 1_500, "tank pull: on the tank", 5);
++                await WaitUntilTimed(() => mob.IsDead || mob.TargetObjectId == myId, 800, "tank pull: on the tank", 5);
 +            }
 +        }
 +        finally
