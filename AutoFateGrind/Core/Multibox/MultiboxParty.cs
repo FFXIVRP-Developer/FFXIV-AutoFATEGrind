@@ -1,17 +1,15 @@
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using ECommons;
 using ECommons.DalamudServices;
 using ECommons.PartyFunctions;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace AutoFateGrind.Core.Multibox;
 
 // Fork (README-FORK item 19): the leader and its slaves in one party, like AutoDuty's multibox (same game calls).
 //   leader, while its run is going: invites every connected slave that is not in the party (one try per slave every
 //     20 s, up to the 8-member cap); same world → InviteToParty, another world → InviteToPartyContentId.
-//   slave: accepts an invite from the leader (the game's own Yes/No, answered through the addon, never key presses);
+//   slave: accepts an invite from the leader with InfoProxyPartyInvite.RespondToInvitation (as Henchman does: the game is
+//     answered directly, no Yes/No window is clicked);
 //     any other invite is left to the user (or to the auto-decline of Settings → Party invites). A slave already in a
 //     party with others is left alone.
 internal static unsafe class MultiboxParty
@@ -26,13 +24,11 @@ internal static unsafe class MultiboxParty
     public static void Start()
     {
         Svc.Framework.Update += Tick;
-        Svc.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnSelectYesno);
     }
 
     public static void Stop()
     {
         Svc.Framework.Update -= Tick;
-        Svc.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectYesno", OnSelectYesno);
     }
 
     /// <summary>The invite on screen comes from the leader (the auto-decline leaves it alone).</summary>
@@ -47,6 +43,7 @@ internal static unsafe class MultiboxParty
 
     private static void Tick(Dalamud.Plugin.Services.IFramework _)
     {
+        AcceptLeaderInvite();
         if (Environment.TickCount64 < nextMs) return;
         nextMs = Environment.TickCount64 + EveryMs;
         if (Plugin.Cfg.MultiboxRole != MultiboxRole.Leader || Plugin.Instance?.Controller.Running != true) return;
@@ -84,17 +81,16 @@ internal static unsafe class MultiboxParty
         }
     }
 
-    private static void OnSelectYesno(AddonEvent type, AddonArgs args)
+    private static long nextAcceptMs;
+
+    private static void AcceptLeaderInvite()
     {
+        if (Environment.TickCount64 < nextAcceptMs) return;
+        nextAcceptMs = Environment.TickCount64 + 1_000;
         if (!IsLeaderInvite() || UniversalParty.Length > 1) return;
-        var addon = (AtkUnitBase*)args.Addon.Address;
-        if (addon is null) return;
-        var inviter = InfoProxyPartyInvite.Instance()->InviterName.ToString();
-        // The prompt names the inviter; anything else on a SelectYesno is not this invite.
-        var yesno = new ECommons.UIHelpers.AddonMasterImplementations.AddonMaster.SelectYesno(addon);
-        if (!yesno.Text.Contains(inviter, StringComparison.Ordinal)) return;
-        Svc.Log.Info($"[AFG] Multibox: accepting the party invite from the leader {inviter}");
-        yesno.Yes();
+        var proxy = InfoProxyPartyInvite.Instance();
+        Svc.Log.Info($"[AFG] Multibox: accepting the party invite from the leader {proxy->InviterName}");
+        proxy->RespondToInvitation(proxy->InviterName.StringPtr, true);
     }
 
     private static ushort? WorldId(string name)

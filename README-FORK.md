@@ -160,7 +160,7 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 19. **Leader and slaves in one party** (`Core/Multibox/MultiboxParty.cs`, AutoDuty's game calls). While its run is
     going, the leader invites every connected slave that is not in the party (one try per slave every 20 s, up to the 8
     cap; same world `InviteToParty`, other world `InviteToPartyContentId`). A slave accepts an invite from the leader
-    on the game's own Yes/No (through `AddonMaster.SelectYesno`, no key presses) when it is not in a party with others;
+    with `InfoProxyPartyInvite.RespondToInvitation` (as Henchman; no window is clicked) when not in a party with others;
     the run's auto-decline (`PartyInviteWatcher`) skips the leader's invite. Following does not wait for the party.
 
 ## Verified in game
