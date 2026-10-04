@@ -1,5 +1,5 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..70c3ecc 100644
+index efc08bd..404d096 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
@@ -17,7 +17,7 @@ index efc08bd..70c3ecc 100644
          }
      }
  
-@@ -68,6 +72,14 @@ public sealed class Configuration : IPluginConfiguration
+@@ -68,6 +72,20 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -26,13 +26,19 @@ index efc08bd..70c3ecc 100644
 +    // Fork: multibox follow (item 16). Leader publishes its zone and FATE; Follower (set on slaves by the XIVProfiles override)
 +    // goes to the leader's zone and takes its FATE.
 +    public AutoFateGrind.Core.Multibox.MultiboxRole MultiboxRole { get; set; } = AutoFateGrind.Core.Multibox.MultiboxRole.Leader;
++
++    // Fork (item 20): natural spreading in FATEs (Settings → Multibox → Spreading).
++    public bool SpreadStandAngle { get; set; } = true;
++    public bool SpreadCrowdNudge { get; set; } = true;
++    public bool SpreadDodgeMargin { get; set; } = true;
++    public bool SpreadCombatRange { get; set; } = true;
 +    // Fork: resume a run that was going when the plugin unloaded (item 17, Core/Fork/ReloadResume.cs).
 +    public bool ResumeAfterReload { get; set; } = true;
 +    public bool ResumeAfterReloadPending { get; set; }
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +156,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +162,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -142,6 +148,134 @@ index 0000000..75b5f3d
 +        {
 +            return false;
 +        }
++    }
++}
+diff --git a/AutoFateGrind/Core/Fork/Spread.cs b/AutoFateGrind/Core/Fork/Spread.cs
+new file mode 100644
+index 0000000..34f4e9c
+--- /dev/null
++++ b/AutoFateGrind/Core/Fork/Spread.cs
+@@ -0,0 +1,122 @@
++using System.Globalization;
++using System.Numerics;
++using AutoFateGrind.Core.Game.Fates;
++using Dalamud.Game.ClientState.Objects.SubKinds;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Fork;
++
++// Fork (README-FORK item 20): characters spread out naturally in a FATE, like BOCCHI's critical encounter parking.
++// Every character rolls its own values from its content id, so the leader and each slave keep the same personal
++// side and distances (stable, not re-rolled every walk) while being different from each other:
++//   1. stand angle   its own side of the FATE / mob: the arrival point, the walk to a mob, the walk to the centre
++//   2. crowd nudge   after arriving, someone within 6 m → a nearby spot with more room (BOCCHI's scoring)
++//   3. dodge margin  BossMod's ForbiddenZoneCushion: Small or Medium per character (was none)
++//   4. combat range  BossMod's StayCloseToTarget range: melee on the hitbox, ranged/healers 12-20 m per character
++internal static class Spread
++{
++    private const float CrowdRadius = 6f;       // a nudge when another player stands this close
++    private const float ScoreCrowdRadius = 8f;  // BOCCHI: -5 per player within 8 m
++    private const float NearestCap = 25f;
++    private const float CrowdPenalty = 5f;
++    private const int NudgeSamples = 30;
++    private const float NudgeMinStep = 4f, NudgeMaxStep = 12f;
++
++    private static ulong seededFor;
++    private static float angle;            // radians, this character's side
++    private static string cushion = "Small";
++    private static float rangedRange = 15f;
++    private static readonly Random jitter = new();
++
++    private static void EnsureSeed()
++    {
++        var cid = ECommons.GameHelpers.Player.CID;
++        if (cid == 0 || cid == seededFor) return;
++        seededFor = cid;
++        var rng = new Random(unchecked((int)(cid ^ (cid >> 32))));
++        angle = rng.NextSingle() * MathF.Tau;
++        cushion = rng.Next(2) == 0 ? "Small" : "Medium";
++        rangedRange = MathF.Round(12f + rng.NextSingle() * 8f, 1);
++        Svc.Log.Info($"[AFG] Spread: side {angle * 180f / MathF.PI:F0}°, dodge margin {cushion}, ranged distance {rangedRange:F1} m");
++    }
++
++    private static Vector3 Dir(float radians) => new(MathF.Cos(radians), 0f, MathF.Sin(radians));
++
++    /// <summary>1. Arrival: a point on this character's side, 20-50 % of the radius out; null when off.</summary>
++    public static Vector3? ArrivalPoint(Vector3 centre, float radius)
++    {
++        if (!Plugin.Cfg.SpreadStandAngle) return null;
++        EnsureSeed();
++        var a = angle + (jitter.NextSingle() * 2f - 1f) * 0.45f; // ±25°
++        var r = radius * (0.2f + jitter.NextSingle() * 0.3f);
++        return centre + Dir(a) * r;
++    }
++
++    /// <summary>1. In the fight: this character's side of a point (a mob, the FATE centre), standoff metres out.</summary>
++    public static Vector3 AroundPoint(Vector3 point, float standoff)
++    {
++        if (!Plugin.Cfg.SpreadStandAngle || standoff <= 0f) return point;
++        EnsureSeed();
++        var a = angle + (jitter.NextSingle() * 2f - 1f) * 0.35f; // ±20°
++        var p = point + Dir(a) * standoff;
++        return FateGround.Project(p) ?? point;
++    }
++
++    /// <summary>2. A nearby spot with more room when another player stands within 6 m; null = stay.</summary>
++    public static Vector3? CrowdNudge(Vector3 me, Vector3 fateCentre, float fateRadius)
++    {
++        if (!Plugin.Cfg.SpreadCrowdNudge) return null;
++        var others = OtherPlayers();
++        if (!others.Any(o => Vector3.Distance(o, me) < CrowdRadius)) return null;
++
++        var current = Score(me, others);
++        Vector3? best = null;
++        var bestScore = current;
++        for (var i = 0; i < NudgeSamples; i++)
++        {
++            var step = NudgeMinStep + jitter.NextSingle() * (NudgeMaxStep - NudgeMinStep);
++            var candidate = me + Dir(jitter.NextSingle() * MathF.Tau) * step;
++            if (FateGround.HorizontalDistance(candidate, fateCentre) > fateRadius * 0.85f) continue;
++            if (FateGround.Project(candidate) is not { } onMesh || Vector3.Distance(onMesh, candidate) > 2f) continue;
++            var score = Score(onMesh, others);
++            if (score > bestScore) { bestScore = score; best = onMesh; }
++        }
++        return best;
++    }
++
++    private static float Score(Vector3 at, List<Vector3> others)
++    {
++        if (others.Count == 0) return NearestCap;
++        var nearest = others.Min(o => Vector3.Distance(o, at));
++        var crowd = others.Count(o => Vector3.Distance(o, at) < ScoreCrowdRadius);
++        return MathF.Min(nearest, NearestCap) - CrowdPenalty * crowd;
++    }
++
++    private static List<Vector3> OtherPlayers()
++    {
++        var me = Svc.Objects.LocalPlayer;
++        var list = new List<Vector3>();
++        foreach (var obj in Svc.Objects)
++        {
++            if (obj is IPlayerCharacter pc && (me is null || pc.GameObjectId != me.GameObjectId)) list.Add(pc.Position);
++        }
++        return list;
++    }
++
++    /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
++    public static string? DodgeMargin()
++    {
++        if (!Plugin.Cfg.SpreadDodgeMargin) return null;
++        EnsureSeed();
++        return cushion;
++    }
++
++    /// <summary>4. BossMod StayCloseToTarget range for this character's role, or null when off.</summary>
++    public static string? CombatRange(byte role)
++    {
++        if (!Plugin.Cfg.SpreadCombatRange) return null;
++        EnsureSeed();
++        // ClassJob.Role: 1 tank, 2 melee, 3 ranged, 4 healer.
++        return role is 1 or 2 ? "OnHitbox" : rangedRange.ToString(CultureInfo.InvariantCulture);
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs b/AutoFateGrind/Core/Game/Fates/FateMobScanner.cs
@@ -319,6 +453,30 @@ index 0000000..f2ca3bb
 +        phase.UnregisterFunc();
 +    }
 +}
+diff --git a/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs b/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
+index 7f83980..53b1fe2 100644
+--- a/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
++++ b/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
+@@ -6,7 +6,8 @@ internal static class DefaultCombatPreset
+ {
+     public const string Name = AfgConstants.BundledCombatPresetName;
+ 
+-    public const int Revision = 1;
++    // Fork (item 20): 2 adds MiscAI.StayCloseToTarget (the fighting distance Spread sets) to the bundled preset.
++    public const int Revision = 2;
+ 
+     private const string Base64Brotli =
+         "4YgOAWCc5ErO8zbnUraX8y98h5DuAagZYbHoXK2N6aRPiUwJNEIjld/bxzzxDUIjpMcWlWRSGomQm4jf" +
+@@ -20,5 +21,8 @@ internal static class DefaultCombatPreset
+ 
+     private static string? cached;
+ 
+-    public static string GetSerialized() => cached ??= Base64Brotli.FromBase64();
++    private const string NormalMovementKey = "\"BossMod.Autorotation.MiscAI.NormalMovement\": [";
++
++    public static string GetSerialized() => cached ??= Base64Brotli.FromBase64().Replace(
++        NormalMovementKey, "\"BossMod.Autorotation.MiscAI.StayCloseToTarget\": [],\n    " + NormalMovementKey);
+ }
 diff --git a/AutoFateGrind/Core/Modes/BuiltInModes.cs b/AutoFateGrind/Core/Modes/BuiltInModes.cs
 index ef48ca1..19af71b 100644
 --- a/AutoFateGrind/Core/Modes/BuiltInModes.cs
@@ -853,7 +1011,7 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..913093a 100644
+index 35e0b04..7f8b9ed 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 @@ -153,6 +153,7 @@ public sealed partial class AutoFate
@@ -968,7 +1126,7 @@ index 35e0b04..913093a 100644
 +        var goal = sightBlocked?.Position ?? survey.NearestPosition;
 +        var goalHitbox = sightBlocked?.HitboxRadius ?? survey.NearestHitboxRadius;
 +        var goalDistance = sightBlocked?.DistanceToHitbox ?? survey.NearestDistanceToHitbox;
-+        var dest = goal.OnMesh();
++        var dest = Fork.Spread.AroundPoint(goal, goalHitbox + 1.5f).OnMesh(); // fork (item 20): this character's side of the mob
          // Already inside the ranged approach distance and still not fighting means the ground in between is the
          // problem, so close in like a melee; clib ends a move that starts within its tolerance without moving.
 -        var closeIn = idle.Meters <= EngageMeleeReachMeters || survey.NearestDistanceToHitbox <= EngageRangedApproachToleranceMeters;
@@ -979,6 +1137,15 @@ index 35e0b04..913093a 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
+@@ -464,7 +488,7 @@ public sealed partial class AutoFate
+         Status = $"Searching {fateName}";
+         Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
+ 
+-        var dest = FateGround.Project(centre) ?? centre;
++        var dest = Fork.Spread.AroundPoint(FateGround.Project(centre) ?? centre, 8f); // fork (item 20): its own side of the centre
+         var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
+ 
+         bool MobSeenOrGone()
 @@ -518,8 +542,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
@@ -1070,10 +1237,42 @@ index 35e0b04..913093a 100644
          {
              var now = Environment.TickCount64;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
-index d79e384..ce80568 100644
+index d79e384..72c8f62 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
-@@ -268,7 +268,10 @@ public sealed partial class AutoFate
+@@ -25,7 +25,8 @@ public sealed partial class AutoFate
+         await WaitForNavmeshReady(NavmeshReadyWaitMs, 60);
+         await GenerateObstacleMap(fate);
+ 
+-        var rnd = RandomPointInsideRadius(fate.Position, fate.Radius * 0.5f);
++        // Fork (item 20): this character's own side of the FATE, not a fresh random point shared by nobody.
++        var rnd = Fork.Spread.ArrivalPoint(fate.Position, fate.Radius) ?? RandomPointInsideRadius(fate.Position, fate.Radius * 0.5f);
+         var projected = FateGround.Project(rnd) ?? FateGround.Project(fate.Position);
+         var dest = projected ?? rnd;
+         if (projected is null)
+@@ -178,9 +179,21 @@ public sealed partial class AutoFate
+         // Clean arrival. clib only dismounts when it lands inside tolerance; a flying mount routinely
+         // stops a few metres ABOVE the point (the Y gap), so it would otherwise enter the FATE still mounted.
+         await SafeDismount($"dismount-{targetId}");
++        await NudgeFromCrowd(targetId);
+         return MoveStopReason.None;
+     }
+ 
++    // Fork (item 20): arrived next to another player (a slave, the leader, anyone): step to a spot with more room.
++    private async Task NudgeFromCrowd(uint fateId)
++    {
++        if (PublicEvent.GetFateById(fateId) is not { } fate || Svc.Objects.LocalPlayer is not { } me) return;
++        if (Svc.Condition[ConditionFlag.InCombat]) return;
++        if (Fork.Spread.CrowdNudge(me.Position, fate.Position, fate.Radius) is not { } spot) return;
++        Diag($"Spread: someone is standing within 6 m; moving {Vector3.Distance(me.Position, spot):F0} m to a spot with more room");
++        bool Stop() => Svc.Condition[ConditionFlag.InCombat] || PublicEvent.GetFateById(fateId) is not { State: FateState.Running };
++        await WalkWithBossModParked(spot, MovementConfig.Default.WithTolerance(1.5f), Stop, $"spread-nudge-{fateId}");
++    }
++
+     private async Task TryTeleportShortcut(Vector3 fatePos, uint fateId, string fateName)
+     {
+         if (Plugin.Cfg.EconomyTravel) return;
+@@ -268,7 +281,10 @@ public sealed partial class AutoFate
                  if (IsPlayerKO()) break;
                  // A real FATE may have started on top of us; let the state machine take over. A ring it
                  // left (blacklisted or abandoned) is not one, so the aggro from it still gets cleared.
@@ -1085,7 +1284,7 @@ index d79e384..ce80568 100644
                  if (Svc.Condition[ConditionFlag.Mounted]) { BossModIPC.Instance.ClearActive(); await SafeDismount("dismount-clearcombat"); }
                  AssertPresetActive(preset);
                  await NextFrame(30);
-@@ -280,7 +283,7 @@ public sealed partial class AutoFate
+@@ -280,7 +296,7 @@ public sealed partial class AutoFate
          }
  
          if (Svc.Condition[ConditionFlag.InCombat])
@@ -1094,6 +1293,30 @@ index d79e384..ce80568 100644
      }
  
      private void EnsureCombatPreset(string preset)
+@@ -323,9 +339,23 @@ public sealed partial class AutoFate
+             return;
+         }
+         BossModIPC.Instance.AddTransientStrategy(preset, AutoTargetModule, "MaxTargets", PullSize().ToString());
++        ApplySpreadStrategies(preset);
+         BossModFateHelper.SyncChocobo(preset, reapply: true);
+     }
+ 
++    // Fork (item 20): this character's dodge margin and fighting distance; BossMod's answer is logged (it says false
++    // when a module or option is unknown to the BossMod build in use).
++    private void ApplySpreadStrategies(string preset)
++    {
++        const string normal = "BossMod.Autorotation.MiscAI.NormalMovement";
++        const string stayClose = "BossMod.Autorotation.MiscAI.StayCloseToTarget";
++        if (Fork.Spread.DodgeMargin() is { } cushion)
++            Diag($"Spread: dodge margin {cushion} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, normal, "ForbiddenZoneCushion", cushion) ? "accepted" : "REFUSED")}");
++        var role = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
++        if (Fork.Spread.CombatRange(role) is { } range)
++            Diag($"Spread: fighting distance {range} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, stayClose, "range", range) ? "accepted" : "REFUSED")}");
++    }
++
+     private static unsafe void SyncToFate(uint fateId)
+     {
+         var mgr = CSFateManager.Instance();
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
 index 0000000..bc48579
@@ -2247,10 +2470,10 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..bb76955
+index 0000000..a2c3c1d
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,118 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Windows.Components;
 +using Dalamud.Bindings.ImGui;
@@ -2289,6 +2512,19 @@ index 0000000..bb76955
 +        }
 +
 +        // Connected clients only, leader first, then by name (file order changes every 2 s as the cards are rewritten).
++        // Fork (item 20): natural spreading, for every character (leader and slaves alike).
++        using (SettingsGroup.Begin("Spreading"))
++        {
++            SettingsRow.Draw("Own side", "Each character keeps its own side of the FATE and of the mob it walks to (from its character id), so several characters arrive and close in from different directions.",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadStandAngle, v => cfg.SpreadStandAngle = v, "##sp_side"));
++            SettingsRow.Draw("Move away from crowds", "After arriving, when another player stands within 6 m, step to a nearby spot with more room (like BOCCHI's critical encounter parking).",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCrowdNudge, v => cfg.SpreadCrowdNudge = v, "##sp_crowd"));
++            SettingsRow.Draw("Extra dodge margin", "BossMod keeps a Small or Medium extra distance from danger zones (per character), so not everyone stops on the same safe edge.",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadDodgeMargin, v => cfg.SpreadDodgeMargin = v, "##sp_dodge"));
++            SettingsRow.Draw("Own fighting distance", "Melee fight on the target's hitbox; ranged jobs and healers hold their own distance between 12 and 20 m (per character).",
++                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
++        }
++
 +        var clients = MultiboxLink.Clients().Where(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)
 +            .OrderBy(c => c.Role).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
 +        using (SettingsGroup.Begin("Leader"))
