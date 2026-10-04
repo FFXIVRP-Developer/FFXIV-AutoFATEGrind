@@ -438,7 +438,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
             // fight in it, so the reward is tracked and the grind moves on to the next FATE in the zone.
             TrackCollectReward(current);
         }
-        else if (current is { State: FateState.Running } && abandonedFateId != current.Id)
+        else if (current is { State: FateState.Running } && abandonedFateId != current.Id && followerLeftFateId != current.Id) // fork: a slave left it for the leader's
         {
             if (current.Progress >= 100)
                 StartFollowUpWatch(current.Id);

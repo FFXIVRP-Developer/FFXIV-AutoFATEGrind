@@ -38,6 +38,9 @@ public sealed partial class AutoFate
             ? lastPickedFateId
             : current is { State: FateState.Running } ? current.Id : 0;
 
+        if (followerLeftFateId != 0 && (MultiboxLink.Leader()?.FateId == followerLeftFateId || PublicEvent.GetFateById(followerLeftFateId) is not { State: FateState.Running }))
+            followerLeftFateId = 0; // the leader came back to it, or it is over
+
         if (!MultiboxFollowerWatch.IsFollower)
         {
             MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
@@ -179,6 +182,22 @@ public sealed partial class AutoFate
             if (!quiet) Svc.Log.Debug($"[AFG] {name} failed: {ex.Message}");
             return false;
         }
+    }
+
+    // A slave in a FATE the leader left (it picked another one: 2026-10-04 a restarted leader went to FATE 1140 while the
+    // slaves fought on in 1134) leaves at its first moment out of combat (no mobs dragged along) and follows. Marked so
+    // ComputeState does not route it back into the ring it still stands in; cleared when the leader comes back to it.
+    private uint followerLeftFateId;
+
+    private bool FollowerLeavesFate(uint fateId)
+    {
+        if (!MultiboxFollowerWatch.IsFollower || Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat]) return false;
+        if (MultiboxLink.Leader() is not { FateId: not 0 } leader || leader.FateId == fateId) return false;
+        if (leader.Territory != Svc.ClientState.TerritoryType || leader.Instance != MultiboxLink.CurrentInstance) return false;
+        if (PublicEvent.GetFateById(leader.FateId) is not { } next || next.State is FateState.Ended or FateState.Failed) return false;
+        Diag($"Multibox: the leader moved on to FATE {next.Id} ({next.Name}); leaving FATE {fateId} to follow");
+        followerLeftFateId = fateId;
+        return true;
     }
 
     /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>

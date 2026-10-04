@@ -205,6 +205,12 @@ public sealed partial class AutoFate
                     break;
                 }
 
+                if (FollowerLeavesFate(fateId)) // fork (item 18): the leader went to another FATE
+                {
+                    LeaveFate(fateId);
+                    break;
+                }
+
                 // A Collect FATE at 100% is won; its row lingers as the hand-in window (leftovers go in below), not a stall.
                 if (isCollect && fate.Progress >= 100) break;
 

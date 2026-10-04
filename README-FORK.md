@@ -167,7 +167,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     For every new FATE of the leader a slave waits its own random 3-15 s before setting off (`LeaderFate`), counted
     from the later of leaving combat and the leader's pick, so slaves leave and arrive at different times. The leader
     publishes its FATE the moment it picks it (`PickFate`): the run loop does not tick during the trip, so slaves
-    otherwise learned it only when the leader arrived.
+    otherwise learned it only when the leader arrived. A slave in a FATE the leader left for another one (same zone and
+    instance) leaves at its first moment out of combat and follows (`FollowerLeavesFate`; `followerLeftFateId` keeps
+    ComputeState from routing it back into that ring, cleared when the leader returns to it or it ends).
 
 19. **Leader and slaves in one party** (`Core/Multibox/MultiboxParty.cs`, AutoDuty's game calls). While its run is
     going, the leader invites every connected slave that is not in the party (one try per slave every 20 s, up to the 8
