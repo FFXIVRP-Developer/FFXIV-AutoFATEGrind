@@ -36,6 +36,10 @@ internal static class Spread
     private static float? groupAngle;
     private static string groupKey = "";
 
+    /// <summary>This character's place in the connected group (0-based), or -1 when alone.</summary>
+    public static int GroupIndex { get { Side(); return groupIndexValue; } }
+    private static int groupIndexValue = -1;
+
     /// <summary>This character's side: an even share of the circle within the connected group, else its own random side.</summary>
     private static float Side()
     {
@@ -46,6 +50,7 @@ internal static class Spread
             .Where(c => DateTime.UtcNow - c.UpdatedUtc <= Multibox.MultiboxLink.ClientFresh && c.ContentId != 0)
             .Select(c => c.ContentId).Distinct().OrderBy(id => id).ToList();
         var index = ids.IndexOf(seededFor);
+        groupIndexValue = ids.Count < 2 ? -1 : index;
         if (index < 0 || ids.Count < 2) { groupAngle = null; groupKey = ""; return angle; }
         var key = string.Join(',', ids);
         if (key != groupKey)
@@ -142,6 +147,15 @@ internal static class Spread
 
     /// <summary>Another player stands within this many metres.</summary>
     public static bool SomeoneWithin(Vector3 me, float metres) => OtherPlayers().Any(o => Vector3.Distance(o, me) < metres);
+
+    /// <summary>Fork (item 22): BossMod GoToPositional for a melee DPS (Rear or Flank by its place in the group), else null.</summary>
+    public static string? MeleePositional(byte role)
+    {
+        if (!Plugin.Cfg.SpreadMeleePositional || role != 2) return null;
+        EnsureSeed();
+        var slot = GroupIndex >= 0 ? GroupIndex : (int)(seededFor % 2);
+        return slot % 2 == 0 ? "Rear" : "Flank";
+    }
 
     /// <summary>3. BossMod ForbiddenZoneCushion for this character, or null when off.</summary>
     public static string? DodgeMargin()

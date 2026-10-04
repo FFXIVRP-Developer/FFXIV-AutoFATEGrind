@@ -68,19 +68,24 @@ internal static unsafe class FateMobScanner
             : new FateMobSurvey(liveCount, nearestPosition, nearestHitbox, nearestDistance, nearestVerticalDelta);
     }
 
-    /// <summary>Fork (item 21): live mobs of the FATE not fighting anyone yet, within reach and in sight, nearest first.</summary>
-    public static List<IBattleNpc> UnpulledMobs(uint fateId, Vector3 from, float maxDistanceToHitbox)
+    /// <summary>Fork (item 21): FATE mobs a tank should pull, within reach and in sight: first those fighting nobody yet
+    /// (nearest first), then "wrong pulls", mobs attacking a player who is not a tank (nearest first).</summary>
+    public static List<(IBattleNpc Mob, bool WrongPull)> PullCandidates(uint fateId, Vector3 from, float maxDistanceToHitbox)
     {
-        var list = new List<IBattleNpc>();
+        var me = Svc.Objects.LocalPlayer?.GameObjectId ?? 0;
+        var fresh = new List<IBattleNpc>();
+        var wrong = new List<IBattleNpc>();
         foreach (var obj in Svc.Objects)
         {
             if (obj is not IBattleNpc npc || !IsLiveMobOfFate(npc, fateId)) continue;
-            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) != 0) continue;
             if (DistanceToHitbox(from, npc) > maxDistanceToHitbox || !HasLineOfSight(from, npc.Position)) continue;
-            list.Add(npc);
+            if ((npc.StatusFlags & DalamudStatusFlags.InCombat) == 0) { fresh.Add(npc); continue; }
+            if (npc.TargetObjectId == me || npc.TargetObject is not Dalamud.Game.ClientState.Objects.SubKinds.IPlayerCharacter victim) continue;
+            if (victim.ClassJob.Value.Role != 1) wrong.Add(npc);
         }
-        list.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
-        return list;
+        fresh.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
+        wrong.Sort((a, b) => DistanceToHitbox(from, a).CompareTo(DistanceToHitbox(from, b)));
+        return [.. fresh.Select(m => (m, false)), .. wrong.Select(m => (m, true))];
     }
 
     public static bool TryGetTargetedMob(uint fateId, Vector3 from, out float distanceToHitbox)

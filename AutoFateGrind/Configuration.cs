@@ -84,6 +84,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool SpreadDodgeMargin { get; set; } = true;
     public bool SpreadCombatRange { get; set; } = true;
     public bool SpreadInCombat { get; set; } = true;
+    public bool SpreadMeleePositional { get; set; } = true;
 
     // Fork (item 21): with a leader on a tank job, slaves do not pull: they assist its target and stay near it.
     public bool TankLeaderAssist { get; set; } = true;

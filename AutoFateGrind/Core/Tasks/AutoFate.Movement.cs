@@ -352,6 +352,13 @@ public sealed partial class AutoFate
         if (Fork.Spread.DodgeMargin() is { } cushion)
             Diag($"Spread: dodge margin {cushion} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, normal, "ForbiddenZoneCushion", cushion) ? "accepted" : "REFUSED")}");
         var role = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
+        if (Fork.Spread.MeleePositional(role) is { } positional)
+        {
+            const string goToPositional = "BossMod.Autorotation.MiscAI.GoToPositional";
+            var ok = BossModIPC.Instance.AddTransientStrategy(preset, goToPositional, "Positional", positional)
+                   & BossModIPC.Instance.AddTransientStrategy(preset, goToPositional, "EdgeBuffer", "Small");
+            Diag($"Spread: melee positional {positional} → BossMod {(ok ? "accepted" : "REFUSED")}");
+        }
         if (Fork.Spread.CombatRange(role) is { } range)
             Diag($"Spread: fighting distance {range} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, stayClose, "range", range) ? "accepted" : "REFUSED")}");
     }

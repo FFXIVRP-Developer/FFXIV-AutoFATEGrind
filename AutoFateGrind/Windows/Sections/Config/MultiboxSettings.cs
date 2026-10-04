@@ -49,6 +49,8 @@ internal static class MultiboxSettings
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadCombatRange, v => cfg.SpreadCombatRange = v, "##sp_range"));
             SettingsRow.Draw("Step apart in fights", "A ranged job or healer with another player within 3 m steps to its own side of its target, only when no enemy nearby is casting and BossMod is not dodging. Melee and tanks stay on their target.",
                 SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadInCombat, v => cfg.SpreadInCombat = v, "##sp_fight"));
+            SettingsRow.Draw("Melee positionals", "Melee DPS go to the target's Rear or Flank (alternating across the group, through BossMod's positional module) instead of standing in front with the tank.",
+                SettingsControls.RowComboWidth, () => SettingsControls.DrawToggle(cfg, () => cfg.SpreadMeleePositional, v => cfg.SpreadMeleePositional = v, "##sp_melee"));
         }
 
         // Fork (item 21)

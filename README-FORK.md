@@ -209,8 +209,15 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     the nearest mob when nothing is in reach. Strategies are applied when the mode changes and every 10 s, with BossMod's
     answer logged. Bundled preset revision 3 adds StayCloseToPartyRole. The leader on a tank job pulls the FATE to itself
     (`AutoFate.TankPull.cs`, switch: Tank pulls with its ranged attack): FATE mobs within 20 m not fighting yet each get
-    its ranged attack (Shield Lob, Tomahawk, Unmend, Lightning Shot; `ActionManager.UseAction`), nearest first, up to 8
-    per pass (4 when already in combat), BossMod off for the pass; checked every 3 s, 6 s after a pass.
+    its ranged attack (Shield Lob, Tomahawk, Unmend, Lightning Shot; `ActionManager.UseAction`), nearest first, then
+    "wrong pulls" (FATE mobs attacking a non-tank player; Provoke when it is up), up to 8 per pass (4 when already in
+    combat), BossMod off for the pass; checked every 3 s, 6 s after a pass.
+
+22. **Melee positionals** (Settings → Multibox → Spreading → Melee positionals, on). A melee DPS gets BossMod's
+    `MiscAI.GoToPositional` Positional Rear or Flank (alternating by its place in the connected group), EdgeBuffer Small,
+    as a transient strategy with the others (bundled preset revision 4 adds the module). The xan rotations only hint the
+    positional; nothing moved melee there before. A melee slave of a tank leader then skips StayCloseToPartyRole. The
+    BossMod Reborn config is identical on every profile (synced), so this was not a sync difference.
 
 ## Verified in game
 
