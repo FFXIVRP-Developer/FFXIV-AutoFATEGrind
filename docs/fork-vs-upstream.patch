@@ -610,10 +610,10 @@ index c1e6385..6bacb04 100644
  
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
 new file mode 100644
-index 0000000..0688e16
+index 0000000..8b2d88f
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,176 @@
 +using AutoFateGrind.Core.Modes;
 +using AutoFateGrind.Core.Tasks;
 +using Dalamud.Game.ClientState.Conditions;
@@ -682,6 +682,15 @@ index 0000000..0688e16
 +         || Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BoundByDuty]) return;
 +
 +        var now = Environment.TickCount64;
++
++        // The leader grinds on another world: an idle slave travels there first (Lifestream), then follows as usual.
++        if (!plugin.Controller.Running && MultiboxLink.LeaderAnyWorld() is { } far
++            && Svc.Objects.LocalPlayer is { } self && far.World != self.CurrentWorld.RowId)
++        {
++            TravelToLeaderWorld(far);
++            return;
++        }
++
 +        var leader = MultiboxLink.Leader(); // fresh and on this world = the leader is grinding
 +        var inParty = ECommons.PartyFunctions.UniversalParty.Length > 1;
 +        if (wasInParty && !inParty) { partyGone = true; Svc.Log.Info("[AFG] Multibox: no longer in the party; the leader stopped"); }
@@ -739,23 +748,35 @@ index 0000000..0688e16
 +        leaderWasRunning = leaderRunning;
 +    }
 +
++    private const int WorldTravelRetryMs = 120_000;
++    private static long nextWorldTravelMs;
++
++    private static void TravelToLeaderWorld(LeaderState leader)
++    {
++        if (Environment.TickCount64 < nextWorldTravelMs) return;
++        try
++        {
++            var busy = Svc.PluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
++            if (busy.HasFunction && busy.InvokeFunc()) return;
++            nextWorldTravelMs = Environment.TickCount64 + WorldTravelRetryMs;
++            var name = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.World>().GetRowOrDefault(leader.World)?.Name.ExtractText() ?? leader.World.ToString();
++            Svc.Chat.Print($"[AFG] The leader {leader.Name} is on {name}; travelling there.");
++            Svc.Log.Info($"[AFG] Multibox: the leader is on {name}; Lifestream world travel");
++            Svc.PluginInterface.GetIpcSubscriber<string, bool>("Lifestream.ChangeWorld").InvokeFunc(name);
++        }
++        catch (Exception ex)
++        {
++            Svc.Log.Warning($"[AFG] Multibox: world travel to the leader failed: {ex.Message}");
++        }
++    }
++
 +    private static void Park()
 +    {
 +        Parked = true;
 +        if (Blocked is null) MultiboxParty.LeaveAsSlave(); // the leader stopped (a blocked slave stays in the party)
-+        var command = Plugin.Cfg.HumanizerRetreat switch
-+        {
-+            HumanizerRetreat.Inn              => "inn",
-+            HumanizerRetreat.Apartment        => "apartment",
-+            HumanizerRetreat.PrivateHouse     => "home",
-+            HumanizerRetreat.FreeCompanyHouse => "fc",
-+            _                                 => null, // City (wander): stay where it is
-+        };
-+        if (command is null)
-+        {
-+            Svc.Chat.Print("[AFG] Parked here (the break location is City).");
-+            return;
-+        }
++        // Always the inn of the world it is on: a break location like an apartment or a house is on the home world, and
++        // going there world-travelled the slaves away from the leader (2026-10-04).
++        const string command = "inn";
 +        try
 +        {
 +            var busy = Svc.PluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
