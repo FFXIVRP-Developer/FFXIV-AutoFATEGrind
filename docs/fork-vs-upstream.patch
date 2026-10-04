@@ -1,8 +1,23 @@
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index efc08bd..fb85384 100644
+index efc08bd..70c3ecc 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
-@@ -68,6 +68,14 @@ public sealed class Configuration : IPluginConfiguration
+@@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
+     {
+         get
+         {
++            // Fork (item 18): the role decides. A slave always runs Follow the leader; a leader never does (its own goal).
++            if (MultiboxRole == Core.Multibox.MultiboxRole.Follower)
++                return FateGrindModes.GetById(FollowLeaderMode.ModeId)!;
+             if (string.IsNullOrEmpty(ModeId))
+                 ModeId = FateGrindModes.IdForLegacy(Mode);
+-            return FateGrindModes.GetById(ModeId) ?? FateGrindModes.Default;
++            var mode = FateGrindModes.GetById(ModeId);
++            return mode is null or FollowLeaderMode ? FateGrindModes.Default : mode;
+         }
+     }
+ 
+@@ -68,6 +72,14 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -17,7 +32,7 @@ index efc08bd..fb85384 100644
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -144,6 +152,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -144,6 +156,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -1914,6 +1929,31 @@ index 7ff8682..bec76d0 100644
      {
          if (Controller.Running)
          {
+diff --git a/AutoFateGrind/Windows/Pages/GrindPage.cs b/AutoFateGrind/Windows/Pages/GrindPage.cs
+index 4de37ba..c7f3c20 100644
+--- a/AutoFateGrind/Windows/Pages/GrindPage.cs
++++ b/AutoFateGrind/Windows/Pages/GrindPage.cs
+@@ -16,9 +16,20 @@ internal sealed class GrindPage
+         var ctrl = plugin.Controller;
+         var running = ctrl.Running;
+ 
++        // Fork (item 18): Leader / Slave on top. A slave has no goal of its own: only its panel while idle.
++        MultiboxPanel.DrawRoleSwitch(cfg, running);
++        Styling.VSpace(12f);
++
+         using var reveal = Motion.PushSwitch("##afg_grind_state", running, SwitchRevealMs);
+         if (running) RunningPanel.Draw(cfg, ctrl);
++        else if (cfg.MultiboxRole == Core.Multibox.MultiboxRole.Follower) MultiboxPanel.DrawSlave(cfg);
+         else DrawIdle(plugin, window, cfg, ctrl);
++
++        if (cfg.MultiboxRole == Core.Multibox.MultiboxRole.Leader)
++        {
++            Styling.VSpace(16f);
++            MultiboxPanel.DrawSlaveList();
++        }
+     }
+ 
+     private static void DrawIdle(Plugin plugin, AppWindow window, Configuration cfg, AutoFateController ctrl)
 diff --git a/AutoFateGrind/Windows/Pages/SettingsPage.cs b/AutoFateGrind/Windows/Pages/SettingsPage.cs
 index 56ea3ea..1738d5b 100644
 --- a/AutoFateGrind/Windows/Pages/SettingsPage.cs
@@ -2015,7 +2055,7 @@ index da8719c..5092dbe 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..c4abf30
+index 0000000..0c7faa9
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 @@ -0,0 +1,103 @@
@@ -2048,7 +2088,7 @@ index 0000000..c4abf30
 +                () =>
 +                {
 +                    var role = (int)cfg.MultiboxRole;
-+                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Follower"], SettingsControls.RowComboWidth))
++                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Slave"], SettingsControls.RowComboWidth))
 +                    {
 +                        cfg.MultiboxRole = (MultiboxRole)role;
 +                        cfg.Save();
@@ -2140,6 +2180,136 @@ index 4a2b0bb..508007f 100644
          SettingsRow.Draw(Loc.T(L.Settings.CollectHandIn),
              Loc.T(L.Settings.CollectHandInHelp),
              SettingsControls.ToggleWidth,
+diff --git a/AutoFateGrind/Windows/Sections/GoalSection.cs b/AutoFateGrind/Windows/Sections/GoalSection.cs
+index 4f70e0b..a17c9af 100644
+--- a/AutoFateGrind/Windows/Sections/GoalSection.cs
++++ b/AutoFateGrind/Windows/Sections/GoalSection.cs
+@@ -94,7 +94,7 @@ internal static class GoalSection
+         var all = FateGrindModes.All;
+         for (var index = 0; index < all.Count; index++)
+         {
+-            if (CategoryOf(all[index].Id) == category)
++            if (all[index] is not FollowLeaderMode && CategoryOf(all[index].Id) == category) // fork (item 18): the Slave role
+             {
+                 cardScratch.Add(all[index]);
+             }
+diff --git a/AutoFateGrind/Windows/Sections/MultiboxPanel.cs b/AutoFateGrind/Windows/Sections/MultiboxPanel.cs
+new file mode 100644
+index 0000000..34e51d5
+--- /dev/null
++++ b/AutoFateGrind/Windows/Sections/MultiboxPanel.cs
+@@ -0,0 +1,111 @@
++using AutoFateGrind.Core.Multibox;
++using AutoFateGrind.Core.Tasks;
++using AutoFateGrind.Windows.Components;
++using Dalamud.Bindings.ImGui;
++using Dalamud.Interface;
++using Dalamud.Interface.Utility;
++using Dalamud.Interface.Utility.Raii;
++using System.Numerics;
++
++namespace AutoFateGrind.Windows.Sections;
++
++// Fork (README-FORK item 18): the first page's multibox parts. The Leader / Slave switch on top; a slave sees only its
++// panel (no goals, zones or limits: it grinds where the leader grinds), the leader keeps its goals and gets the slave list.
++internal static class MultiboxPanel
++{
++    private static readonly Vector4 Green = new(0.45f, 0.85f, 0.55f, 1f);
++    private static readonly Vector4 Amber = new(1f, 0.75f, 0.3f, 1f);
++    private static readonly Vector4 Red = new(0.95f, 0.45f, 0.45f, 1f);
++    private static readonly Vector4 Grey = new(0.55f, 0.55f, 0.55f, 1f);
++    private static readonly Segmented.Item[] roleItems =
++    [
++        new(FontAwesomeIcon.Crown, "Leader"),
++        new(FontAwesomeIcon.Link, "Slave"),
++    ];
++
++    public static void DrawRoleSwitch(Configuration cfg, bool running)
++    {
++        var role = (int)cfg.MultiboxRole;
++        if (Segmented.Draw("##afg_mb_role", roleItems, ref role, enabled: !running))
++        {
++            cfg.MultiboxRole = (MultiboxRole)role;
++            cfg.Save();
++        }
++        if (running && ImGui.IsItemHovered()) ImGui.SetTooltip("Stop the run to change the role.");
++    }
++
++    /// <summary>A slave's whole idle page: who it follows and what it does next.</summary>
++    public static void DrawSlave(Configuration cfg)
++    {
++        var leader = MultiboxLink.Leader();
++        ImGui.TextColored(Styling.TextSecondary, "SLAVE");
++        ImGui.TextWrapped("This client follows the leader: it starts when the leader starts, grinds in the leader's zone, instance and FATE, and when the leader stops it finishes its FATE and parks. Goals, zones and limits are the leader's.");
++        Styling.VSpace(10f);
++
++        if (leader is null)
++        {
++            ImGui.TextColored(Amber, "Waiting for the leader to start a run.");
++        }
++        else
++        {
++            ImGui.TextColored(Green, $"Leader {leader.Name} is grinding");
++            ImGui.SameLine();
++            ImGui.TextDisabled($"{ZoneName(leader.Territory)} · instance {leader.Instance}");
++        }
++        if (MultiboxFollowerWatch.Parked) ImGui.TextColored(Grey, "Parked: the leader stopped.");
++
++        Styling.VSpace(6f);
++        var park = cfg.HumanizerRetreat switch
++        {
++            HumanizerRetreat.Inn => "the inn",
++            HumanizerRetreat.Apartment => "the apartment",
++            HumanizerRetreat.PrivateHouse => "the private house",
++            HumanizerRetreat.FreeCompanyHouse => "the FC house",
++            _ => "where it is (break location City)",
++        };
++        ImGui.TextDisabled($"Parks at {park}: Settings → Humanizer, break location.");
++    }
++
++    /// <summary>The leader's view of its slaves (every follower card of this PC).</summary>
++    public static void DrawSlaveList()
++    {
++        var slaves = MultiboxLink.Clients().Where(c => c.Role == MultiboxRole.Follower).ToList();
++        ImGui.TextColored(Styling.TextSecondary, $"SLAVES ({slaves.Count(c => DateTime.UtcNow - c.UpdatedUtc <= MultiboxLink.ClientFresh)} connected)");
++        if (slaves.Count == 0)
++        {
++            ImGui.TextDisabled("No slave has reported. Slaves are clients with the Slave role, opened on this PC.");
++            return;
++        }
++
++        var scale = ImGuiHelpers.GlobalScale;
++        using var table = ImRaii.Table("##afg_mb_slaves", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingStretchProp);
++        if (!table) return;
++        ImGui.TableSetupColumn("Character", ImGuiTableColumnFlags.WidthStretch, 1.2f);
++        ImGui.TableSetupColumn("Zone", ImGuiTableColumnFlags.WidthStretch, 1.1f);
++        ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthStretch, 1.7f);
++        ImGui.TableSetupColumn("Seen", ImGuiTableColumnFlags.WidthFixed, 50f * scale);
++        ImGui.TableHeadersRow();
++        foreach (var slave in slaves)
++        {
++            var age = DateTime.UtcNow - slave.UpdatedUtc;
++            var connected = age <= MultiboxLink.ClientFresh;
++            var status = connected ? slave.Status : "disconnected";
++            var color = !connected ? Grey
++                      : status.StartsWith("blocked", StringComparison.Ordinal) ? Red
++                      : status.StartsWith("following", StringComparison.Ordinal) ? Green
++                      : Amber;
++            ImGui.TableNextRow();
++            ImGui.TableNextColumn();
++            ImGui.TextColored(connected ? new Vector4(1, 1, 1, 1) : Grey, slave.Name);
++            ImGui.TableNextColumn();
++            ImGui.TextUnformatted($"{slave.Zone} · {slave.Instance}");
++            ImGui.TableNextColumn();
++            ImGui.TextColored(color, status);
++            ImGui.TableNextColumn();
++            ImGui.TextDisabled(age.TotalSeconds < 60 ? $"{age.TotalSeconds:F0}s" : $"{age.TotalMinutes:F0}m");
++        }
++    }
++
++    private static string ZoneName(uint territory)
++        => ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
++}
 diff --git a/ECommons b/ECommons
 index f1656e8..62cd604 160000
 --- a/ECommons
