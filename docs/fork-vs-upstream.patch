@@ -291,10 +291,10 @@ index 0000000..f2ca3bb
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Modes/BuiltInModes.cs b/AutoFateGrind/Core/Modes/BuiltInModes.cs
-index ef48ca1..36e2b74 100644
+index ef48ca1..19af71b 100644
 --- a/AutoFateGrind/Core/Modes/BuiltInModes.cs
 +++ b/AutoFateGrind/Core/Modes/BuiltInModes.cs
-@@ -96,5 +96,11 @@ public sealed class YokaiMedalsMode : IFateGrindMode
+@@ -96,5 +96,25 @@ public sealed class YokaiMedalsMode : IFateGrindMode
  
      public bool PlansZones => true;
  
@@ -306,7 +306,142 @@ index ef48ca1..36e2b74 100644
 +    public bool IsZoneDone(uint territoryId) => YokaiProgress.IsZoneDone(Plugin.Cfg, territoryId);
 +
 +    public string ZoneDoneReason(uint territoryId) => "no yo-kai that still needs medals drops here";
++}
++
++// Fork (README-FORK item 18): a slave's mode. It plans every FATE zone so the leader's is always in the plan, never
++// rotates on its own (MultiboxTick moves it to the leader's zone, PickFate takes the leader's FATE), has no goal of its
++// own, and is started and stopped with the leader by MultiboxFollowerWatch (parking at the humanizer break location).
++public sealed class FollowLeaderMode : IFateGrindMode
++{
++    public const string ModeId = "followleader";
++    public string Id => ModeId;
++    public string DisplayName => "Follow the leader";
++    public string Description => "For the other clients of this PC: goes where the leader grinds and fights its FATE, starts when the leader starts, and when the leader stops finishes its FATE and parks at the break location (Settings → Humanizer).";
++    public bool IsComplete(ModeContext ctx) => false;
++    public bool PlansZones => true;
++    public IReadOnlyList<ZoneInfo> PlanZones(Configuration cfg) => AutoFateGrind.Core.Zones.ZoneRegistry.Zones;
  }
+diff --git a/AutoFateGrind/Core/Modes/FateGrindModes.cs b/AutoFateGrind/Core/Modes/FateGrindModes.cs
+index c1e6385..6bacb04 100644
+--- a/AutoFateGrind/Core/Modes/FateGrindModes.cs
++++ b/AutoFateGrind/Core/Modes/FateGrindModes.cs
+@@ -24,6 +24,7 @@ public static class FateGrindModes
+         }
+ 
+         modes.Add(new YokaiMedalsMode());
++        modes.Add(new FollowLeaderMode()); // fork (item 18)
+         return modes;
+     }
+ 
+diff --git a/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
+new file mode 100644
+index 0000000..16edde9
+--- /dev/null
++++ b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
+@@ -0,0 +1,103 @@
++using AutoFateGrind.Core.Modes;
++using AutoFateGrind.Core.Tasks;
++using Dalamud.Game.ClientState.Conditions;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Multibox;
++
++// Fork (README-FORK item 18): a client in "Follow the leader" mode is started and stopped with the leader.
++//   leader starts (its file goes fresh)     → the follower starts its run (and travels to the leader)
++//   leader stops (file stale for 30 s)      → the follower finishes its FATE (StopWhenSafe) and parks at the humanizer
++//                                             break location (inn / apartment / house / FC; "City" = stays where it is)
++//   leader starts again                     → the parked follower starts again
++// A follower the user stopped by hand while the leader runs is left alone until the leader's next start.
++internal static class MultiboxFollowerWatch
++{
++    private const int EveryMs = 3_000;
++    private static readonly TimeSpan LeaderGoneAfter = TimeSpan.FromSeconds(30);
++
++    private static long nextMs;
++    private static bool? leaderWasRunning; // null until the first look after the plugin loaded
++    private static DateTime leaderLastSeenUtc = DateTime.MinValue;
++    private static bool stopAskedByUs;
++    private static bool startedByUs;
++
++    /// <summary>Parked at the break location because the leader stopped (for the Multibox tab).</summary>
++    public static bool Parked { get; private set; }
++
++    public static bool IsFollower => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower || Plugin.Cfg.ActiveMode is FollowLeaderMode;
++
++    public static void Start() => Svc.Framework.Update += Tick;
++
++    public static void Stop() => Svc.Framework.Update -= Tick;
++
++    private static void Tick(Dalamud.Plugin.Services.IFramework _)
++    {
++        if (Environment.TickCount64 < nextMs) return;
++        nextMs = Environment.TickCount64 + EveryMs;
++        if (Plugin.Cfg.ActiveMode is not FollowLeaderMode || Plugin.Instance is not { } plugin) return;
++        if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null
++         || Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BoundByDuty]) return;
++
++        var leader = MultiboxLink.Leader(); // fresh and on this world = the leader is grinding
++        if (leader is not null) leaderLastSeenUtc = DateTime.UtcNow;
++        var leaderRunning = leader is not null || DateTime.UtcNow - leaderLastSeenUtc < LeaderGoneAfter;
++        var running = plugin.Controller.Running;
++
++        // The leader started (or was already going when this client loaded): start following.
++        var leaderStarted = leaderRunning && leaderWasRunning != true;
++        if (leaderRunning && !running && (leaderStarted || Parked))
++        {
++            Svc.Chat.Print($"[AFG] The leader {leader?.Name ?? ""} is grinding; following.");
++            Parked = false;
++            stopAskedByUs = false;
++            startedByUs = true;
++            plugin.StartFromCommand();
++        }
++
++        // The leader stopped: finish the FATE, then park.
++        if (!leaderRunning && running && !stopAskedByUs)
++        {
++            Svc.Chat.Print("[AFG] The leader stopped; finishing this FATE, then parking at the break location.");
++            stopAskedByUs = true;
++            plugin.Controller.StopWhenSafe();
++        }
++        if (!leaderRunning && !running && (stopAskedByUs || (startedByUs && !Parked)))
++        {
++            stopAskedByUs = false;
++            startedByUs = false;
++            Park();
++        }
++
++        leaderWasRunning = leaderRunning;
++    }
++
++    private static void Park()
++    {
++        Parked = true;
++        var command = Plugin.Cfg.HumanizerRetreat switch
++        {
++            HumanizerRetreat.Inn              => "inn",
++            HumanizerRetreat.Apartment        => "apartment",
++            HumanizerRetreat.PrivateHouse     => "home",
++            HumanizerRetreat.FreeCompanyHouse => "fc",
++            _                                 => null, // City (wander): stay where it is
++        };
++        if (command is null)
++        {
++            Svc.Chat.Print("[AFG] Parked here (the break location is City).");
++            return;
++        }
++        try
++        {
++            var busy = Svc.PluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
++            if (busy.HasFunction && busy.InvokeFunc()) return;
++            Svc.PluginInterface.GetIpcSubscriber<string, object>("Lifestream.ExecuteCommand").InvokeAction(command);
++            Svc.Chat.Print($"[AFG] Parking: /li {command}.");
++        }
++        catch (Exception ex)
++        {
++            Svc.Log.Warning($"[AFG] Parking: Lifestream /li {command} failed: {ex.Message}");
++        }
++    }
++}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxLink.cs b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
 new file mode 100644
 index 0000000..eeaa46f
@@ -458,10 +593,10 @@ index 0000000..eeaa46f
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxPresence.cs b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 new file mode 100644
-index 0000000..5b819ad
+index 0000000..bf51234
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,43 @@
 +using ECommons.DalamudServices;
 +
 +namespace AutoFateGrind.Core.Multibox;
@@ -485,12 +620,15 @@ index 0000000..5b819ad
 +        if (player is null) return;
 +
 +        var running = Plugin.Instance?.Controller.Running ?? false;
++        // The leader publishes while its run is going, breaks included (the run's own publish only runs while it picks
++        // FATEs: a humanizer break went stale and parked the followers).
++        if (running && !MultiboxFollowerWatch.IsFollower) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
 +        var territory = Svc.ClientState.TerritoryType;
 +        var zone = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
 +        var fateId = running ? MultiboxLink.CurrentFateId : 0;
 +        var fate = fateId == 0 ? "" : PublicEventName(fateId);
-+        var role = Plugin.Cfg.MultiboxRole;
-+        var status = !running ? "not running"
++        var role = MultiboxFollowerWatch.IsFollower ? MultiboxRole.Follower : MultiboxRole.Leader;
++        var status = !running ? (MultiboxFollowerWatch.Parked ? "parked (leader stopped)" : "not running")
 +                   : role == MultiboxRole.Leader ? "leading"
 +                   : MultiboxLink.FollowerStatus;
 +
@@ -786,7 +924,7 @@ index d79e384..ce80568 100644
      private void EnsureCombatPreset(string preset)
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
-index 0000000..f109855
+index 0000000..5922e5d
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 @@ -0,0 +1,169 @@
@@ -811,7 +949,7 @@ index 0000000..f109855
 +        var current = PublicEvent.CurrentFate;
 +        MultiboxLink.CurrentFateId = current is { State: FateState.Running } ? current.Id : lastPickedFateId;
 +
-+        if (Plugin.Cfg.MultiboxRole == MultiboxRole.Leader)
++        if (!MultiboxFollowerWatch.IsFollower)
 +        {
 +            MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
 +            return;
@@ -876,7 +1014,7 @@ index 0000000..f109855
 +
 +    /// <summary>ComputeState, when not in a FATE: hop to the leader's instance now?</summary>
 +    private bool WantsInstanceHop()
-+        => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower && instanceHopTarget != 0 && Environment.TickCount64 >= nextInstanceHopMs
++        => MultiboxFollowerWatch.IsFollower && instanceHopTarget != 0 && Environment.TickCount64 >= nextInstanceHopMs
 +        && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat];
 +
 +    private async Task HopToLeaderInstance()
@@ -951,7 +1089,7 @@ index 0000000..f109855
 +    /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>
 +    private PublicEvent? LeaderFate()
 +    {
-+        if (Plugin.Cfg.MultiboxRole != MultiboxRole.Follower) return null;
++        if (!MultiboxFollowerWatch.IsFollower) return null;
 +        if (MultiboxLink.Leader() is not { FateId: not 0 } leader || leader.Territory != Svc.ClientState.TerritoryType) return null;
 +        if (leader.Instance != MultiboxLink.CurrentInstance) return null; // another instance: different FATEs
 +        if (PublicEvent.GetFateById(leader.FateId) is not { Progress: < 100 } fate) return null;
@@ -1341,7 +1479,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..f912cb0 100644
+index 1f98ff8..0afc223 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -1391,6 +1529,15 @@ index 1f98ff8..f912cb0 100644
          if (ShouldWaitForFollowUp())
              return GrindState.WaitingForFollowUp;
  
+@@ -470,7 +482,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+             zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(Math.Clamp(Plugin.Cfg.SwapZoneWaitSec, 0, MaxSwapWaitSec) * 1000);
+         }
+ 
+-        if (Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !KeepingTwistOfFate()
++        if (Plugin.Cfg.SwapZonesWhenEmpty && Plugin.Cfg.ActiveMode is not AutoFateGrind.Core.Modes.FollowLeaderMode /* fork (item 18): only where the leader goes */ && zones.Count > 1 && !KeepingTwistOfFate()
+          && Environment.TickCount64 - zoneIdleSinceMs >= zoneIdleWaitMs)
+             return GrindState.SwapZone;
+ 
 @@ -501,6 +513,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
  
      private async Task GoToZone()
@@ -1414,6 +1561,15 @@ index 1f98ff8..f912cb0 100644
              return;
          }
  
+@@ -579,7 +600,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+     {
+         await EnsureConsumables();
+         var keepingTwist = KeepingTwistOfFate();
+-        var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && zones.Count > 1 && !keepingTwist;
++        var swapPending = Plugin.Cfg.SwapZonesWhenEmpty && Plugin.Cfg.ActiveMode is not AutoFateGrind.Core.Modes.FollowLeaderMode /* fork (item 18): only where the leader goes */ && zones.Count > 1 && !keepingTwist;
+         TryIdleMount();
+         var remainingSec = Math.Max(0L, zoneIdleWaitMs - (Environment.TickCount64 - zoneIdleSinceMs)) / 1000;
+         Status = swapPending
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs b/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
 index 924cdf3..97580da 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
@@ -1720,16 +1876,17 @@ index 829167d..6305bc1 100644
      {
          var sheet = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 7ff8682..c2b31e2 100644
+index 7ff8682..bec76d0 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,13 @@ public sealed class Plugin : IDalamudPlugin
+@@ -85,8 +85,14 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
 +        ipcProvider = new Core.Ipc.AfgIpcProvider(this); // Fork
 +        Core.Fork.ReloadResume.OnLoad(this); // Fork (item 17)
 +        Core.Multibox.MultiboxPresence.Start(); // Fork (item 16)
++        Core.Multibox.MultiboxFollowerWatch.Start(); // Fork (item 18)
      }
  
 +    private readonly Core.Ipc.AfgIpcProvider ipcProvider; // Fork
@@ -1737,17 +1894,18 @@ index 7ff8682..c2b31e2 100644
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +108,9 @@ public sealed class Plugin : IDalamudPlugin
+@@ -103,6 +109,10 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
 +        Core.Fork.ReloadResume.OnUnload(this); // Fork (item 17): before anything stops the run
 +        Core.Multibox.MultiboxPresence.Stop(); // Fork (item 16)
++        Core.Multibox.MultiboxFollowerWatch.Stop(); // Fork (item 18)
 +        ipcProvider.Dispose(); // Fork
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -153,7 +161,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -153,7 +163,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
