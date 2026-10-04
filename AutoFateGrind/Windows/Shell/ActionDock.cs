@@ -41,6 +41,7 @@ internal static class ActionDock
     private static void DrawSlaveLine(Core.Tasks.AutoFateController ctrl)
     {
         var line = ctrl.Running ? $"Slave · {Core.Multibox.MultiboxLink.FollowerStatus}"
+            : Core.Multibox.MultiboxFollowerWatch.Blocked is { } why ? $"Slave · parked: {why}"
             : Core.Multibox.MultiboxFollowerWatch.Parked ? "Slave · parked: starts again when the leader does"
             : "Slave · starts and stops with the leader";
         ImGui.TextDisabled(line);

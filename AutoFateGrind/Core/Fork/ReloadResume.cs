@@ -21,7 +21,9 @@ internal static class ReloadResume
 
     public static void OnLoad(Plugin plugin)
     {
-        if (!Plugin.Cfg.ResumeAfterReload || !Plugin.Cfg.ResumeAfterReloadPending)
+        // A slave (item 18) does not resume by itself: MultiboxFollowerWatch starts it once the leader grinds again.
+        if (!Plugin.Cfg.ResumeAfterReload || !Plugin.Cfg.ResumeAfterReloadPending
+         || Plugin.Cfg.MultiboxRole == Multibox.MultiboxRole.Follower)
         {
             Clear();
             return;

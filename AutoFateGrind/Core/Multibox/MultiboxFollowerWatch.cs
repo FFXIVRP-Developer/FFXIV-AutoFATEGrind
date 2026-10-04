@@ -11,6 +11,8 @@ namespace AutoFateGrind.Core.Multibox;
 //                                             break location (inn / apartment / house / FC; "City" = stays where it is)
 //   leader starts again                     → the parked follower starts again
 // A follower the user stopped by hand while the leader runs is left alone until the leader's next start.
+// A slave that cannot use the leader's zone (below its level, or not unlocked: no aetheryte attuned) does not try: it
+// finishes its FATE and parks, and starts again once the leader is somewhere it can follow.
 internal static class MultiboxFollowerWatch
 {
     private const int EveryMs = 3_000;
@@ -21,9 +23,29 @@ internal static class MultiboxFollowerWatch
     private static DateTime leaderLastSeenUtc = DateTime.MinValue;
     private static bool stopAskedByUs;
     private static bool startedByUs;
+    private static long startAtMs; // the random start delay (0 = none set)
+    private static readonly Random random = new();
+    private const int StartDelayMinMs = 5_000, StartDelayMaxMs = 30_000;
 
     /// <summary>Parked at the break location because the leader stopped (for the Multibox tab).</summary>
     public static bool Parked { get; private set; }
+
+    /// <summary>Why this slave cannot follow the leader where it is now; null when it can.</summary>
+    public static string? Blocked { get; private set; }
+
+    /// <summary>null = this slave can go where the leader grinds; else why not (zone level, zone not unlocked).</summary>
+    public static string? CantFollowReason(LeaderState leader)
+    {
+        var zone = Zones.ZoneRegistry.Zones.FirstOrDefault(z => z.TerritoryId == leader.Territory);
+        if (zone is null) return null; // not a FATE zone (the leader on a city break): nothing to check
+        var level = Svc.PlayerState.Level;
+        if (level > 0 && level < zone.MinLevel)
+            return $"{zone.Name} needs Lv {zone.MinLevel}, I am Lv {level}";
+        if (Svc.ClientState.TerritoryType != zone.TerritoryId && Zones.ZoneStateReader.AnyAetheryteAttuned()
+         && !Zones.ZoneStateReader.IsTerritoryUnlocked(zone.TerritoryId))
+            return $"{zone.Name} is not unlocked here (no aetheryte attuned)";
+        return null;
+    }
 
     public static bool IsFollower => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower || Plugin.Cfg.ActiveMode is FollowLeaderMode;
 
@@ -43,11 +65,26 @@ internal static class MultiboxFollowerWatch
         if (leader is not null) leaderLastSeenUtc = DateTime.UtcNow;
         var leaderRunning = leader is not null || DateTime.UtcNow - leaderLastSeenUtc < LeaderGoneAfter;
         var running = plugin.Controller.Running;
+        var blocked = leader is null ? null : CantFollowReason(leader);
+        if (blocked != Blocked && blocked is not null) Svc.Log.Info($"[AFG] Multibox: cannot follow the leader: {blocked}");
+        Blocked = blocked;
 
         // The leader started (or was already going when this client loaded): start following.
         var leaderStarted = leaderRunning && leaderWasRunning != true;
-        if (leaderRunning && !running && (leaderStarted || Parked))
+        // Blocked while idle (e.g. the leader started in a zone above this slave): waits like a parked slave, so it starts
+        // once the leader moves somewhere it can follow.
+        if (leaderRunning && blocked is not null && !running) Parked = true;
+        var wantStart = leaderRunning && blocked is null && !running && (leaderStarted || Parked || startAtMs != 0);
+        if (!wantStart) startAtMs = 0;
+        else if (startAtMs == 0)
         {
+            // Each slave sets off on its own 5-30 s after the leader starts, not all in the same 3 s.
+            startAtMs = Environment.TickCount64 + random.Next(StartDelayMinMs, StartDelayMaxMs);
+            Svc.Log.Info($"[AFG] Multibox: the leader is grinding; starting in {(startAtMs - Environment.TickCount64) / 1000}s");
+        }
+        if (wantStart && Environment.TickCount64 >= startAtMs)
+        {
+            startAtMs = 0;
             Svc.Chat.Print($"[AFG] The leader {leader?.Name ?? ""} is grinding; following.");
             Parked = false;
             stopAskedByUs = false;
@@ -55,14 +92,16 @@ internal static class MultiboxFollowerWatch
             plugin.StartFromCommand();
         }
 
-        // The leader stopped: finish the FATE, then park.
-        if (!leaderRunning && running && !stopAskedByUs)
+        // The leader stopped, or went where this slave cannot follow: finish the FATE, then park.
+        if ((!leaderRunning || blocked is not null) && running && !stopAskedByUs)
         {
-            Svc.Chat.Print("[AFG] The leader stopped; finishing this FATE, then parking at the break location.");
+            Svc.Chat.Print(blocked is not null
+                ? $"[AFG] Cannot follow the leader: {blocked}. Finishing this FATE, then parking."
+                : "[AFG] The leader stopped; finishing this FATE, then parking at the break location.");
             stopAskedByUs = true;
             plugin.Controller.StopWhenSafe();
         }
-        if (!leaderRunning && !running && (stopAskedByUs || (startedByUs && !Parked)))
+        if (!running && (stopAskedByUs || (!leaderRunning && startedByUs && !Parked)))
         {
             stopAskedByUs = false;
             startedByUs = false;

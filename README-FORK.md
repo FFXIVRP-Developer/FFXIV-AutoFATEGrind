@@ -160,6 +160,10 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     dock shows a status line instead; `/afg stop` still works as an emergency stop), `RunAll` refuses to start it while
     no leader grinds on its world, and it fights only the leader's FATE (`PickFate` returns null
     for a slave otherwise: it waits while the leader is between FATEs instead of picking its own).
+    A slave that cannot use the leader's zone (`MultiboxFollowerWatch.CantFollowReason`: below the zone's MinLevel, or
+    the zone not unlocked = no aetheryte attuned) finishes its FATE and parks, and starts again once the leader is
+    somewhere it can follow; it skips a leader's FATE above its level + MaxLevelAbove. Each slave starts 5-30 s after the
+    leader (random per slave), and a slave does not use resume-after-reload (the watcher starts it with the leader).
 
 19. **Leader and slaves in one party** (`Core/Multibox/MultiboxParty.cs`, AutoDuty's game calls). While its run is
     going, the leader invites every connected slave that is not in the party (one try per slave every 20 s, up to the 8

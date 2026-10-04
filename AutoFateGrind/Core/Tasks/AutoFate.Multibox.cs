@@ -38,6 +38,12 @@ public sealed partial class AutoFate
             return;
         }
 
+        if (MultiboxFollowerWatch.CantFollowReason(leader) is { } cant)
+        {
+            MultiboxLink.FollowerStatus = $"blocked: {cant}"; // MultiboxFollowerWatch parks it
+            return;
+        }
+
         if (leader.Territory != zone.TerritoryId)
         {
             // The leader's zone, when it is one of this run's zones (same plan, the config comes from MAIN).
@@ -164,6 +170,13 @@ public sealed partial class AutoFate
         if (leader.Instance != MultiboxLink.CurrentInstance) return null; // another instance: different FATEs
         if (PublicEvent.GetFateById(leader.FateId) is not { Progress: < 100 } fate) return null;
         if (fate.State is FateState.Ended or FateState.Failed) return null;
+        // Fork (item 18): a FATE above this slave's level would sync nothing up and kill it (Settings → Filters: max above).
+        var level = Svc.PlayerState.Level;
+        if (level > 0 && fate.Level > level + Plugin.Cfg.MaxLevelAbove)
+        {
+            MultiboxLink.FollowerStatus = $"blocked: the leader's FATE is Lv {fate.Level}, I am Lv {level} (max {Plugin.Cfg.MaxLevelAbove} above)";
+            return null;
+        }
         return fate;
     }
 }
