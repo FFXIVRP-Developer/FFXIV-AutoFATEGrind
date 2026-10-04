@@ -11,7 +11,7 @@ namespace AutoFateGrind.Windows.Pages;
 
 internal sealed class SettingsPage
 {
-    private enum Tab { General, Travel, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert }
+    private enum Tab { General, Travel, Filters, Classes, Gemstones, Repair, Consumables, Humanize, PartyInvites, GmAlert, Multibox }
 
     private readonly record struct Entry(Tab Tab, LocString Label, FontAwesomeIcon Icon, LocString Subtitle);
 
@@ -27,6 +27,9 @@ internal sealed class SettingsPage
         new(Tab.Humanize,     L.Settings.CatHumanizer,    FontAwesomeIcon.Walking,    L.Settings.CatHumanizerSub),
         new(Tab.PartyInvites, L.Settings.CatPartyInvites, FontAwesomeIcon.UserSlash,  L.Settings.CatPartyInvitesSub),
         new(Tab.GmAlert,      L.Settings.CatGmAlert,      FontAwesomeIcon.UserSecret, L.Settings.CatGmAlertSub),
+        // Fork (item 16)
+        new(Tab.Multibox,     new LocString("fork.settings.multibox", "Multibox"), FontAwesomeIcon.Users,
+            new LocString("fork.settings.multiboxSub", "Leader and followers on this PC: who is connected, following or blocked.")),
     ];
 
     private Tab activeTab = Tab.General;
@@ -107,6 +110,7 @@ internal sealed class SettingsPage
             case Tab.Humanize: HumanizerSettings.Draw(cfg); break;
             case Tab.PartyInvites: PartyInviteSettings.Draw(cfg); break;
             case Tab.GmAlert: GmAlertSettings.Draw(cfg); break;
+            case Tab.Multibox: MultiboxSettings.Draw(cfg); break;
         }
     }
 }

@@ -130,6 +130,11 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     its run's zones (normal travel takes it there), and picks the leader's FATE when it exists in its own instance and
     is still going; otherwise it picks as usual. A FATE it is in is never left for the leader's. XIVProfiles sets every
     slave to Follower (`overrides/XIVLauncher/pluginConfigs/AutoFateGrind.json`), so MAIN is the only leader.
+    Settings → **Multibox** (`MultiboxSettings.cs`): this client's role, the leader (who, zone, instance, FATE), and every
+    client of this PC with zone, instance, FATE and status: leading, following, or blocked and why (leader not seen,
+    another world, a zone not in my plan, another instance), like AutoDuty's multibox list. Every client writes a status
+    card every 2 s while logged in (`MultiboxPresence.cs`, `clients\<content id>.json`); 30 s old = disconnected.
+    The leader file also carries the instance, so a follower in another instance does not take the leader's FATE.
 
 17. **Resume the run after a reload** (`Core/Fork/ReloadResume.cs`, a hook at the start of `Plugin.Dispose` and one after
     the IPC provider in the constructor; Settings → General, on by default, saved as `ResumeAfterReload`). A run going
