@@ -1064,7 +1064,7 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 35e0b04..0d35ebb 100644
+index 35e0b04..44a78a7 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 @@ -39,7 +39,11 @@ public sealed partial class AutoFate
@@ -1088,7 +1088,20 @@ index 35e0b04..0d35ebb 100644
          SyncToFate(fateId);
          AssertPresetActive(preset);
          ResetEngageOverrides(preset);
-@@ -211,6 +216,7 @@ public sealed partial class AutoFate
+@@ -200,6 +205,12 @@ public sealed partial class AutoFate
+                     break;
+                 }
+ 
++                if (FollowerLeavesFate(fateId)) // fork (item 18): the leader went to another FATE
++                {
++                    LeaveFate(fateId);
++                    break;
++                }
++
+                 // A Collect FATE at 100% is won; its row lingers as the hand-in window (leftovers go in below), not a stall.
+                 if (isCollect && fate.Progress >= 100) break;
+ 
+@@ -211,6 +222,7 @@ public sealed partial class AutoFate
                      lastProgress = fate.Progress;
                      lastProgressAtMs = Environment.TickCount64;
                      combatStallBounces = 0;
@@ -1096,7 +1109,7 @@ index 35e0b04..0d35ebb 100644
                  }
                  else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                        && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
-@@ -246,13 +252,14 @@ public sealed partial class AutoFate
+@@ -246,13 +258,14 @@ public sealed partial class AutoFate
                      AssertPresetActive(preset);
                  }
  
@@ -1113,7 +1126,7 @@ index 35e0b04..0d35ebb 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -260,6 +267,7 @@ public sealed partial class AutoFate
+@@ -260,6 +273,7 @@ public sealed partial class AutoFate
                  }
  
                  var chasing = await TickRingChase(fateId, idle, preset);
@@ -1121,7 +1134,7 @@ index 35e0b04..0d35ebb 100644
                  if (!chasing && !isCollect && await TickEngagementWatchdog(fateId, fate, idle))
                  {
                      break;
-@@ -269,12 +277,16 @@ public sealed partial class AutoFate
+@@ -269,12 +283,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -1138,7 +1151,7 @@ index 35e0b04..0d35ebb 100644
              BossModIPC.Instance.ClearActive();
              if (isCollect) DisableTextAdvance();
          }
-@@ -331,7 +343,7 @@ public sealed partial class AutoFate
+@@ -331,7 +349,7 @@ public sealed partial class AutoFate
              return true;
  
          if (Plugin.Cfg.HumanizerEnabled
@@ -1147,7 +1160,7 @@ index 35e0b04..0d35ebb 100644
           && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
          {
              Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -385,7 +397,9 @@ public sealed partial class AutoFate
+@@ -385,7 +403,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -1158,7 +1171,7 @@ index 35e0b04..0d35ebb 100644
          {
              return false;
          }
-@@ -409,28 +423,43 @@ public sealed partial class AutoFate
+@@ -409,28 +429,43 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -1177,14 +1190,14 @@ index 35e0b04..0d35ebb 100644
 +        && FateMobScanner.TryGetTarget(fateId, player.Position, out var target)
 +        && target.DistanceToHitbox <= reachMeters
 +        && FateMobScanner.HasLineOfSight(player.Position, target.Position);
- 
--    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle)
++
 +    // Fork: the targeted FATE mob is close enough to hit but level geometry blocks the line of sight.
 +    private static bool TryGetSightBlockedTarget(uint fateId, Vector3 from, float reachMeters, out FateMobTarget target)
 +        => FateMobScanner.TryGetTarget(fateId, from, out target)
 +        && target.DistanceToHitbox <= reachMeters
 +        && !FateMobScanner.HasLineOfSight(from, target.Position);
-+
+ 
+-    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle)
 +    private async Task RepositionToFateMob(uint fateId, string fateName, FateMobSurvey survey, EngageIdleTracker idle, FateMobTarget? sightBlocked)
      {
          idle.CountReposition();
@@ -1211,7 +1224,7 @@ index 35e0b04..0d35ebb 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -464,7 +493,7 @@ public sealed partial class AutoFate
+@@ -464,7 +499,7 @@ public sealed partial class AutoFate
          Status = $"Searching {fateName}";
          Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
  
@@ -1220,7 +1233,7 @@ index 35e0b04..0d35ebb 100644
          var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
  
          bool MobSeenOrGone()
-@@ -518,8 +547,31 @@ public sealed partial class AutoFate
+@@ -518,8 +553,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
      {
@@ -1253,7 +1266,7 @@ index 35e0b04..0d35ebb 100644
              EndRingChase(preset);
              return false;
          }
-@@ -643,6 +695,8 @@ public sealed partial class AutoFate
+@@ -643,6 +701,8 @@ public sealed partial class AutoFate
          ringChaseTargetId = 0;
          ringChaseFailures = 0;
          ringChaseGivenUpTargetId = 0;
@@ -1262,7 +1275,7 @@ index 35e0b04..0d35ebb 100644
          collectPullsHeld = false;
          if (!BossModIPC.Instance.CanClearTransientStrategy)
          {
-@@ -741,7 +795,7 @@ public sealed partial class AutoFate
+@@ -741,7 +801,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -1271,7 +1284,7 @@ index 35e0b04..0d35ebb 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -779,6 +833,12 @@ public sealed partial class AutoFate
+@@ -779,6 +839,12 @@ public sealed partial class AutoFate
  
      private bool  ringChaseParked;
      private ulong ringChaseTargetId;
@@ -1284,7 +1297,7 @@ index 35e0b04..0d35ebb 100644
      private int   ringChaseFailures;
      private ulong ringChaseGivenUpTargetId;
  
-@@ -792,7 +852,7 @@ public sealed partial class AutoFate
+@@ -792,7 +858,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -1293,7 +1306,7 @@ index 35e0b04..0d35ebb 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -802,11 +862,15 @@ public sealed partial class AutoFate
+@@ -802,11 +868,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -1393,10 +1406,10 @@ index d79e384..72c8f62 100644
          var mgr = CSFateManager.Instance();
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
-index 0000000..f2b0001
+index 0000000..e924d7f
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,238 @@
 +using AutoFateGrind.Core.Game.Fates;
 +using AutoFateGrind.Core.Multibox;
 +using clib.Utils;
@@ -1436,6 +1449,9 @@ index 0000000..f2b0001
 +        MultiboxLink.CurrentFateId = lastPickedFateId != 0 && PublicEvent.GetFateById(lastPickedFateId) is { State: not (FateState.Ended or FateState.Failed) }
 +            ? lastPickedFateId
 +            : current is { State: FateState.Running } ? current.Id : 0;
++
++        if (followerLeftFateId != 0 && (MultiboxLink.Leader()?.FateId == followerLeftFateId || PublicEvent.GetFateById(followerLeftFateId) is not { State: FateState.Running }))
++            followerLeftFateId = 0; // the leader came back to it, or it is over
 +
 +        if (!MultiboxFollowerWatch.IsFollower)
 +        {
@@ -1578,6 +1594,22 @@ index 0000000..f2b0001
 +            if (!quiet) Svc.Log.Debug($"[AFG] {name} failed: {ex.Message}");
 +            return false;
 +        }
++    }
++
++    // A slave in a FATE the leader left (it picked another one: 2026-10-04 a restarted leader went to FATE 1140 while the
++    // slaves fought on in 1134) leaves at its first moment out of combat (no mobs dragged along) and follows. Marked so
++    // ComputeState does not route it back into the ring it still stands in; cleared when the leader comes back to it.
++    private uint followerLeftFateId;
++
++    private bool FollowerLeavesFate(uint fateId)
++    {
++        if (!MultiboxFollowerWatch.IsFollower || Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat]) return false;
++        if (MultiboxLink.Leader() is not { FateId: not 0 } leader || leader.FateId == fateId) return false;
++        if (leader.Territory != Svc.ClientState.TerritoryType || leader.Instance != MultiboxLink.CurrentInstance) return false;
++        if (PublicEvent.GetFateById(leader.FateId) is not { } next || next.State is FateState.Ended or FateState.Failed) return false;
++        Diag($"Multibox: the leader moved on to FATE {next.Id} ({next.Name}); leaving FATE {fateId} to follow");
++        followerLeftFateId = fateId;
++        return true;
 +    }
 +
 +    /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>
@@ -2126,7 +2158,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..276709e 100644
+index 1f98ff8..16dae6d 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -2174,6 +2206,15 @@ index 1f98ff8..276709e 100644
  
          if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
              abandonedFateId = null;
+@@ -428,7 +438,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+             // fight in it, so the reward is tracked and the grind moves on to the next FATE in the zone.
+             TrackCollectReward(current);
+         }
+-        else if (current is { State: FateState.Running } && abandonedFateId != current.Id)
++        else if (current is { State: FateState.Running } && abandonedFateId != current.Id && followerLeftFateId != current.Id) // fork: a slave left it for the leader's
+         {
+             if (current.Progress >= 100)
+                 StartFollowUpWatch(current.Id);
 @@ -437,6 +447,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              return GrindState.Engaging;
          }
