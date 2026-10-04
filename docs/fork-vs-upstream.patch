@@ -610,10 +610,10 @@ index c1e6385..6bacb04 100644
  
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
 new file mode 100644
-index 0000000..8b2d88f
+index 0000000..5fee457
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,178 @@
 +using AutoFateGrind.Core.Modes;
 +using AutoFateGrind.Core.Tasks;
 +using Dalamud.Game.ClientState.Conditions;
@@ -710,7 +710,9 @@ index 0000000..8b2d88f
 +        // Blocked while idle (e.g. the leader started in a zone above this slave): waits like a parked slave, so it starts
 +        // once the leader moves somewhere it can follow.
 +        if (leaderRunning && blocked is not null && !running) Parked = true;
-+        var wantStart = leaderRunning && blocked is null && !running && (leaderStarted || Parked || startAtMs != 0);
++        // stopAskedByUs: it stopped itself (blocked, e.g. the leader passed through a zone it has not unlocked) and the
++        // leader is somewhere it can follow again: start, do not sit idle (2026-10-04 slave7 stayed stopped).
++        var wantStart = leaderRunning && blocked is null && !running && (leaderStarted || Parked || startAtMs != 0 || stopAskedByUs);
 +        if (!wantStart) startAtMs = 0;
 +        else if (startAtMs == 0)
 +        {
@@ -1460,7 +1462,7 @@ index 35e0b04..12e3d78 100644
          {
              var now = Environment.TickCount64;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
-index d79e384..21c6ffe 100644
+index d79e384..abcff0b 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
 @@ -25,7 +25,8 @@ public sealed partial class AutoFate
@@ -1516,7 +1518,7 @@ index d79e384..21c6ffe 100644
      }
  
      private void EnsureCombatPreset(string preset)
-@@ -323,9 +339,30 @@ public sealed partial class AutoFate
+@@ -323,9 +339,34 @@ public sealed partial class AutoFate
              return;
          }
          BossModIPC.Instance.AddTransientStrategy(preset, AutoTargetModule, "MaxTargets", PullSize().ToString());
@@ -1533,6 +1535,10 @@ index d79e384..21c6ffe 100644
 +        if (Fork.Spread.DodgeMargin() is { } cushion)
 +            Diag($"Spread: dodge margin {cushion} → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, normal, "ForbiddenZoneCushion", cushion) ? "accepted" : "REFUSED")}");
 +        var role = Svc.Objects.LocalPlayer?.ClassJob.Value.Role ?? 0;
++        // A healer raises dead party members (BossMod's healer AI defaults to Raise = None, so nobody was raised: 2026-10-04).
++        // Slowcast: Swiftcast when it is up, else a hard cast.
++        if (role == 4)
++            Diag($"Healer: raising party members → BossMod {(BossModIPC.Instance.AddTransientStrategy(preset, "BossMod.Autorotation.xan.HealerAI", "Raise", "Slowcast") ? "accepted" : "REFUSED")}");
 +        if (Fork.Spread.MeleePositional(role) is { } positional)
 +        {
 +            const string goToPositional = "BossMod.Autorotation.MiscAI.GoToPositional";
@@ -1828,6 +1834,50 @@ index a643c8e..26126a0 100644
      {
          varietyConsideredIds.Clear();
          if (!Pacing.PickVarietyActive || returnToFateId is not null)
+diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Recovery.cs b/AutoFateGrind/Core/Tasks/AutoFate.Recovery.cs
+index ec91a29..906d9c4 100644
+--- a/AutoFateGrind/Core/Tasks/AutoFate.Recovery.cs
++++ b/AutoFateGrind/Core/Tasks/AutoFate.Recovery.cs
+@@ -29,7 +29,7 @@ public sealed partial class AutoFate
+ 
+         var soloWait = Svc.Party.Length == 0;
+         Status = soloWait ? "KO — releasing" : "KO — waiting for raise";
+-        Diag(soloWait ? "Solo KO: returning home." : "Party KO: waiting up to 30s for a raise.");
++        Diag(soloWait ? "Solo KO: returning home." : $"Party KO: waiting up to {(LivingHealerInParty() ? RaiseWaitWithHealerMs : RaiseWaitMs) / 1000}s for a raise.");
+ 
+         var returningHome = soloWait;
+         if (soloWait)
+@@ -40,7 +40,7 @@ public sealed partial class AutoFate
+         }
+         else
+         {
+-            var raiseDeadline = Environment.TickCount64 + RaiseWaitMs;
++            var raiseDeadline = Environment.TickCount64 + (LivingHealerInParty() ? RaiseWaitWithHealerMs : RaiseWaitMs);
+             var accepted = false;
+             while (Environment.TickCount64 < raiseDeadline)
+             {
+@@ -112,8 +112,21 @@ public sealed partial class AutoFate
+         }
+     }
+ 
++    // Fork: the raise statuses on a dead player while a raise is offered (BossMod RaiseUtil: Raise 148, 1140, 2648). The
++    // accept used to fire at once with nothing offered and count as success, so a party KO waited out two revive timeouts
++    // before going home (2026-10-04).
++    private static readonly uint[] RaisePendingStatuses = [148, 1140, 2648];
++
++    private static bool RaiseOffered()
++        => Svc.Objects.LocalPlayer is { } me && me.StatusList.Any(s => RaisePendingStatuses.Contains(s.StatusId));
++
++    /// <summary>A living healer in the party (it may still raise): the raise wait is longer.</summary>
++    private static bool LivingHealerInParty()
++        => Svc.Party.Any(m => m.ClassJob.ValueNullable?.Role == 4 && m.CurrentHP > 0 && (ulong)m.ContentId != ECommons.GameHelpers.Player.CID);
++
+     private static bool TryAcceptRaisePrompt()
+     {
++        if (!RaiseOffered()) return false;
+         // No reliable raise-prompt addon check that's API-stable across patches; accept-attempt is a no-op
+         // unless the prompt is showing, so we can spam it without side effects.
+         return TryExecuteReviveCommand(ReviveParamAccept);
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Spread.cs b/AutoFateGrind/Core/Tasks/AutoFate.Spread.cs
 new file mode 100644
 index 0000000..7714123
@@ -2536,7 +2586,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..16dae6d 100644
+index 1f98ff8..856da08 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -2548,7 +2598,15 @@ index 1f98ff8..16dae6d 100644
      private const int   EngageRepositionWatchdogMs = 40_000;
      private const float EngageMeleeApproachToleranceMeters  = 2.5f;
      private const float EngageRangedApproachToleranceMeters = 15f;
-@@ -153,6 +155,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -74,6 +76,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+     // Cap on fighting off a mob that aggroed mid-travel, so an unkillable add can't park the run.
+     private const int   CombatClearTimeoutMs = 30_000;
+     private const int   RaiseWaitMs = 30_000;
++    private const int   RaiseWaitWithHealerMs = 60_000; // fork: a living healer in the party gets time to reach and raise
+     private const int   ReleaseTransitionWaitMs = 60_000;
+     private const int   DefaultSwapWaitMs = 30_000;
+     private const int   MaxSwapWaitSec = 300;
+@@ -153,6 +156,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
          BetweenFates,         // Have a target FATE; move (or activate prep NPC) and arrive.
          Engaging,             // CurrentFate is set; fight until it ends or we KO.
          WaitingForFates,      // No eligible FATE; idle-scan with optional zone swap.
@@ -2556,7 +2614,7 @@ index 1f98ff8..16dae6d 100644
      }
  
      private GrindState lastObservedState = GrindState.Idle;
-@@ -244,6 +247,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -244,6 +248,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                  LogHeartbeat(state);
              }
  
@@ -2565,7 +2623,7 @@ index 1f98ff8..16dae6d 100644
              switch (state)
              {
                  case GrindState.AllDone:
-@@ -261,6 +266,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -261,6 +267,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
                      await HandOffToNextYokai();
                      return;
  
@@ -2576,7 +2634,7 @@ index 1f98ff8..16dae6d 100644
                  case GrindState.GoalZoneDone:
                      if (await LeaveDoneZone() is ExitReason.Quit) return;
                      break;
-@@ -384,6 +393,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -384,6 +394,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      private GrindState ComputeState()
      {
          RefreshPendingCollectReward();
@@ -2584,7 +2642,7 @@ index 1f98ff8..16dae6d 100644
  
          if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
              abandonedFateId = null;
-@@ -428,7 +438,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -428,7 +439,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              // fight in it, so the reward is tracked and the grind moves on to the next FATE in the zone.
              TrackCollectReward(current);
          }
@@ -2593,7 +2651,7 @@ index 1f98ff8..16dae6d 100644
          {
              if (current.Progress >= 100)
                  StartFollowUpWatch(current.Id);
-@@ -437,6 +447,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -437,6 +448,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              return GrindState.Engaging;
          }
  
@@ -2604,7 +2662,7 @@ index 1f98ff8..16dae6d 100644
          if (ShouldWaitForFollowUp())
              return GrindState.WaitingForFollowUp;
  
-@@ -470,7 +484,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -470,7 +485,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
              zoneIdleWaitMs = Pacing.IdleWaitBeforeSwapMs(Math.Clamp(Plugin.Cfg.SwapZoneWaitSec, 0, MaxSwapWaitSec) * 1000);
          }
  
@@ -2613,7 +2671,7 @@ index 1f98ff8..16dae6d 100644
           && Environment.TickCount64 - zoneIdleSinceMs >= zoneIdleWaitMs)
              return GrindState.SwapZone;
  
-@@ -501,6 +515,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -501,6 +516,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
  
      private async Task GoToZone()
      {
@@ -2627,7 +2685,7 @@ index 1f98ff8..16dae6d 100644
          Status = $"Teleporting to {zone.Name}";
          Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
          var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
-@@ -516,6 +537,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -516,6 +538,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
          if (result == TerritoryTeleportResult.Blocked)
          {
              FaultIfCharacterStaysBlocked();
@@ -2636,7 +2694,7 @@ index 1f98ff8..16dae6d 100644
              return;
          }
  
-@@ -579,7 +602,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -579,7 +603,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      {
          await EnsureConsumables();
          var keepingTwist = KeepingTwistOfFate();
