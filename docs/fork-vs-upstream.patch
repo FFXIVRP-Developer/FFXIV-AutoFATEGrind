@@ -786,15 +786,16 @@ index d79e384..ce80568 100644
      private void EnsureCombatPreset(string preset)
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
-index 0000000..45d2f29
+index 0000000..f109855
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,169 @@
 +using AutoFateGrind.Core.Game.Fates;
 +using AutoFateGrind.Core.Multibox;
 +using clib.Utils;
 +using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 +using ECommons.DalamudServices;
++using System.Threading.Tasks;
 +
 +namespace AutoFateGrind.Core.Tasks;
 +
@@ -853,9 +854,98 @@ index 0000000..45d2f29
 +        }
 +
 +        var myInstance = MultiboxLink.CurrentInstance;
-+        MultiboxLink.FollowerStatus = leader.Instance != myInstance && Svc.ClientState.TerritoryType == leader.Territory
-+            ? $"blocked: leader {leader.Name} is in instance {leader.Instance}, I am in {myInstance}"
-+            : $"following {leader.Name}";
++        if (leader.Instance != myInstance && leader.Instance != 0 && myInstance != 0 && Svc.ClientState.TerritoryType == leader.Territory)
++        {
++            MultiboxLink.FollowerStatus = Environment.TickCount64 < nextInstanceHopMs
++                ? $"blocked: leader {leader.Name} is in instance {leader.Instance}, I am in {myInstance} (next try in {(nextInstanceHopMs - Environment.TickCount64) / 1000}s)"
++                : $"changing to instance {leader.Instance} (leader {leader.Name})";
++            instanceHopTarget = leader.Instance;
++            return;
++        }
++        instanceHopTarget = 0;
++        MultiboxLink.FollowerStatus = $"following {leader.Name}";
++    }
++
++    // ---- Following the leader into its instance --------------------------------------------------------------
++    // A follower in another instance of the leader's zone sees other FATEs: it finishes its own FATE, teleports to the
++    // zone's aetheryte and has Lifestream change the instance there (Lifestream.ChangeInstance needs an aetheryte in
++    // reach). At most one try every 90 s: a full instance or a refused change does not turn into a loop.
++    private const int InstanceHopRetryMs = 90_000;
++    private uint instanceHopTarget;
++    private long nextInstanceHopMs;
++
++    /// <summary>ComputeState, when not in a FATE: hop to the leader's instance now?</summary>
++    private bool WantsInstanceHop()
++        => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower && instanceHopTarget != 0 && Environment.TickCount64 >= nextInstanceHopMs
++        && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat];
++
++    private async Task HopToLeaderInstance()
++    {
++        var target = instanceHopTarget;
++        nextInstanceHopMs = Environment.TickCount64 + InstanceHopRetryMs;
++        if (!LifestreamFunc<bool>("Lifestream.CanChangeInstance", out _, quiet: true) && !LifestreamFunc<int>("Lifestream.GetCurrentInstance", out _, quiet: true))
++        {
++            Diag("Multibox: Lifestream is not loaded; cannot change the instance");
++            return;
++        }
++
++        Status = $"Following the leader into instance {target}";
++        if (!(LifestreamFunc<bool>("Lifestream.CanChangeInstance", out var canNow) && canNow))
++        {
++            // Not at an aetheryte: to the zone's own (a teleport inside the zone lands next to it).
++            var aetheryte = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.Aetheryte.RowId ?? 0;
++            if (aetheryte == 0)
++            {
++                Diag("Multibox: this zone has no aetheryte to change the instance at");
++                return;
++            }
++            Diag($"Multibox: teleporting to aetheryte {aetheryte} to change to instance {target}");
++            if (!TeleportToAetheryte(aetheryte))
++            {
++                Diag("Multibox: the teleport to the aetheryte was refused");
++                return;
++            }
++            await WaitUntilTimed(() => Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas], 15_000, "instance hop: teleport start");
++            await WaitUntilTimed(() => !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas] && Svc.Objects.LocalPlayer is not null, 60_000, "instance hop: teleport end");
++            if (!await WaitUntilTimed(() => LifestreamFunc<bool>("Lifestream.CanChangeInstance", out var can, quiet: true) && can, 15_000, "instance hop: at the aetheryte"))
++            {
++                Diag("Multibox: at the aetheryte, but Lifestream cannot change the instance here");
++                return;
++            }
++        }
++
++        Diag($"Multibox: changing to instance {target} (Lifestream)");
++        try { Svc.PluginInterface.GetIpcSubscriber<int, object>("Lifestream.ChangeInstance").InvokeAction((int)target); }
++        catch (Exception ex) { Diag($"Multibox: Lifestream.ChangeInstance failed: {ex.Message}"); return; }
++
++        if (await WaitUntilTimed(() => MultiboxLink.CurrentInstance == target && !Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas], 90_000, "instance hop: in the leader's instance"))
++        {
++            Diag($"Multibox: in instance {target} with the leader");
++            instanceHopTarget = 0;
++        }
++    }
++
++    private static unsafe bool TeleportToAetheryte(uint aetheryte)
++    {
++        var telepo = FFXIVClientStructs.FFXIV.Client.Game.UI.Telepo.Instance();
++        return telepo is not null && telepo->Teleport(aetheryte, 0);
++    }
++
++    private static bool LifestreamFunc<T>(string name, out T value, bool quiet = false)
++    {
++        value = default!;
++        try
++        {
++            var gate = Svc.PluginInterface.GetIpcSubscriber<T>(name);
++            if (!gate.HasFunction) return false;
++            value = gate.InvokeFunc();
++            return true;
++        }
++        catch (Exception ex)
++        {
++            if (!quiet) Svc.Log.Debug($"[AFG] {name} failed: {ex.Message}");
++            return false;
++        }
 +    }
 +
 +    /// <summary>A follower's pick: the leader's FATE when it exists here and is still going; null to pick as usual.</summary>
@@ -1251,7 +1341,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 1f98ff8..99e94ea 100644
+index 1f98ff8..f912cb0 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -1263,7 +1353,26 @@ index 1f98ff8..99e94ea 100644
      private const int   EngageRepositionWatchdogMs = 40_000;
      private const float EngageMeleeApproachToleranceMeters  = 2.5f;
      private const float EngageRangedApproachToleranceMeters = 15f;
-@@ -384,6 +386,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -153,6 +155,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+         BetweenFates,         // Have a target FATE; move (or activate prep NPC) and arrive.
+         Engaging,             // CurrentFate is set; fight until it ends or we KO.
+         WaitingForFates,      // No eligible FATE; idle-scan with optional zone swap.
++        InstanceHop,          // Fork (item 16): a follower changes to the leader's instance (out of a FATE).
+     }
+ 
+     private GrindState lastObservedState = GrindState.Idle;
+@@ -261,6 +264,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+                     await HandOffToNextYokai();
+                     return;
+ 
++                case GrindState.InstanceHop: // fork (item 16)
++                    await HopToLeaderInstance();
++                    break;
++
+                 case GrindState.GoalZoneDone:
+                     if (await LeaveDoneZone() is ExitReason.Quit) return;
+                     break;
+@@ -384,6 +391,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
      private GrindState ComputeState()
      {
          RefreshPendingCollectReward();
@@ -1271,7 +1380,18 @@ index 1f98ff8..99e94ea 100644
  
          if (abandonedFateId is { } abandonedId && !IsStillExcluded(abandonedId))
              abandonedFateId = null;
-@@ -501,6 +504,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -437,6 +445,10 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+             return GrindState.Engaging;
+         }
+ 
++        // Fork (item 16): out of a FATE (the Engaging check above returned for one), a follower joins the leader's instance.
++        if (WantsInstanceHop())
++            return GrindState.InstanceHop;
++
+         if (ShouldWaitForFollowUp())
+             return GrindState.WaitingForFollowUp;
+ 
+@@ -501,6 +513,13 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
  
      private async Task GoToZone()
      {
@@ -1285,7 +1405,7 @@ index 1f98ff8..99e94ea 100644
          Status = $"Teleporting to {zone.Name}";
          Diag($"Off-zone (in {Svc.ClientState.TerritoryType}), teleporting to {zone.TerritoryId}");
          var result = await AttemptTerritoryTeleport(zone.TerritoryId, zone.CentralLanding, "teleport-to-zone", TeleportWatchdogMs);
-@@ -516,6 +526,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
+@@ -516,6 +535,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
          if (result == TerritoryTeleportResult.Blocked)
          {
              FaultIfCharacterStaysBlocked();
