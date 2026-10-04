@@ -173,7 +173,9 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
 
 20. **Natural spreading** (`Core/Fork/Spread.cs`; Settings → Multibox → Spreading, four switches, on by default), after
     BOCCHI's critical encounter parking. Values are rolled per character from its content id (stable, different per
-    character). Own side: the arrival point (`MoveToFate`, 20-50 % of the radius at its angle ±25°) and the in-fight
+    character). Own side: with other clients of this PC connected the sides are spaced evenly (the group sorted by
+    content id, 360°/n apart, the circle turned by the lowest id; re-checked every 10 s), alone a random one; used for
+    the arrival point (`MoveToFate`, 20-50 % of the radius at its angle ±25°) and the in-fight
     walks to a mob (`RepositionToFateMob`, hitbox + 1.5 m on its side) and to the centre (`SeekFateCentre`, 8 m out).
     Crowd nudge: after arriving, another player within 6 m → the best of 30 spots 4-12 m away, scored like BOCCHI
     (`min(nearest, 25) - 5 x players within 8 m`), inside 85 % of the radius. Dodge margin: BossMod
