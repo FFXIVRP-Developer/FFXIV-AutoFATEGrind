@@ -16,11 +16,15 @@ namespace AutoFateGrind.Core.Multibox;
 internal static class MultiboxFollowerWatch
 {
     private const int EveryMs = 3_000;
-    private static readonly TimeSpan LeaderGoneAfter = TimeSpan.FromSeconds(30);
+    // Without its leader (no party any more, or no leader grinding) a slave finishes its FATE and waits this long for the
+    // leader before it parks; a leader that starts again in time re-invites it and it carries on.
+    private const int WaitForLeaderMs = 60_000;
 
     private static long nextMs;
     private static bool? leaderWasRunning; // null until the first look after the plugin loaded
-    private static DateTime leaderLastSeenUtc = DateTime.MinValue;
+    private static long leaderGoneSinceMs;    // 0 while the leader grinds
+    private static bool wasInParty;
+    private static bool partyGone;            // dropped out of the party (the leader disbanded it): the leader stopped
     private static bool stopAskedByUs;
     private static bool startedByUs;
     private static long startAtMs; // the random start delay (0 = none set)
@@ -61,9 +65,16 @@ internal static class MultiboxFollowerWatch
         if (!Svc.ClientState.IsLoggedIn || Svc.Objects.LocalPlayer is null
          || Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BoundByDuty]) return;
 
+        var now = Environment.TickCount64;
         var leader = MultiboxLink.Leader(); // fresh and on this world = the leader is grinding
-        if (leader is not null) leaderLastSeenUtc = DateTime.UtcNow;
-        var leaderRunning = leader is not null || DateTime.UtcNow - leaderLastSeenUtc < LeaderGoneAfter;
+        var inParty = ECommons.PartyFunctions.UniversalParty.Length > 1;
+        if (wasInParty && !inParty) { partyGone = true; Svc.Log.Info("[AFG] Multibox: no longer in the party; the leader stopped"); }
+        if (inParty) partyGone = false;
+        wasInParty = inParty;
+        var leaderRunning = leader is not null && !partyGone;
+        if (leaderRunning) leaderGoneSinceMs = 0;
+        else if (leaderGoneSinceMs == 0) leaderGoneSinceMs = now;
+        var waitedOut = !leaderRunning && now - leaderGoneSinceMs >= WaitForLeaderMs;
         var running = plugin.Controller.Running;
         var blocked = leader is null ? null : CantFollowReason(leader);
         if (blocked != Blocked && blocked is not null) Svc.Log.Info($"[AFG] Multibox: cannot follow the leader: {blocked}");
@@ -97,11 +108,12 @@ internal static class MultiboxFollowerWatch
         {
             Svc.Chat.Print(blocked is not null
                 ? $"[AFG] Cannot follow the leader: {blocked}. Finishing this FATE, then parking."
-                : "[AFG] The leader stopped; finishing this FATE, then parking at the break location.");
+                : "[AFG] The leader stopped; finishing this FATE, then waiting 60 s for it before parking.");
             stopAskedByUs = true;
             plugin.Controller.StopWhenSafe();
         }
-        if (!running && (stopAskedByUs || (!leaderRunning && startedByUs && !Parked)))
+        // Park: blocked right away; without the leader once it waited 60 s (also a slave that logged in to no leader).
+        if (!running && !Parked && (blocked is not null ? stopAskedByUs : waitedOut && (stopAskedByUs || startedByUs || !inParty)))
         {
             stopAskedByUs = false;
             startedByUs = false;
@@ -114,6 +126,7 @@ internal static class MultiboxFollowerWatch
     private static void Park()
     {
         Parked = true;
+        if (Blocked is null) MultiboxParty.LeaveAsSlave(); // the leader stopped (a blocked slave stays in the party)
         var command = Plugin.Cfg.HumanizerRetreat switch
         {
             HumanizerRetreat.Inn              => "inn",

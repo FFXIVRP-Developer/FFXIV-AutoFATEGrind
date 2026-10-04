@@ -176,6 +176,11 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     cap; same world `InviteToParty`, other world `InviteToPartyContentId`). A slave accepts an invite from the leader
     with `InfoProxyPartyInvite.RespondToInvitation` (as Henchman; no window is clicked) when not in a party with others;
     the run's auto-decline (`PartyInviteWatcher`) skips the leader's invite. Following does not wait for the party.
+    When the leader's run stops it disbands the party (`InfoProxyPartyMember.DisbandParty`) if everyone else in it is
+    one of its slaves, so boarding the boat starts clean; the next start invites everyone again. A slave treats dropping
+    out of the party as the leader stopping: it finishes its FATE and waits 60 s for the leader (a leader back in time
+    re-invites it and it carries on), then parks at the break location and leaves any party left. A slave that logs in
+    to no leader and no party also parks after 60 s.
 
 20. **Natural spreading** (`Core/Fork/Spread.cs`; Settings → Multibox → Spreading, four switches, on by default), after
     BOCCHI's critical encounter parking. Values are rolled per character from its content id (stable, different per
