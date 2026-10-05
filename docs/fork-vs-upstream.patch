@@ -611,10 +611,10 @@ index c1e6385..6bacb04 100644
  
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
 new file mode 100644
-index 0000000..1844bdf
+index 0000000..c8a2a55
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,258 @@
 +using AutoFateGrind.Core.Modes;
 +using AutoFateGrind.Core.Tasks;
 +using Dalamud.Game.ClientState.Conditions;
@@ -669,6 +669,9 @@ index 0000000..1844bdf
 +    }
 +
 +    public static bool IsFollower => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower || Plugin.Cfg.ActiveMode is FollowLeaderMode;
++
++    // Fork (item 24): publishes for followers; a Solo client is neither leader nor follower.
++    public static bool IsLeader => Plugin.Cfg.MultiboxRole == MultiboxRole.Leader && !IsFollower;
 +
 +    public static void Start() => Svc.Framework.Update += Tick;
 +
@@ -872,10 +875,10 @@ index 0000000..1844bdf
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxLink.cs b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
 new file mode 100644
-index 0000000..c6c1a4f
+index 0000000..e07e4a5
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxLink.cs
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,149 @@
 +using System.IO;
 +using System.Text.Json;
 +using ECommons.DalamudServices;
@@ -892,6 +895,8 @@ index 0000000..c6c1a4f
 +{
 +    Leader = 0,
 +    Follower = 1,
++    // Fork (item 24): no multibox at all, a character on its own (publishes nothing, follows no one), as upstream.
++    Solo = 2,
 +}
 +
 +// Fork (item 21): TargetId (the leader's current target, for slaves assisting a tank) and Tank (on a tank job).
@@ -1177,7 +1182,7 @@ index 0000000..4f12763
 +}
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxPresence.cs b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 new file mode 100644
-index 0000000..e3be393
+index 0000000..f7cb1fb
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxPresence.cs
 @@ -0,0 +1,55 @@
@@ -1203,7 +1208,7 @@ index 0000000..e3be393
 +        if (Environment.TickCount64 < nextMs) return;
 +        nextMs = Environment.TickCount64 + EveryMs;
 +        var player = Svc.Objects.LocalPlayer;
-+        if (player is null) return;
++        if (player is null || Plugin.Cfg.MultiboxRole == MultiboxRole.Solo) return; // Fork (item 24): Solo writes no card
 +
 +        var running = Plugin.Instance?.Controller.Running ?? false;
 +        // Fork (item 20): a position line every 30 s of a run, to check the spreading from the logs.
@@ -1218,7 +1223,7 @@ index 0000000..e3be393
 +        }
 +        // The leader publishes while its run is going, breaks included (the run's own publish only runs while it picks
 +        // FATEs: a humanizer break went stale and parked the followers).
-+        if (running && !MultiboxFollowerWatch.IsFollower) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
++        if (running && MultiboxFollowerWatch.IsLeader) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
 +        var territory = Svc.ClientState.TerritoryType;
 +        var zone = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
 +        var fateId = running ? MultiboxLink.CurrentFateId : 0;
@@ -1633,7 +1638,7 @@ index d79e384..abcff0b 100644
          var mgr = CSFateManager.Instance();
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 new file mode 100644
-index 0000000..e924d7f
+index 0000000..5b59181
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Multibox.cs
 @@ -0,0 +1,238 @@
@@ -1682,7 +1687,7 @@ index 0000000..e924d7f
 +
 +        if (!MultiboxFollowerWatch.IsFollower)
 +        {
-+            MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
++            if (MultiboxFollowerWatch.IsLeader) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId); // Fork (item 24): not Solo
 +            return;
 +        }
 +
@@ -1876,7 +1881,7 @@ index 0000000..e924d7f
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
-index a643c8e..26126a0 100644
+index a643c8e..a6bee02 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Pacing.cs
 @@ -66,6 +66,32 @@ public sealed partial class AutoFate
@@ -1899,7 +1904,7 @@ index a643c8e..26126a0 100644
 +        var picked = PickFateOwn(from);
 +        // Fork: the leader publishes its pick right away; the run loop (which publishes too) does not tick during the trip,
 +        // so slaves only learned the FATE once the leader arrived (2026-10-04: 15-19 s late).
-+        if (picked is not null && !Core.Multibox.MultiboxFollowerWatch.IsFollower)
++        if (picked is not null && Core.Multibox.MultiboxFollowerWatch.IsLeader)
 +        {
 +            Core.Multibox.MultiboxLink.CurrentFateId = picked.Id;
 +            Core.Multibox.MultiboxLink.Publish(Svc.ClientState.TerritoryType, picked.Id);
@@ -2179,7 +2184,7 @@ index 0000000..50b1eb3
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
 new file mode 100644
-index 0000000..675f030
+index 0000000..bdccb17
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.TankPull.cs
 @@ -0,0 +1,123 @@
@@ -2236,7 +2241,7 @@ index 0000000..675f030
 +        var now = Environment.TickCount64;
 +        if (now < nextTankPullMs) return;
 +        nextTankPullMs = now + TankPullCheckEveryMs;
-+        if (!Plugin.Cfg.TankLeaderPull || Multibox.MultiboxFollowerWatch.IsFollower) return;
++        if (!Plugin.Cfg.TankLeaderPull || !Multibox.MultiboxFollowerWatch.IsLeader) return; // Fork (item 24): not Solo
 +        if (Svc.Objects.LocalPlayer is not { } me || !TankRangedAttack.TryGetValue(me.ClassJob.RowId, out var action)) return;
 +
 +        // The tank stance first: a ranged attack without it hardly draws a mob off a DPS.
@@ -3267,7 +3272,7 @@ index 6377e9a..a453708 100644
      }
 diff --git a/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 new file mode 100644
-index 0000000..c5fd7f4
+index 0000000..54a416e
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/Config/MultiboxSettings.cs
 @@ -0,0 +1,131 @@
@@ -3295,12 +3300,12 @@ index 0000000..c5fd7f4
 +        using (SettingsGroup.Begin("This client"))
 +        {
 +            SettingsRow.Draw("Role",
-+                "Leader: publishes the zone and FATE it grinds for the other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
++                "Leader: publishes the zone and FATE it grinds for the other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). Solo: no multibox at all, a character on its own (publishes nothing, follows no one). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
 +                SettingsControls.RowComboWidth,
 +                () =>
 +                {
 +                    var role = (int)cfg.MultiboxRole;
-+                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Slave"], SettingsControls.RowComboWidth))
++                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Slave", "Solo"], SettingsControls.RowComboWidth))
 +                    {
 +                        cfg.MultiboxRole = (MultiboxRole)role;
 +                        cfg.Save();
@@ -3435,10 +3440,10 @@ index 4f70e0b..a17c9af 100644
              }
 diff --git a/AutoFateGrind/Windows/Sections/MultiboxPanel.cs b/AutoFateGrind/Windows/Sections/MultiboxPanel.cs
 new file mode 100644
-index 0000000..2dc07eb
+index 0000000..a7c0dd9
 --- /dev/null
 +++ b/AutoFateGrind/Windows/Sections/MultiboxPanel.cs
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,115 @@
 +using AutoFateGrind.Core.Multibox;
 +using AutoFateGrind.Core.Tasks;
 +using AutoFateGrind.Windows.Components;
@@ -3462,6 +3467,7 @@ index 0000000..2dc07eb
 +    [
 +        new(FontAwesomeIcon.Crown, "Leader"),
 +        new(FontAwesomeIcon.Link, "Slave"),
++        new(FontAwesomeIcon.User, "Solo"), // Fork (item 24)
 +    ];
 +
 +    public static void DrawRoleSwitch(Configuration cfg, bool running)
