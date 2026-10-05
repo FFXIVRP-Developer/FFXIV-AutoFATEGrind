@@ -43,7 +43,7 @@ public sealed partial class AutoFate
 
         if (!MultiboxFollowerWatch.IsFollower)
         {
-            MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
+            if (MultiboxFollowerWatch.IsLeader) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId); // Fork (item 24): not Solo
             return;
         }
 

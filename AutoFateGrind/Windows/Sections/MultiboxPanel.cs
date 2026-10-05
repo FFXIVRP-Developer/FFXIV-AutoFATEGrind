@@ -21,6 +21,7 @@ internal static class MultiboxPanel
     [
         new(FontAwesomeIcon.Crown, "Leader"),
         new(FontAwesomeIcon.Link, "Slave"),
+        new(FontAwesomeIcon.User, "Solo"), // Fork (item 24)
     ];
 
     public static void DrawRoleSwitch(Configuration cfg, bool running)

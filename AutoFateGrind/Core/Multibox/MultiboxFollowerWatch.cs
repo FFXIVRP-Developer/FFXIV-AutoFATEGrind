@@ -53,6 +53,9 @@ internal static class MultiboxFollowerWatch
 
     public static bool IsFollower => Plugin.Cfg.MultiboxRole == MultiboxRole.Follower || Plugin.Cfg.ActiveMode is FollowLeaderMode;
 
+    // Fork (item 24): publishes for followers; a Solo client is neither leader nor follower.
+    public static bool IsLeader => Plugin.Cfg.MultiboxRole == MultiboxRole.Leader && !IsFollower;
+
     public static void Start() => Svc.Framework.Update += Tick;
 
     public static void Stop() => Svc.Framework.Update -= Tick;

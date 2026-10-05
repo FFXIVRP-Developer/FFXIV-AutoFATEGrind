@@ -22,12 +22,12 @@ internal static class MultiboxSettings
         using (SettingsGroup.Begin("This client"))
         {
             SettingsRow.Draw("Role",
-                "Leader: publishes the zone and FATE it grinds for the other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
+                "Leader: publishes the zone and FATE it grinds for the other clients of this PC. Follower: goes to the leader's zone and takes the leader's FATE when it is in the same world and instance (otherwise picks as usual). Solo: no multibox at all, a character on its own (publishes nothing, follows no one). The slaves are set to Follower by the XIVProfiles override; leave the main on Leader.",
                 SettingsControls.RowComboWidth,
                 () =>
                 {
                     var role = (int)cfg.MultiboxRole;
-                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Slave"], SettingsControls.RowComboWidth))
+                    if (SettingsControls.DrawPlainCombo("##mb_role", ref role, ["Leader", "Slave", "Solo"], SettingsControls.RowComboWidth))
                     {
                         cfg.MultiboxRole = (MultiboxRole)role;
                         cfg.Save();

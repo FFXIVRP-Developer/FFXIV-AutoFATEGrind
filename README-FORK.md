@@ -236,6 +236,12 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     and count as success, so a party KO sat through two revive timeouts before going home). It waits 60 s for a raise
     with a living healer in the party, 30 s otherwise, then returns home and the run (or the slave's follow) carries on.
     A slave that stopped itself because it was blocked starts again once the leader is somewhere it can follow.
+24. **Solo role** (`MultiboxRole.Solo = 2`; the role switch and Settings → Multibox → Role). A character on its own,
+    neither leader nor slave: it writes no client card and no leader file, follows no one, invites and disbands no
+    party, does no tank leader pull, picks its own FATEs toward its own goal, and resumes after a reload like a leader:
+    upstream's behaviour, with the rest of the fork's fixes. `MultiboxFollowerWatch.IsLeader` (Leader and not
+    following) gates every publish and the tank pull, which were "not a follower" before. XIVProfiles sets it per
+    profile (`profile.json` configs) for a slave that levels by itself, e.g. under BoatRunner.
 
 ## Verified in game
 

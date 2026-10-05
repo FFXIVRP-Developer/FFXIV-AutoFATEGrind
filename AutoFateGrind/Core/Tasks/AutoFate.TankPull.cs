@@ -51,7 +51,7 @@ public sealed partial class AutoFate
         var now = Environment.TickCount64;
         if (now < nextTankPullMs) return;
         nextTankPullMs = now + TankPullCheckEveryMs;
-        if (!Plugin.Cfg.TankLeaderPull || Multibox.MultiboxFollowerWatch.IsFollower) return;
+        if (!Plugin.Cfg.TankLeaderPull || !Multibox.MultiboxFollowerWatch.IsLeader) return; // Fork (item 24): not Solo
         if (Svc.Objects.LocalPlayer is not { } me || !TankRangedAttack.TryGetValue(me.ClassJob.RowId, out var action)) return;
 
         // The tank stance first: a ranged attack without it hardly draws a mob off a DPS.

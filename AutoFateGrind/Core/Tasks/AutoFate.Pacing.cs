@@ -82,7 +82,7 @@ public sealed partial class AutoFate
         var picked = PickFateOwn(from);
         // Fork: the leader publishes its pick right away; the run loop (which publishes too) does not tick during the trip,
         // so slaves only learned the FATE once the leader arrived (2026-10-04: 15-19 s late).
-        if (picked is not null && !Core.Multibox.MultiboxFollowerWatch.IsFollower)
+        if (picked is not null && Core.Multibox.MultiboxFollowerWatch.IsLeader)
         {
             Core.Multibox.MultiboxLink.CurrentFateId = picked.Id;
             Core.Multibox.MultiboxLink.Publish(Svc.ClientState.TerritoryType, picked.Id);

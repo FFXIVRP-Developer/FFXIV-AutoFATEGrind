@@ -14,6 +14,8 @@ public enum MultiboxRole
 {
     Leader = 0,
     Follower = 1,
+    // Fork (item 24): no multibox at all, a character on its own (publishes nothing, follows no one), as upstream.
+    Solo = 2,
 }
 
 // Fork (item 21): TargetId (the leader's current target, for slaves assisting a tank) and Tank (on a tank job).

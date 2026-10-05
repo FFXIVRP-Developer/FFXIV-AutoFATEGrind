@@ -20,7 +20,7 @@ internal static class MultiboxPresence
         if (Environment.TickCount64 < nextMs) return;
         nextMs = Environment.TickCount64 + EveryMs;
         var player = Svc.Objects.LocalPlayer;
-        if (player is null) return;
+        if (player is null || Plugin.Cfg.MultiboxRole == MultiboxRole.Solo) return; // Fork (item 24): Solo writes no card
 
         var running = Plugin.Instance?.Controller.Running ?? false;
         // Fork (item 20): a position line every 30 s of a run, to check the spreading from the logs.
@@ -35,7 +35,7 @@ internal static class MultiboxPresence
         }
         // The leader publishes while its run is going, breaks included (the run's own publish only runs while it picks
         // FATEs: a humanizer break went stale and parked the followers).
-        if (running && !MultiboxFollowerWatch.IsFollower) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
+        if (running && MultiboxFollowerWatch.IsLeader) MultiboxLink.Publish(Svc.ClientState.TerritoryType, MultiboxLink.CurrentFateId);
         var territory = Svc.ClientState.TerritoryType;
         var zone = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
         var fateId = running ? MultiboxLink.CurrentFateId : 0;
