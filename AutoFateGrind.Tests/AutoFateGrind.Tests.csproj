@@ -28,5 +28,7 @@
 
     <ItemGroup>
         <Reference Include="Dalamud" HintPath="$(DalamudLibPath)Dalamud.dll" />
+        <Reference Include="FFXIVClientStructs" HintPath="$(DalamudLibPath)FFXIVClientStructs.dll" />
+        <Reference Include="InteropGenerator.Runtime" HintPath="$(DalamudLibPath)InteropGenerator.Runtime.dll" />
     </ItemGroup>
 </Project>

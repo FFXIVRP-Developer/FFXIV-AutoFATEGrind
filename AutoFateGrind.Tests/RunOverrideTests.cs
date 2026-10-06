@@ -28,7 +28,11 @@ public sealed class RunOverrideTests : IDisposable
 
     public void Dispose() => RunOverride.Restore(cfg);
 
-    private static RunOverride.Request Levelling() => new() { Gearsets = [7], StopAtLevel = 15, Zones = [134, 135], MaxLevelAbove = 3, MaxLevelBelow = 10 };
+    private static RunOverride.Request Levelling() => new()
+    {
+        Gearsets = [7], StopAtLevel = 15, Zones = [134, 135], MaxLevelAbove = 2, MaxLevelBelow = 10,
+        SkipFateRules = ["Escort", "Chase", "EventFate", "ConcertedWorks", "Fete", "NoSuchRule"], SwapZoneWaitSec = 10,
+    };
 
     [Fact]
     public void GivenALevellingRequest_ExpectItsSettingsForTheRun()
@@ -41,7 +45,7 @@ public sealed class RunOverrideTests : IDisposable
         Assert.Equal(AfterClassQueueDone.StopRun, cfg.AfterClassQueueDone);
         Assert.True(cfg.ApplyClassOnStart);
         Assert.True(cfg.LevelRangeFilterEnabled);
-        Assert.Equal(3, cfg.MaxLevelAbove);
+        Assert.Equal(2, cfg.MaxLevelAbove);
         Assert.False(cfg.StopAfterFatesEnabled);
     }
 
@@ -84,5 +88,58 @@ public sealed class RunOverrideTests : IDisposable
     {
         Assert.False(RunOverride.Apply(cfg, new RunOverride.Request { Gearsets = [], Zones = [134] }));
         Assert.Equal([956u, 957u], cfg.SelectedZones);
+    }
+
+    // ---- Solo, nonstop, FATEs the character can do (user, 2026-10-06) -------------------------------------------------------
+
+    [Fact]
+    public void GivenALevellingRun_ExpectItSolo_NeverFollowingOrLeading()
+    {
+        cfg.MultiboxRole = Core.Multibox.MultiboxRole.Follower;
+        RunOverride.Apply(cfg, Levelling());
+        Assert.Equal(Core.Multibox.MultiboxRole.Solo, cfg.MultiboxRole);
+    }
+
+    [Fact]
+    public void GivenALevellingRun_ExpectItNonstop_NoGoalCapBreakTradeOrLogout()
+    {
+        cfg.HumanizerEnabled = true;
+        cfg.TradeOnCap = true;
+        cfg.SwapZonesWhenEmpty = false;
+        cfg.AfterRun = AfterRunAction.Logout;
+        RunOverride.Apply(cfg, Levelling());
+        Assert.Equal("plainfates", cfg.ModeId);
+        Assert.False(cfg.StopAfterFatesEnabled);
+        Assert.False(cfg.StopAfterMinutesEnabled);
+        Assert.False(cfg.HumanizerEnabled);
+        Assert.False(cfg.TradeOnCap);
+        Assert.True(cfg.SwapZonesWhenEmpty);
+        Assert.Equal(10, cfg.SwapZoneWaitSec);
+        Assert.Equal(AfterRunAction.StayLoggedIn, cfg.AfterRun);
+    }
+
+    [Fact]
+    public void GivenALevellingRun_ExpectTheKindsItCannotDoAloneSkipped_AnUnknownNameIgnored()
+    {
+        RunOverride.Apply(cfg, Levelling());
+        Assert.Equal(5, cfg.SkippedFateRules.Count);
+        Assert.DoesNotContain(RunOverride.Rules(["Normal"]).Single(), cfg.SkippedFateRules);
+        Assert.DoesNotContain(RunOverride.Rules(["Collect"]).Single(), cfg.SkippedFateRules);
+        Assert.Contains(RunOverride.Rules(["Escort"]).Single(), cfg.SkippedFateRules);
+    }
+
+    [Fact]
+    public void GivenTheRunEnded_ExpectTheUsersRoleSkipsAndBreaksBack()
+    {
+        cfg.MultiboxRole = Core.Multibox.MultiboxRole.Follower;
+        cfg.HumanizerEnabled = true;
+        cfg.SkippedFateRules = [1];
+        cfg.AfterRun = AfterRunAction.Logout;
+        RunOverride.Apply(cfg, Levelling());
+        RunOverride.Restore(cfg);
+        Assert.Equal(Core.Multibox.MultiboxRole.Follower, cfg.MultiboxRole);
+        Assert.True(cfg.HumanizerEnabled);
+        Assert.Equal([1], cfg.SkippedFateRules);
+        Assert.Equal(AfterRunAction.Logout, cfg.AfterRun);
     }
 }
