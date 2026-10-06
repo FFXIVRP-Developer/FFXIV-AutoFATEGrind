@@ -242,7 +242,12 @@ public sealed class Configuration : IPluginConfiguration
         return changed;
     }
 
-    public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
+    // Fork: while another plugin's run settings are in place (Core.Fork.RunOverride), a save writes the user's own settings.
+    public void Save()
+    {
+        if (Core.Fork.RunOverride.SaveOriginal(this)) return;
+        Plugin.PluginInterface.SavePluginConfig(this);
+    }
 
     public void SaveDebounced()
     {

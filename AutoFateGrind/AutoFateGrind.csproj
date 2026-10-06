@@ -27,6 +27,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Fork: the fork's own rules tested outside the game (AutoFateGrind.Tests). -->
+    <InternalsVisibleTo Include="AutoFateGrind.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj">
       <Private>true</Private>
     </ProjectReference>

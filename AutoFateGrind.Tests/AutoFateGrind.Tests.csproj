@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- Fork: the fork's own rules tested outside the game, no Dalamud running. The plugin is built for the tests in Debug
+         into obj\plugin, never into bin\Release, which the game clients load as a dev plugin. Run with dotnet test. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>preview</LangVersion>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(MSBuildThisFileDirectory)..\..\Profiles\Me\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\AutoFateGrind\AutoFateGrind.csproj"
+                          AdditionalProperties="Configuration=Debug;DalamudLibPath=$(DalamudLibPath);OutDir=$(MSBuildThisFileDirectory)obj\plugin\;OutputPath=$(MSBuildThisFileDirectory)obj\plugin\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Dalamud" HintPath="$(DalamudLibPath)Dalamud.dll" />
+    </ItemGroup>
+</Project>

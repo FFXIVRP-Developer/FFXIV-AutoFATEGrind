@@ -13,6 +13,9 @@ namespace AutoFateGrind.Core.Ipc;
 //                                            FATE after StopWhenSafe); callers wait for false
 //   AutoFateGrind.GoalReached  () -> bool    the last run ended because its goal was met (e.g. every Yo-kai zone done),
 //                                            not a stop or a fault: restarting it would end again at once
+//   AutoFateGrind.StartLevelling (json) -> bool  a run with these settings for this run only (Core.Fork.RunOverride.Request:
+//                                            gear sets, the level to stop at, zones, the FATE level band); the user's settings
+//                                            come back when it ends; false when it did not start
 internal sealed class AfgIpcProvider : IDisposable
 {
     private const string Prefix = "AutoFateGrind";
@@ -24,6 +27,8 @@ internal sealed class AfgIpcProvider : IDisposable
     private readonly ICallGateProvider<object> stopWhenSafe;
     private readonly ICallGateProvider<object> stop;
     private readonly ICallGateProvider<string> phase;
+    private readonly ICallGateProvider<string, bool> startLevelling;
+    private readonly Plugin plugin;
 
     public AfgIpcProvider(Plugin plugin)
     {
@@ -46,7 +51,25 @@ internal sealed class AfgIpcProvider : IDisposable
         stopWhenSafe.RegisterAction(() => plugin.Controller.StopWhenSafe());
         stop.RegisterAction(() => plugin.Controller.Stop());
         phase.RegisterFunc(() => plugin.Controller.Phase.ToString());
+
+        this.plugin = plugin;
+        startLevelling = Svc.PluginInterface.GetIpcProvider<string, bool>($"{Prefix}.StartLevelling");
+        startLevelling.RegisterFunc(json =>
+        {
+            if (plugin.Controller.Running) return false;
+            Core.Fork.RunOverride.Request? request;
+            try { request = Newtonsoft.Json.JsonConvert.DeserializeObject<Core.Fork.RunOverride.Request>(json); }
+            catch { return false; }
+            if (request is null || !Core.Fork.RunOverride.Apply(Plugin.Cfg, request)) return false;
+            plugin.StartFromCommand();
+            if (plugin.Controller.Running) return true;
+            Core.Fork.RunOverride.Restore(Plugin.Cfg);
+            return false;
+        });
+        Svc.Framework.Update += OnUpdate;
     }
+
+    private void OnUpdate(Dalamud.Plugin.Services.IFramework _) => Core.Fork.RunOverride.Tick(plugin);
 
     public void Dispose()
     {
@@ -57,5 +80,8 @@ internal sealed class AfgIpcProvider : IDisposable
         stopWhenSafe.UnregisterAction();
         stop.UnregisterAction();
         phase.UnregisterFunc();
+        startLevelling.UnregisterFunc();
+        Svc.Framework.Update -= OnUpdate;
+        Core.Fork.RunOverride.Restore(Plugin.Cfg); // an unload never leaves the run's settings in place
     }
 }
