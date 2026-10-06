@@ -16,6 +16,7 @@ namespace AutoFateGrind.Core.Ipc;
 //   AutoFateGrind.StartLevelling (json) -> bool  a run with these settings for this run only (Core.Fork.RunOverride.Request:
 //                                            gear sets, the level to stop at, zones, the FATE level band); the user's settings
 //                                            come back when it ends; false when it did not start
+//   AutoFateGrind.IsLevelling  () -> bool    a run started by StartLevelling is going (a caller reloaded mid-run takes it back)
 internal sealed class AfgIpcProvider : IDisposable
 {
     private const string Prefix = "AutoFateGrind";
@@ -28,6 +29,7 @@ internal sealed class AfgIpcProvider : IDisposable
     private readonly ICallGateProvider<object> stop;
     private readonly ICallGateProvider<string> phase;
     private readonly ICallGateProvider<string, bool> startLevelling;
+    private readonly ICallGateProvider<bool> isLevelling;
     private readonly Plugin plugin;
 
     public AfgIpcProvider(Plugin plugin)
@@ -66,6 +68,8 @@ internal sealed class AfgIpcProvider : IDisposable
             Core.Fork.RunOverride.Restore(Plugin.Cfg);
             return false;
         });
+        isLevelling = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsLevelling");
+        isLevelling.RegisterFunc(() => plugin.Controller.Running && Core.Fork.RunOverride.Active);
         Svc.Framework.Update += OnUpdate;
     }
 
@@ -81,6 +85,7 @@ internal sealed class AfgIpcProvider : IDisposable
         stop.UnregisterAction();
         phase.UnregisterFunc();
         startLevelling.UnregisterFunc();
+        isLevelling.UnregisterFunc();
         Svc.Framework.Update -= OnUpdate;
         Core.Fork.RunOverride.Restore(Plugin.Cfg); // an unload never leaves the run's settings in place
     }
