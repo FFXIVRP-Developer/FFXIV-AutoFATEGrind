@@ -248,6 +248,11 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     the game was still logging in, that crashed the game (access violation in `Telepo.UpdateAetheryteList`). The list is
     read only with a character loaded and not between maps; otherwise the last list read is used (empty before the first,
     which upstream already treats as "not published yet"). `AetheryteListGuardTests`.
+26. **A follower parks without a trip while another plugin uses the character, and on its own world** (`Core/Fork/FollowerPark.cs`,
+    called in `MultiboxFollowerWatch.Park`). A follower that logged in with no leader grinding parked 60 s later with
+    "/li inn N" in the middle of another plugin's work (BoatRunner washing its inventory, 2026-10-08), and on a visited world
+    Lifestream's "inn N" went home first. Now: another plugin busy (`BusyElsewhere`) = dormant where it stands, no trip;
+    visiting another world = Lifestream's own "inn" there. `FollowerParkTests`.
 
 ## Verified in game
 

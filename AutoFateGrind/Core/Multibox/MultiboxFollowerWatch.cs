@@ -1,3 +1,4 @@
+using AutoFateGrind.Core.Fork;
 using AutoFateGrind.Core.Modes;
 using AutoFateGrind.Core.Tasks;
 using Dalamud.Game.ClientState.Conditions;
@@ -212,21 +213,14 @@ internal static class MultiboxFollowerWatch
     private static bool InInnRoom()
         => Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.TerritoryIntendedUse.RowId == 2;
 
-    /// <summary>
-    ///     Lifestream's inn for this character's Grand Company city ("/li inn N" counts its InnData, sorted by territory:
-    ///     1 Limsa Lominsa, 2 Ul'dah, 3 Gridania); plain "inn" (Lifestream's own pick, same world) without a company.
-    /// </summary>
-    private static unsafe string GrandCompanyInnCommand()
+    private static unsafe byte GrandCompany()
     {
         var state = FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState.Instance();
-        return (state is null ? (byte)0 : state->GrandCompany) switch
-        {
-            1 => "inn 1", // Maelstrom: Limsa Lominsa, The Mizzenmast
-            2 => "inn 3", // Order of the Twin Adder: Gridania, The Roost
-            3 => "inn 2", // Immortal Flames: Ul'dah, The Hourglass
-            _ => "inn",
-        };
+        return state is null ? (byte)0 : state->GrandCompany;
     }
+
+    private static bool VisitingAnotherWorld() =>
+        Svc.Objects.LocalPlayer is { } me && me.CurrentWorld.RowId != 0 && me.CurrentWorld.RowId != me.HomeWorld.RowId;
 
     private static void Park()
     {
@@ -234,6 +228,12 @@ internal static class MultiboxFollowerWatch
         Dormant = true;              // from here on the slave is left alone (other plugins may use it)
         dormantSawLeaderGone = false;
         if (Blocked is null) MultiboxParty.LeaveAsSlave(); // the leader stopped (a blocked slave stays in the party)
+        // Another plugin is using the character (BoatRunner, AutoRetainer, ...): dormant where it stands, no trip (README-FORK item 26).
+        if (BusyElsewhere() is { } other && !FollowerPark.Trip(other))
+        {
+            Svc.Log.Info($"[AFG] Multibox: parked where it stands, {other} is using this character.");
+            return;
+        }
         // Already in an inn room (any of them): it is parked, no trip (2026-10-04).
         if (InInnRoom())
         {
@@ -242,7 +242,7 @@ internal static class MultiboxFollowerWatch
         }
         // Always an inn of the world it is on (an apartment or a house is on the home world and world-travelled the
         // slaves away from the leader), and the inn of its Grand Company's city when it has one.
-        var command = GrandCompanyInnCommand();
+        var command = FollowerPark.InnCommand(GrandCompany(), VisitingAnotherWorld()); // the inn of this world (item 26)
         try
         {
             var busy = Svc.PluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
