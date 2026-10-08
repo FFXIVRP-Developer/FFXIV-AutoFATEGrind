@@ -243,6 +243,12 @@ See DRIFT.md for where each item hooks into upstream and how to recover from reb
     following) gates every publish and the tank pull, which were "not a follower" before. XIVProfiles sets it per
     profile (`profile.json` configs) for a slave that levels by itself, e.g. under BoatRunner.
 
+25. **Aetheryte list read only when safe** (`Core/Fork/AetheryteListGuard.cs`, a hook at the start of `ZoneStateReader.AttunedSet`).
+    Upstream reads the game's aetheryte list (`Svc.AetheryteList`) from its window's header every few seconds; drawn while
+    the game was still logging in, that crashed the game (access violation in `Telepo.UpdateAetheryteList`). The list is
+    read only with a character loaded and not between maps; otherwise the last list read is used (empty before the first,
+    which upstream already treats as "not published yet"). `AetheryteListGuardTests`.
+
 ## Verified in game
 
 | Item | Status (2026-10-03) |

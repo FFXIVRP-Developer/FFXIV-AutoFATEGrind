@@ -38,6 +38,8 @@ internal static class ZoneStateReader
 
     private static HashSet<uint> AttunedSet()
     {
+        // Fork: item 25 (README-FORK): never read the list while logging in or loading; it crashed the game.
+        if (!Core.Fork.AetheryteListGuard.CanReadNow()) return attunedAetheryteCache ?? [];
         var now = Environment.TickCount64;
         if (attunedAetheryteCache is null || now - attunedCacheTickMs > AttunedCacheLifetimeMs)
         {
