@@ -42,6 +42,12 @@ public enum RepairMode
     NpcOnly,
 }
 
+public enum HumanizerBreakActivity
+{
+    Wander,
+    IdleAtSpot,
+}
+
 public enum PartyInviteReplyChannel
 {
     Tell,

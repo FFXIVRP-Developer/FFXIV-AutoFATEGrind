@@ -63,6 +63,9 @@ internal static class ZoneAetherytes
         return cached is not null;
     }
 
+    public static bool IsTeleportable(uint territoryId)
+        => AttunableIdsIn(territoryId).Length > 0 || TryFindGateway(territoryId, out _);
+
     private static ZoneGateway? ResolveGateway(uint territoryId)
     {
         if (AttunableIdsIn(territoryId).Length > 0) return null;

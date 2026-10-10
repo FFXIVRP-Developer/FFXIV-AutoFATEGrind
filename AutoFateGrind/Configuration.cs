@@ -153,6 +153,8 @@ public sealed class Configuration : IPluginConfiguration
     public int HumanizerFatesBeforeBreak { get; set; } = 20;
     public int HumanizerBreakMinMinutes { get; set; } = 5;
     public int HumanizerBreakMaxMinutes { get; set; } = 10;
+    public HumanizerBreakActivity HumanizerBreakActivity { get; set; } = HumanizerBreakActivity.Wander;
+    public List<IdleSpot> HumanizerIdleSpots { get; set; } = [];
     public int HumanizerPauseMinSec { get; set; } = 3;
     public int HumanizerPauseMaxSec { get; set; } = 8;
     public int HumanizerWanderMinMeters { get; set; } = 25;

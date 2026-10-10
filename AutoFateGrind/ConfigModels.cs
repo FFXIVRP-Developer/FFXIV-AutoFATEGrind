@@ -14,6 +14,20 @@ public sealed class RepairNpc
     public int RepairIndex { get; set; } = 0;
 }
 
+// Saved from where the character stood; Name is whatever was targeted at the time, empty when nothing was.
+[Serializable]
+public sealed class IdleSpot
+{
+    public uint TerritoryId { get; set; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Z { get; set; }
+    public string Name { get; set; } = "";
+
+    [Newtonsoft.Json.JsonIgnore]
+    public System.Numerics.Vector3 Position => new(X, Y, Z);
+}
+
 [Serializable]
 public sealed class ConsumableEntry
 {

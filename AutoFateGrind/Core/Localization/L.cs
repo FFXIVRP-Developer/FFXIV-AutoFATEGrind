@@ -828,7 +828,7 @@ internal static class L
 
         public static readonly LocString HumanizerBreaks = new("settings.humanizer.breaks", "Breaks");
         public static readonly LocString HumanizerEnable = new("settings.humanizer.enable", "Take periodic city breaks");
-        public static readonly LocString HumanizerEnableHelp = new("settings.humanizer.enableHelp", "Every N FATEs, teleport to a random selected city and wander around for a few minutes before resuming. Helps you avoid player reports by acting a little more human, useful when you leave the PC running for long sessions and don't want others noticing you grinding FATEs non-stop.");
+        public static readonly LocString HumanizerEnableHelp = new("settings.humanizer.enableHelp", "Every N FATEs, take a few minutes off: wander around a random city or stand at one of your saved spots, then resume. Helps you avoid player reports by acting a little more human, useful when you leave the PC running for long sessions and don't want others noticing you grinding FATEs non-stop.");
         public static readonly LocString HumanizerOff = new("settings.humanizer.off", "Humanizer is off. Enable it to configure breaks.");
         public static readonly LocString FatesBetween = new("settings.humanizer.fatesBetween", "FATEs between breaks");
         public static readonly LocString FatesBetweenHelp = new("settings.humanizer.fatesBetweenHelp", "Take a break after this many completed FATEs. The counter resets after each break.");
@@ -836,6 +836,12 @@ internal static class L
         public static readonly LocString BreakLength = new("settings.humanizer.breakLength", "Break length");
         public static readonly LocString BreakLengthHelp = new("settings.humanizer.breakLengthHelp", "A random duration between these two values is rolled for each break.");
         public static readonly LocString MinutesFormat = new("settings.humanizer.minutesFormat", "%d min");
+        public static readonly LocString BreakActivity = new("settings.humanizer.breakActivity", "Break activity");
+        public static readonly LocString BreakActivityHelp = new("settings.humanizer.breakActivityHelp", "What your character does during a break.");
+        public static readonly LocString BreakActivityWanderName = new("settings.humanizer.activityWanderName", "Wander a city");
+        public static readonly LocString BreakActivityWanderDetail = new("settings.humanizer.activityWanderDetail", "Teleport to one of your cities and walk between random points until the break ends.");
+        public static readonly LocString BreakActivityIdleName = new("settings.humanizer.activityIdleName", "Idle at a spot");
+        public static readonly LocString BreakActivityIdleDetail = new("settings.humanizer.activityIdleDetail", "Go to one of your saved spots, such as a summoning bell, a vendor or an aetheryte, and stand there until the break ends.");
         public static readonly LocString HumanizerWandering = new("settings.humanizer.wandering", "Wandering");
         public static readonly LocString PauseBetween = new("settings.humanizer.pauseBetween", "Pause between walks");
         public static readonly LocString PauseBetweenHelp = new("settings.humanizer.pauseBetweenHelp", "After arriving at each random point, stand still for a random duration in this range before walking somewhere else.");
@@ -847,6 +853,14 @@ internal static class L
         public static readonly LocString AllowedCities = new("settings.humanizer.allowedCities", "Allowed cities");
         public static readonly LocString AllowedCitiesHelp = new("settings.humanizer.allowedCitiesHelp", "Tick the cities the plugin is allowed to teleport to. One is picked at random each break. Untick cities you haven't unlocked or don't want visited.");
         public static readonly LocString NoCities = new("settings.humanizer.noCities", "No cities selected - Humanizer will skip the break and keep grinding.");
+        public static readonly LocString IdleSpots = new("settings.humanizer.idleSpots", "Idle spots");
+        public static readonly LocString SavedSpots = new("settings.humanizer.savedSpots", "Saved spots");
+        public static readonly LocString SavedSpotsHelp = new("settings.humanizer.savedSpotsHelp", "Stand where you want to idle and press Save this spot. Target the bell, vendor or aetheryte first and the spot takes its name. With more than one saved, each break picks one at random and never the same one twice in a row.");
+        public static readonly LocString NoSpots = new("settings.humanizer.noSpots", "No spots saved yet. Until you save one, breaks idle next to the aetheryte of one of the cities below.");
+        public static readonly LocString SaveSpot = new("settings.humanizer.saveSpot", "Save this spot");
+        public static readonly LocString SpotSavedChat = new("settings.humanizer.spotSavedChat", "[AFG] Idle spot saved in {0}.");
+        public static readonly LocString SpotAirborneChat = new("settings.humanizer.spotAirborneChat", "[AFG] Land first: an idle spot has to be on the ground.");
+        public static readonly LocString SpotNoAetheryteChat = new("settings.humanizer.spotNoAetheryteChat", "[AFG] AFG can't teleport here, so a break could never come back to this spot. Save one in a city or a zone with an aetheryte.");
         public static readonly LocString Pacing = new("settings.humanizer.pacing", "Pacing");
         public static readonly LocString PacingEnable = new("settings.humanizer.pacingEnable", "Vary timing between FATEs");
         public static readonly LocString PacingEnableHelp = new("settings.humanizer.pacingEnableHelp", "Every player running AFG sees a FATE end at the same moment, so without this they all move on, teleport and swap zones in perfect sync. When on, each step waits a short random delay, and the teleport shortcut distance, zone swap wait, follow-up watch, release after a KO and FATEs between breaks are rolled fresh every time.");

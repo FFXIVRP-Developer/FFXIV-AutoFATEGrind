@@ -115,6 +115,8 @@ public sealed class AutoFateSession
         fatesBeforeNextBreak = 0;
     }
 
+    public IdleSpot? LastIdleSpot;
+
     public readonly HashSet<uint> UnreachableZoneIds = [];
 
     private readonly Dictionary<uint, int> deathsByFateId = [];

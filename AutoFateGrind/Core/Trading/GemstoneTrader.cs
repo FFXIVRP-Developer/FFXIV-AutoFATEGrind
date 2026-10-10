@@ -191,7 +191,7 @@ public static class GemstoneTrader
         var zones = new List<string>(ListedZoneLimit);
         for (var index = 0; index < sellers.Count && zones.Count < ListedZoneLimit; index++)
         {
-            var name = ZoneName(sellers[index].TerritoryId);
+            var name = TerritoryNames.Of(sellers[index].TerritoryId);
             if (!zones.Contains(name)) zones.Add(name);
         }
         return string.Join(", ", zones);
@@ -209,12 +209,5 @@ public static class GemstoneTrader
                 if (!sellers.Contains(t)) sellers.Add(t);
         }
         return sellers;
-    }
-
-    private static string ZoneName(uint territoryId)
-    {
-        var name = Svc.Data.GetExcelSheet<TerritoryType>()?
-            .GetRowOrDefault(territoryId)?.PlaceName.ValueNullable?.Name.ExtractText();
-        return string.IsNullOrWhiteSpace(name) ? $"territory {territoryId}" : name;
     }
 }

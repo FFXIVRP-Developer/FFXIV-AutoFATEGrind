@@ -173,7 +173,7 @@ internal sealed partial class AutoFateController
 
     // Runs after every other post-FATE hand-off has cleared. If the humanize threshold tripped while
     // we were repairing/trading, this is where the break actually fires; otherwise we resume the grind
-    // directly. Bookkeeping (FatesSinceLastBreak reset, origin zone, city selection) lives here so the
+    // directly. Bookkeeping (FatesSinceLastBreak reset, origin zone, break destination) lives here so the
     // trigger site only has to set a flag.
     private void ResumeGrindOrHumanize(AutoFateSession owningSession, int resumeIndex)
     {
@@ -188,25 +188,15 @@ internal sealed partial class AutoFateController
         owningSession.PendingHumanizeFromZone = null;
 
         var cfg = Plugin.Cfg;
-        if (!cfg.HumanizerEnabled || cfg.HumanizerCities.Count == 0)
+        var picked = cfg.HumanizerEnabled ? HumanizeBreaks.Pick(cfg, owningSession.LastIdleSpot, rng) : null;
+        if (picked is not { } plan)
         {
-            Diag("Humanize hand-off skipped: feature disabled or no cities selected.");
+            Diag("Humanize hand-off skipped: feature disabled, or no saved idle spot and no selected city in the current catalog.");
             owningSession.ResetBreakCounter();
             StartFateGrind(resumeIndex, owningSession);
             return;
         }
-
-        // Filter against the catalog so cities removed from the registry (e.g. Ul'dah, dropped due to
-        // navmesh issues) are ignored even if they're still in an older saved config.
-        var cities = cfg.HumanizerCities.Where(id => Core.Zones.CityCatalog.Find(id) is not null).ToArray();
-        if (cities.Length == 0)
-        {
-            Diag("Humanize hand-off skipped: no selected cities are in the current catalog.");
-            owningSession.ResetBreakCounter();
-            StartFateGrind(resumeIndex, owningSession);
-            return;
-        }
-        var cityId = cities[rng.Next(cities.Length)];
+        owningSession.LastIdleSpot = plan.Spot;
         var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
         var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
         var minutes = rng.Next(minMin, maxMin + 1);
@@ -217,8 +207,8 @@ internal sealed partial class AutoFateController
         var resumeIdx = ResumeIndexFor(origin, resumeIndex);
 
         Phase = AutoPhase.Humanizing;
-        Diag($"Humanize phase entering: city {cityId}, duration {minutes}m, resume zone {activeZones[resumeIdx].Name}.");
-        var humanize = new AutoHumanize(cityId, durationMs);
+        Diag($"Humanize phase entering: {plan.Describe()}, duration {minutes}m, resume zone {activeZones[resumeIdx].Name}.");
+        var humanize = new AutoHumanize(plan, durationMs);
         RunTask(
             humanize,
             () =>
@@ -238,7 +228,7 @@ internal sealed partial class AutoFateController
                 }
                 else
                 {
-                    Diag($"Humanize did not take a break (could not reach city); leaving counter at {owningSession.FatesSinceLastBreak} to retry next FATE. Resuming at {activeZones[resumeIdx].Name}.");
+                    Diag($"Humanize did not take a break (could not reach {plan.Place}); leaving counter at {owningSession.FatesSinceLastBreak} to retry next FATE. Resuming at {activeZones[resumeIdx].Name}.");
                 }
                 StartFateGrind(resumeIdx, owningSession);
             });
