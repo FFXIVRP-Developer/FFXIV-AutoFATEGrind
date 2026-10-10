@@ -71,11 +71,14 @@ internal static class ActionDock
         var watchMissing = yokai && !YokaiOps.OwnsWatch();
         var ranksMaxed = ranked && Core.Game.SharedFates.SharedFateProgress.AllMaxed(startList);
         var itemReason = ItemGoalReason(cfg);
-        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null;
+        // A maxed job can gain no levels, so the run would end before its first FATE.
+        var atLevelCap = cfg.StopAfterLevelsEnabled && Core.Game.Player.ClassSwitcher.LevelingJobAtMax(cfg);
+        var canStart = startList.Count > 0 && depsOk && !watchMissing && !ranksMaxed && itemReason is null && !atLevelCap;
         var reason = !depsOk ? Loc.T(L.Grind.ReasonInstall)
             : watchMissing ? Loc.T(L.Grind.ReasonNoWatch)
             : ranksMaxed ? Loc.T(L.Grind.ReasonRanksMaxed)
             : itemReason is not null ? itemReason
+            : atLevelCap ? Loc.T(L.Grind.ReasonAtLevelCap)
             : startList.Count > 0 ? string.Empty
             : yokai ? Loc.T(L.Grind.ReasonNoYokai)
             : ranked ? Loc.T(L.Grind.ReasonNoRankedZones)
