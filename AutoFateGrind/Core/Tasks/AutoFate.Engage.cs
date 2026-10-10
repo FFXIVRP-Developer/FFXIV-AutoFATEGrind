@@ -1,6 +1,5 @@
 using AutoFateGrind.Core.External;
 using AutoFateGrind.Core.Game.Fates;
-using AutoFateGrind.Core.Game.Ops;
 using AutoFateGrind.Core.Game.Yokai;
 using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Modes;
@@ -302,7 +301,9 @@ public sealed partial class AutoFate
 
             if (AdvanceClassQueueIfCapHit()) return ExitReason.Quit;
 
-            if (QueueHandoffIfDue())
+            // Hand-off tasks run with the rotation off, and their teleport is rejected for as long as a stray
+            // add keeps the character in combat, so the grind fights free before it quits.
+            if (HandoffTriggers.QueueIfDue(session, zone))
             {
                 await HoldForCollectReward();
                 await WaitOutSettle();
@@ -312,36 +313,6 @@ public sealed partial class AutoFate
         }
 
         return ExitReason.Continue;
-    }
-
-    // Hand-off tasks run with the rotation off, and their teleport is rejected for as long as a stray
-    // add keeps the character in combat, so the grind fights free before it quits.
-    private bool QueueHandoffIfDue()
-    {
-        if (session.StopWhenSafe) return false;
-
-        if (Plugin.Cfg.AutoRepair && RepairOps.NeedsRepair(Plugin.Cfg.AutoRepairThresholdPct))
-        {
-            Diag($"Repair threshold tripped (lowest equipped at {RepairOps.LowestEquippedConditionPct():F0}% ≤ {Plugin.Cfg.AutoRepairThresholdPct}%); queueing repair hand-off.");
-            session.PendingRepair = true;
-            session.PendingRepairFromZone = zone;
-            return true;
-        }
-
-        if (Plugin.Cfg.TradeOnCap && session.GemstoneCurrent >= Plugin.Cfg.TradeThreshold && TryQueueTrade())
-            return true;
-
-        if (Plugin.Cfg.HumanizerEnabled
-         && Plugin.Cfg.HumanizerCities.Count > 0
-         && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
-        {
-            Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-            session.PendingHumanize = true;
-            session.PendingHumanizeFromZone = zone;
-            return true;
-        }
-
-        return false;
     }
 
     private static float EngageReachMeters()
@@ -840,43 +811,6 @@ public sealed partial class AutoFate
         }
 
         session.UpdateGemstones();
-    }
-
-    private bool TryQueueTrade()
-    {
-        var targetId = GemstoneCatalog.EnsurePersistedTarget();
-        if (targetId == 0)
-        {
-            Diag("Trade-on-cap skipped: EnsurePersistedTarget returned 0 (no gem catalog item maps to a registered Bicolor trader).");
-            return false;
-        }
-
-        var target = GemstoneCatalog.FindById(targetId);
-        if (target is null)
-        {
-            Diag($"Trade-on-cap skipped: saved target id {targetId} is not in the gem catalog (was the item removed or renamed?).");
-            return false;
-        }
-
-        var qty = GemstoneCatalog.ComputeBuyQuantity(session.GemstoneCurrent, target.CostPerOne);
-        if (qty <= 0)
-        {
-            Diag($"Trade-on-cap skipped: spend mode {Plugin.Cfg.SpendMode} with {Plugin.Cfg.KeepGemstonesReserve}g reserve buys 0× {target.ItemName} ({target.CostPerOne}g each, wallet {session.GemstoneCurrent}g).");
-            return false;
-        }
-
-        var trader = GemstoneTrader.PickForItem(targetId, zone.TerritoryId, zone.Expansion, out var availability);
-        if (trader is null)
-        {
-            Diag(availability == TraderAvailability.AllLocked
-                ? $"Trade-on-cap skipped: every Bicolor trader selling {target.ItemName} stands in an unattuned zone ({GemstoneTrader.DescribeSellerZones(targetId)}). Pick a different item in /afg config → Trader."
-                : $"Trade-on-cap skipped: no registered Bicolor trader sells {target.ItemName}. Pick a different item in /afg config → Trader.");
-            return false;
-        }
-
-        Diag($"Gemstone threshold {Plugin.Cfg.TradeThreshold}g reached: queueing auto-trade for {qty}× {target.ItemName} at {trader.Name} (territory {trader.TerritoryId}).");
-        session.PendingTradeFromZone = zone;
-        return true;
     }
 
 }
