@@ -115,8 +115,9 @@ internal sealed partial class AutoFateController
 
         Phase = AutoPhase.Trading;
         Diag($"Trade phase entering: item {itemId}, origin zone {origin.Name} ({origin.TerritoryId}).");
+        var trade = new AutoTrade(itemId, origin.TerritoryId, origin.Expansion);
         RunTask(
-            new AutoTrade(itemId, origin.TerritoryId, origin.Expansion),
+            trade,
             () =>
             {
                 if (owningSession != session)
@@ -124,6 +125,10 @@ internal sealed partial class AutoFateController
                     Diag("AutoTrade finished: owning session is stale; not resuming.");
                     EndRun(owningSession);
                     return;
+                }
+                if (!trade.Bought)
+                {
+                    SkipUnboughtTradeItem(owningSession, itemId);
                 }
                 if (Plugin.Cfg.AfterTrade != AfterTradeAction.Resume)
                 {
@@ -143,6 +148,14 @@ internal sealed partial class AutoFateController
                 Diag($"AutoTrade finished: resuming FATE grind at {activeZones[resumeIndex].Name}.");
                 ResumeGrindOrHumanize(owningSession, resumeIndex);
             });
+    }
+
+    private static void SkipUnboughtTradeItem(AutoFateSession owningSession, uint itemId)
+    {
+        owningSession.TradeSkippedItemIds.Add(itemId);
+        var name = GemstoneCatalog.FindById(itemId)?.ItemName ?? $"item {itemId}";
+        Diag($"AutoTrade bought nothing; skipping {name} ({itemId}) for the rest of the run.");
+        ECommons.DalamudServices.Svc.Chat.PrintError($"[AFG] Auto-trade could not buy {name}, so it is skipped for the rest of this run. /xllog has the details.");
     }
 
     // Runs after every other post-FATE hand-off has cleared. If the humanize threshold tripped while

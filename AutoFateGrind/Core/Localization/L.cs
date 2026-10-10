@@ -433,6 +433,7 @@ internal static class L
             new("changelog.r21800.7", "Added A number of levels to the How long row on the Grind page: the run ends once your job has gained that many levels, counted across Class queue switches, or earlier if the job reaches the level cap. Contributed by mmkhatib"),
             new("changelog.r21800.8", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already at or above the trade threshold: AFG now trades before its first FATE, and also repairs first if your gear is already worn. Reported in issue #90"),
             new("changelog.r21800.9", "Fixed the live tracker getting wider every time it was dragged to the left: it now keeps its size wherever you move it. Reported in issue #93"),
+            new("changelog.r21800.10", "Fixed auto-trade going back to the trader after every FATE when a purchase fails, for example when the item is a minion or orchestrion roll already in your inventory: AFG now skips that item for the rest of the run and tells you in chat"),
         ];
 
         public static readonly LocString[] Release21700 =

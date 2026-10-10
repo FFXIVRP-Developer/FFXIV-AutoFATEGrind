@@ -52,6 +52,12 @@ internal static class HandoffTriggers
             return false;
         }
 
+        if (session.TradeSkippedItemIds.Contains(targetId))
+        {
+            Diag($"Trade-on-cap skipped: an earlier trade this run could not buy {target.ItemName}.");
+            return false;
+        }
+
         var qty = GemstoneCatalog.ComputeBuyQuantity(session.GemstoneCurrent, target.CostPerOne);
         if (qty <= 0)
         {

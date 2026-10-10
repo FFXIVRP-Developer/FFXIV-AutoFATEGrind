@@ -24,6 +24,9 @@ public sealed class AutoTrade(uint targetItemId, uint originTerritoryId, Expansi
     private const int ShopCloseSettleMs = 350;
     private const int MenuRetryMs = 500;
 
+    // Stays false when the task faults, since clib still runs OnCompleted after an exception.
+    public bool Bought { get; private set; }
+
     protected override async Task Execute()
     {
         var item = GemstoneCatalog.FindById(targetItemId);
@@ -101,14 +104,16 @@ public sealed class AutoTrade(uint targetItemId, uint originTerritoryId, Expansi
         if (ShopInteraction.SelectYesnoOpen())
             ShopInteraction.ClickSelectYesno();
 
-        if (!await WaitUntilTimed(() => GemstoneCount() < wallet, SpendWaitMs, "wait-spend"))
+        Bought = await WaitUntilTimed(() => GemstoneCount() < wallet, SpendWaitMs, "wait-spend");
+        if (!Bought)
             Diag($"Wallet unchanged after {SpendWaitMs / 1000}s (was {wallet}, now {GemstoneCount()}); closing shop anyway.");
 
         Status = "Closing shop";
         ShopInteraction.CloseShop();
         await DelayMs(ShopCloseSettleMs);
 
-        Svc.Chat.Print($"[AFG] Trade complete. Gemstones now: {GemstoneCount()}");
+        if (Bought)
+            Svc.Chat.Print($"[AFG] Trade complete. Gemstones now: {GemstoneCount()}");
     }
 
     private async Task NavigateSubMenu(GemstoneTradeItem item)

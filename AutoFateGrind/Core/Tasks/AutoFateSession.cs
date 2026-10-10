@@ -88,6 +88,8 @@ public sealed class AutoFateSession
     public double ExpPerHour => Elapsed.TotalHours > 0 ? ExpEarned / Elapsed.TotalHours : 0;
 
     public ZoneInfo? PendingTradeFromZone;
+    // Items a trade failed to buy; the wallet stays over the threshold, so retrying would re-fire after every FATE.
+    public readonly HashSet<uint> TradeSkippedItemIds = [];
     public bool PendingRepair;
     public ZoneInfo? PendingRepairFromZone;
     public int FatesSinceLastBreak;
