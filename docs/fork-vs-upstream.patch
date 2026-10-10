@@ -1,5 +1,298 @@
+diff --git a/AutoFateGrind.Tests/AetheryteListGuardTests.cs b/AutoFateGrind.Tests/AetheryteListGuardTests.cs
+new file mode 100644
+index 0000000..820763b
+--- /dev/null
++++ b/AutoFateGrind.Tests/AetheryteListGuardTests.cs
+@@ -0,0 +1,31 @@
++using AutoFateGrind.Core.Fork;
++
++namespace AutoFateGrind.Tests;
++
++/// <summary>
++///     README-FORK item 25. The game crashed (access violation in Telepo.UpdateAetheryteList) when AFG's window, drawn while
++///     the game was still logging in, read the aetheryte list (HeaderBar → ReadyState → YokaiProgress → ZoneStateReader
++///     .AttunedSet → Svc.AetheryteList). The list is read only with a character loaded and not between maps.
++/// </summary>
++public sealed class AetheryteListGuardTests
++{
++    [Theory]
++    [InlineData(true, true, false, true)]
++    [InlineData(false, false, false, false)] // the title screen, the character select
++    [InlineData(true, false, false, false)]  // logging in: no character object yet
++    [InlineData(true, true, true, false)]    // a loading screen
++    public void GivenTheGameState_ExpectTheListReadOnlyWhenSafe(bool loggedIn, bool hasCharacter, bool betweenAreas, bool read) =>
++        Assert.Equal(read, AetheryteListGuard.CanRead(loggedIn, hasCharacter, betweenAreas));
++
++    [Fact]
++    public void GivenTheReader_ExpectTheGuardBeforeTheList()
++    {
++        var dir = AppContext.BaseDirectory;
++        while (!File.Exists(Path.Combine(dir, "AutoFateGrind", "Core", "Zones", "ZoneStateReader.cs"))) dir = Path.GetDirectoryName(dir)!;
++        var source = File.ReadAllText(Path.Combine(dir, "AutoFateGrind", "Core", "Zones", "ZoneStateReader.cs"));
++        var attunedSet = source[source.IndexOf("private static HashSet<uint> AttunedSet()", StringComparison.Ordinal)..];
++        var guard = attunedSet.IndexOf("AetheryteListGuard.CanReadNow()", StringComparison.Ordinal);
++        Assert.True(guard >= 0, "AttunedSet reads the list without the guard");
++        Assert.True(guard < attunedSet.IndexOf("BuildAttunedSet()", StringComparison.Ordinal));
++    }
++}
+diff --git a/AutoFateGrind.Tests/AutoFateGrind.Tests.csproj b/AutoFateGrind.Tests/AutoFateGrind.Tests.csproj
+new file mode 100644
+index 0000000..76d731c
+--- /dev/null
++++ b/AutoFateGrind.Tests/AutoFateGrind.Tests.csproj
+@@ -0,0 +1,34 @@
++<Project Sdk="Microsoft.NET.Sdk">
++    <!-- Fork: the fork's own rules tested outside the game, no Dalamud running. The plugin is built for the tests in Debug
++         into obj\plugin, never into bin\Release, which the game clients load as a dev plugin. Run with dotnet test. -->
++    <PropertyGroup>
++        <TargetFramework>net10.0-windows</TargetFramework>
++        <Nullable>enable</Nullable>
++        <ImplicitUsings>enable</ImplicitUsings>
++        <LangVersion>preview</LangVersion>
++        <IsPackable>false</IsPackable>
++        <IsTestProject>true</IsTestProject>
++        <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(MSBuildThisFileDirectory)..\..\Profiles\Me\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
++    </PropertyGroup>
++
++    <ItemGroup>
++        <Using Include="Xunit" />
++    </ItemGroup>
++
++    <ItemGroup>
++        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
++        <PackageReference Include="xunit" Version="2.9.3" />
++        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
++    </ItemGroup>
++
++    <ItemGroup>
++        <ProjectReference Include="..\AutoFateGrind\AutoFateGrind.csproj"
++                          AdditionalProperties="Configuration=Debug;DalamudLibPath=$(DalamudLibPath);OutDir=$(MSBuildThisFileDirectory)obj\plugin\;OutputPath=$(MSBuildThisFileDirectory)obj\plugin\" />
++    </ItemGroup>
++
++    <ItemGroup>
++        <Reference Include="Dalamud" HintPath="$(DalamudLibPath)Dalamud.dll" />
++        <Reference Include="FFXIVClientStructs" HintPath="$(DalamudLibPath)FFXIVClientStructs.dll" />
++        <Reference Include="InteropGenerator.Runtime" HintPath="$(DalamudLibPath)InteropGenerator.Runtime.dll" />
++    </ItemGroup>
++</Project>
+\ No newline at end of file
+diff --git a/AutoFateGrind.Tests/FollowerParkTests.cs b/AutoFateGrind.Tests/FollowerParkTests.cs
+new file mode 100644
+index 0000000..d46054c
+--- /dev/null
++++ b/AutoFateGrind.Tests/FollowerParkTests.cs
+@@ -0,0 +1,41 @@
++using AutoFateGrind.Core.Fork;
++
++namespace AutoFateGrind.Tests;
++
++/// <summary>
++///     README-FORK item 26. 2026-10-08: a multibox follower that logged in with no leader grinding parked 60 s later with
++///     "/li inn 2" in the middle of another plugin's work (BoatRunner washing its inventory), and on a visited world Lifestream's
++///     "inn N" went home first (ReturnToHome) before the inn. Parking leaves the character alone while another plugin uses it,
++///     and on a visited world it is the inn of that world.
++/// </summary>
++public sealed class FollowerParkTests
++{
++    [Theory]
++    [InlineData(null, true)]          // idle: parked in an inn
++    [InlineData("BoatRunner", false)] // another plugin is using the character: dormant where it stands, no trip
++    [InlineData("a duty or a loading screen", false)]
++    public void GivenWhatElseIsBusy_ExpectATripOnlyWhenIdle(string? busyElsewhere, bool trip) =>
++        Assert.Equal(trip, FollowerPark.Trip(busyElsewhere));
++
++    [Theory]
++    [InlineData(1, false, "inn 1")] // home world: the Grand Company city's inn
++    [InlineData(3, false, "inn 2")]
++    [InlineData(2, false, "inn 3")]
++    [InlineData(0, false, "inn")]
++    [InlineData(1, true, "inn")]    // visiting another world: Lifestream's own inn there ("inn N" returns home first)
++    [InlineData(3, true, "inn")]
++    public void GivenTheWorld_ExpectAnInnOnIt(byte grandCompany, bool visiting, string command) =>
++        Assert.Equal(command, FollowerPark.InnCommand(grandCompany, visiting));
++
++    [Fact]
++    public void GivenTheWatch_ExpectParkingToAskBoth()
++    {
++        var dir = AppContext.BaseDirectory;
++        while (!File.Exists(Path.Combine(dir, "AutoFateGrind", "Core", "Multibox", "MultiboxFollowerWatch.cs"))) dir = Path.GetDirectoryName(dir)!;
++        var source = File.ReadAllText(Path.Combine(dir, "AutoFateGrind", "Core", "Multibox", "MultiboxFollowerWatch.cs"));
++        var park = source[source.IndexOf("private static void Park()", StringComparison.Ordinal)..];
++        Assert.Contains("BusyElsewhere()", park);
++        Assert.Contains("FollowerPark.Trip(", park);
++        Assert.Contains("FollowerPark.InnCommand(", park);
++    }
++}
+diff --git a/AutoFateGrind.Tests/RunOverrideTests.cs b/AutoFateGrind.Tests/RunOverrideTests.cs
+new file mode 100644
+index 0000000..2d74c9f
+--- /dev/null
++++ b/AutoFateGrind.Tests/RunOverrideTests.cs
+@@ -0,0 +1,145 @@
++using AutoFateGrind.Core.Fork;
++
++namespace AutoFateGrind.Tests;
++
++/// <summary>
++///     Fork: a run with another plugin's settings (BoatRunner's FATE levelling, 2026-10-06), for that run only. The user's own
++///     settings must come back, and a save while the run goes must write the user's, never the run's.
++/// </summary>
++public sealed class RunOverrideTests : IDisposable
++{
++    private readonly List<string> saved = [];
++    private readonly Configuration cfg = new()
++    {
++        SelectedZones = [956, 957],
++        ModeId = "maxgemstones",
++        ApplyClassOnStart = false,
++        LevelRangeFilterEnabled = false,
++        MaxLevelAbove = 5,
++        MaxLevelBelow = 5,
++        StopAfterFatesEnabled = true,
++    };
++
++    public RunOverrideTests()
++    {
++        RunOverride.Persist = c => saved.Add($"{string.Join(",", c.SelectedZones)}|{c.ModeId}|{c.ClassQueue.Count}");
++        cfg.ClassQueue = [new ClassQueueEntry { GearsetIndex = 1, StopAtLevel = 0 }];
++    }
++
++    public void Dispose() => RunOverride.Restore(cfg);
++
++    private static RunOverride.Request Levelling() => new()
++    {
++        Gearsets = [7], StopAtLevel = 15, Zones = [134, 135], MaxLevelAbove = 2, MaxLevelBelow = 10,
++        SkipFateRules = ["Escort", "Chase", "EventFate", "ConcertedWorks", "Fete", "NoSuchRule"], SwapZoneWaitSec = 10,
++    };
++
++    [Fact]
++    public void GivenALevellingRequest_ExpectItsSettingsForTheRun()
++    {
++        Assert.True(RunOverride.Apply(cfg, Levelling()));
++        Assert.Equal([134u, 135u], cfg.SelectedZones);
++        var entry = Assert.Single(cfg.ClassQueue);
++        Assert.Equal((byte)7, entry.GearsetIndex);
++        Assert.Equal(15, entry.StopAtLevel);
++        Assert.Equal(AfterClassQueueDone.StopRun, cfg.AfterClassQueueDone);
++        Assert.True(cfg.ApplyClassOnStart);
++        Assert.True(cfg.LevelRangeFilterEnabled);
++        Assert.Equal(2, cfg.MaxLevelAbove);
++        Assert.False(cfg.StopAfterFatesEnabled);
++    }
++
++    [Fact]
++    public void GivenTheRunEnded_ExpectTheUsersOwnSettingsBack()
++    {
++        RunOverride.Apply(cfg, Levelling());
++        RunOverride.Restore(cfg);
++        Assert.False(RunOverride.Active);
++        Assert.Equal([956u, 957u], cfg.SelectedZones);
++        Assert.Equal("maxgemstones", cfg.ModeId);
++        Assert.Equal((byte)1, Assert.Single(cfg.ClassQueue).GearsetIndex);
++        Assert.False(cfg.ApplyClassOnStart);
++        Assert.Equal(5, cfg.MaxLevelAbove);
++        Assert.True(cfg.StopAfterFatesEnabled);
++    }
++
++    [Fact]
++    public void GivenASaveDuringTheRun_ExpectTheUsersSettingsWritten_TheRunsKept()
++    {
++        RunOverride.Apply(cfg, Levelling());
++        Assert.True(RunOverride.SaveOriginal(cfg));
++        Assert.Equal("956,957|maxgemstones|1", Assert.Single(saved)); // the user's, never the run's
++        Assert.Equal([134u, 135u], cfg.SelectedZones);               // the run goes on with its own
++    }
++
++    [Fact]
++    public void GivenNoOverride_ExpectAnOrdinarySave() =>
++        Assert.False(RunOverride.SaveOriginal(cfg));
++
++    [Fact]
++    public void GivenAnOverrideAlreadyRunning_ExpectASecondOneRefused()
++    {
++        Assert.True(RunOverride.Apply(cfg, Levelling()));
++        Assert.False(RunOverride.Apply(cfg, Levelling()));
++    }
++
++    [Fact]
++    public void GivenAnEmptyRequest_ExpectItRefused_TheSettingsUntouched()
++    {
++        Assert.False(RunOverride.Apply(cfg, new RunOverride.Request { Gearsets = [], Zones = [134] }));
++        Assert.Equal([956u, 957u], cfg.SelectedZones);
++    }
++
++    // ---- Solo, nonstop, FATEs the character can do (user, 2026-10-06) -------------------------------------------------------
++
++    [Fact]
++    public void GivenALevellingRun_ExpectItSolo_NeverFollowingOrLeading()
++    {
++        cfg.MultiboxRole = Core.Multibox.MultiboxRole.Follower;
++        RunOverride.Apply(cfg, Levelling());
++        Assert.Equal(Core.Multibox.MultiboxRole.Solo, cfg.MultiboxRole);
++    }
++
++    [Fact]
++    public void GivenALevellingRun_ExpectItNonstop_NoGoalCapBreakTradeOrLogout()
++    {
++        cfg.HumanizerEnabled = true;
++        cfg.TradeOnCap = true;
++        cfg.SwapZonesWhenEmpty = false;
++        cfg.AfterRun = AfterRunAction.Logout;
++        RunOverride.Apply(cfg, Levelling());
++        Assert.Equal("plainfates", cfg.ModeId);
++        Assert.False(cfg.StopAfterFatesEnabled);
++        Assert.False(cfg.StopAfterMinutesEnabled);
++        Assert.False(cfg.HumanizerEnabled);
++        Assert.False(cfg.TradeOnCap);
++        Assert.True(cfg.SwapZonesWhenEmpty);
++        Assert.Equal(10, cfg.SwapZoneWaitSec);
++        Assert.Equal(AfterRunAction.StayLoggedIn, cfg.AfterRun);
++    }
++
++    [Fact]
++    public void GivenALevellingRun_ExpectTheKindsItCannotDoAloneSkipped_AnUnknownNameIgnored()
++    {
++        RunOverride.Apply(cfg, Levelling());
++        Assert.Equal(5, cfg.SkippedFateRules.Count);
++        Assert.DoesNotContain(RunOverride.Rules(["Normal"]).Single(), cfg.SkippedFateRules);
++        Assert.DoesNotContain(RunOverride.Rules(["Collect"]).Single(), cfg.SkippedFateRules);
++        Assert.Contains(RunOverride.Rules(["Escort"]).Single(), cfg.SkippedFateRules);
++    }
++
++    [Fact]
++    public void GivenTheRunEnded_ExpectTheUsersRoleSkipsAndBreaksBack()
++    {
++        cfg.MultiboxRole = Core.Multibox.MultiboxRole.Follower;
++        cfg.HumanizerEnabled = true;
++        cfg.SkippedFateRules = [1];
++        cfg.AfterRun = AfterRunAction.Logout;
++        RunOverride.Apply(cfg, Levelling());
++        RunOverride.Restore(cfg);
++        Assert.Equal(Core.Multibox.MultiboxRole.Follower, cfg.MultiboxRole);
++        Assert.True(cfg.HumanizerEnabled);
++        Assert.Equal([1], cfg.SkippedFateRules);
++        Assert.Equal(AfterRunAction.Logout, cfg.AfterRun);
++    }
++}
+\ No newline at end of file
+diff --git a/AutoFateGrind/AutoFateGrind.csproj b/AutoFateGrind/AutoFateGrind.csproj
+index 9ca1ae1..8466f35 100644
+--- a/AutoFateGrind/AutoFateGrind.csproj
++++ b/AutoFateGrind/AutoFateGrind.csproj
+@@ -26,6 +26,11 @@
+     <PackageReference Include="croizat.clib" Version="1.0.98" />
+   </ItemGroup>
+ 
++  <ItemGroup>
++    <!-- Fork: the fork's own rules tested outside the game (AutoFateGrind.Tests). -->
++    <InternalsVisibleTo Include="AutoFateGrind.Tests" />
++  </ItemGroup>
++
+   <ItemGroup>
+     <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj">
+       <Private>true</Private>
 diff --git a/AutoFateGrind/Configuration.cs b/AutoFateGrind/Configuration.cs
-index 28c999b..1b5a25f 100644
+index 0c5e469..fad29c4 100644
 --- a/AutoFateGrind/Configuration.cs
 +++ b/AutoFateGrind/Configuration.cs
 @@ -25,9 +25,13 @@ public sealed class Configuration : IPluginConfiguration
@@ -17,7 +310,7 @@ index 28c999b..1b5a25f 100644
          }
      }
  
-@@ -68,6 +72,26 @@ public sealed class Configuration : IPluginConfiguration
+@@ -70,6 +74,26 @@ public sealed class Configuration : IPluginConfiguration
      public string FateNameFormat { get; set; } = Core.Game.Fates.FateNameFormatter.DefaultFormat;
      // Twist of Fate ends on leaving the zone, so zone swaps and teleports wait it out.
      public bool KeepTwistOfFate { get; set; } = true;
@@ -44,7 +337,7 @@ index 28c999b..1b5a25f 100644
      public bool MountWhileWaitingForFates { get; set; } = false;
      public uint PreferredMountId { get; set; } = 0;
      public bool EconomyTravel { get; set; } = false;
-@@ -153,6 +177,8 @@ public sealed class Configuration : IPluginConfiguration
+@@ -159,6 +183,8 @@ public sealed class Configuration : IPluginConfiguration
      public int HumanizerPauseMaxSec { get; set; } = 8;
      public int HumanizerWanderMinMeters { get; set; } = 25;
      public int HumanizerWanderMaxMeters { get; set; } = 80;
@@ -53,6 +346,74 @@ index 28c999b..1b5a25f 100644
      // TerritoryIds from Core.Zones.CityCatalog; defaults to every expansion's main hub.
      public HashSet<uint> HumanizerCities { get; set; } = [129, 132, 1185, Core.Zones.CityCatalog.SolutionNineTerritoryId];
  
+@@ -239,7 +265,12 @@ public sealed class Configuration : IPluginConfiguration
+         return true;
+     }
+ 
+-    public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
++    // Fork: while another plugin's run settings are in place (Core.Fork.RunOverride), a save writes the user's own settings.
++    public void Save()
++    {
++        if (Core.Fork.RunOverride.SaveOriginal(this)) return;
++        Plugin.PluginInterface.SavePluginConfig(this);
++    }
+ 
+     public void SaveDebounced()
+     {
+diff --git a/AutoFateGrind/Core/Fork/AetheryteListGuard.cs b/AutoFateGrind/Core/Fork/AetheryteListGuard.cs
+new file mode 100644
+index 0000000..e307725
+--- /dev/null
++++ b/AutoFateGrind/Core/Fork/AetheryteListGuard.cs
+@@ -0,0 +1,17 @@
++using Dalamud.Game.ClientState.Conditions;
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Fork;
++
++/// <summary>
++///     README-FORK item 25: the game's aetheryte list (Svc.AetheryteList, Telepo.UpdateAetheryteList) is read only with a
++///     character loaded and not between maps; read while logging in, it crashed the game (access violation).
++/// </summary>
++internal static class AetheryteListGuard
++{
++    public static bool CanRead(bool loggedIn, bool hasCharacter, bool betweenAreas) => loggedIn && hasCharacter && !betweenAreas;
++
++    public static bool CanReadNow() =>
++        CanRead(Svc.ClientState.IsLoggedIn, Svc.Objects.LocalPlayer is not null,
++                Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BetweenAreas51]);
++}
+diff --git a/AutoFateGrind/Core/Fork/FollowerPark.cs b/AutoFateGrind/Core/Fork/FollowerPark.cs
+new file mode 100644
+index 0000000..ec23c5a
+--- /dev/null
++++ b/AutoFateGrind/Core/Fork/FollowerPark.cs
+@@ -0,0 +1,25 @@
++namespace AutoFateGrind.Core.Fork;
++
++/// <summary>
++///     README-FORK item 26: where a multibox follower parks. Never a trip while another plugin uses the character (it goes
++///     dormant where it stands), and always an inn of the world it is on: Lifestream's "inn N" returns to the home world first
++///     on a visited one, so a visiting character takes Lifestream's own "inn" there.
++/// </summary>
++public static class FollowerPark
++{
++    /// <summary>A trip to an inn only when nothing else is busy (<paramref name="busyElsewhere" /> null).</summary>
++    public static bool Trip(string? busyElsewhere) => busyElsewhere is null;
++
++    /// <summary>
++    ///     The Lifestream command: the Grand Company city's inn on the home world ("inn N" counts its InnData, sorted by territory:
++    ///     1 Limsa Lominsa, 2 Ul'dah, 3 Gridania), plain "inn" without a company or on a visited world.
++    /// </summary>
++    public static string InnCommand(byte grandCompany, bool visitingAnotherWorld) =>
++        visitingAnotherWorld ? "inn" : grandCompany switch
++        {
++            1 => "inn 1", // Maelstrom: Limsa Lominsa, The Mizzenmast
++            2 => "inn 3", // Order of the Twin Adder: Gridania, The Roost
++            3 => "inn 2", // Immortal Flames: Ul'dah, The Hourglass
++            _ => "inn",
++        };
++}
 diff --git a/AutoFateGrind/Core/Fork/ReloadResume.cs b/AutoFateGrind/Core/Fork/ReloadResume.cs
 new file mode 100644
 index 0000000..75b5f3d
@@ -154,6 +515,144 @@ index 0000000..75b5f3d
 +        {
 +            return false;
 +        }
++    }
++}
+diff --git a/AutoFateGrind/Core/Fork/RunOverride.cs b/AutoFateGrind/Core/Fork/RunOverride.cs
+new file mode 100644
+index 0000000..f16e5b0
+--- /dev/null
++++ b/AutoFateGrind/Core/Fork/RunOverride.cs
+@@ -0,0 +1,132 @@
++using ECommons.DalamudServices;
++
++namespace AutoFateGrind.Core.Fork;
++
++// Fork: a run with settings handed in by another plugin (BoatRunner's FATE levelling: one class to a level cap, in the zones
++// that suit its level), for that run only. The user's own settings are taken aside first and put back when the run ends;
++// while the run goes, every save writes the user's settings, never the run's (the run saves on its own, mid-run).
++// A levelling run is always solo and nonstop (user, 2026-10-06: "it has to be solo, it has to grind nonstop through the maps,
++// it has to be fates that the character can do"): its own role, no goal, cap, break, trade or log-out of the user's.
++internal static class RunOverride
++{
++    /// <summary>What another plugin asks for.</summary>
++    internal sealed class Request
++    {
++        /// <summary>The classes by gear set (1-based, as in the game's list), in order.</summary>
++        public List<byte> Gearsets { get; set; } = [];
++        /// <summary>The level each class stops at; the run ends when every class is there.</summary>
++        public int StopAtLevel { get; set; }
++        public List<uint> Zones { get; set; } = [];
++        /// <summary>The FATE level band around the character's level.</summary>
++        public int MaxLevelAbove { get; set; } = 2;
++        public int MaxLevelBelow { get; set; } = 10;
++        /// <summary>FATE kinds left out, by name (PublicEvent.FateRule: Escort, Chase, ...); an unknown name is ignored.</summary>
++        public List<string> SkipFateRules { get; set; } = [];
++        /// <summary>Seconds a zone with no FATE is waited on before the next.</summary>
++        public int SwapZoneWaitSec { get; set; } = 10;
++    }
++
++    private sealed record Snapshot(
++        List<ClassQueueEntry> Queue, AfterClassQueueDone After, bool ApplyClass, List<uint> Zones, string ModeId,
++        bool RangeOn, int Above, int Below, bool WindowOn, bool StopAfterFates, bool StopAfterMinutes,
++        Multibox.MultiboxRole Role, bool SwapZones, int SwapWait, HashSet<int> SkippedRules, bool Humanizer, bool TradeOnCap,
++        AfterRunAction AfterRun);
++
++    private static Snapshot? original;
++    private static long startedAtMs;
++
++    /// <summary>Writes the settings to disk (replaced in the tests).</summary>
++    internal static Action<Configuration> Persist = c => Plugin.PluginInterface.SavePluginConfig(c);
++
++    internal static bool Active => original is not null;
++
++    private static Snapshot Take(Configuration c) => new(
++        [.. c.ClassQueue], c.AfterClassQueueDone, c.ApplyClassOnStart, [.. c.SelectedZones], c.ModeId,
++        c.LevelRangeFilterEnabled, c.MaxLevelAbove, c.MaxLevelBelow, c.LevelWindowEnabled, c.StopAfterFatesEnabled, c.StopAfterMinutesEnabled,
++        c.MultiboxRole, c.SwapZonesWhenEmpty, c.SwapZoneWaitSec, [.. c.SkippedFateRules], c.HumanizerEnabled, c.TradeOnCap, c.AfterRun);
++
++    private static void Put(Configuration c, Snapshot s)
++    {
++        c.ClassQueue = [.. s.Queue];
++        c.AfterClassQueueDone = s.After;
++        c.ApplyClassOnStart = s.ApplyClass;
++        c.SelectedZones = [.. s.Zones];
++        c.ModeId = s.ModeId;
++        c.LevelRangeFilterEnabled = s.RangeOn;
++        c.MaxLevelAbove = s.Above;
++        c.MaxLevelBelow = s.Below;
++        c.LevelWindowEnabled = s.WindowOn;
++        c.StopAfterFatesEnabled = s.StopAfterFates;
++        c.StopAfterMinutesEnabled = s.StopAfterMinutes;
++        c.MultiboxRole = s.Role;
++        c.SwapZonesWhenEmpty = s.SwapZones;
++        c.SwapZoneWaitSec = s.SwapWait;
++        c.SkippedFateRules = [.. s.SkippedRules];
++        c.HumanizerEnabled = s.Humanizer;
++        c.TradeOnCap = s.TradeOnCap;
++        c.AfterRun = s.AfterRun;
++    }
++
++    /// <summary>The FATE kinds by name, as the game's FateRule values; unknown names left out.</summary>
++    internal static HashSet<int> Rules(IEnumerable<string> names) =>
++        [.. names.Select(n => Enum.TryParse<clib.Utils.PublicEvent.FateRule>(n, true, out var rule) ? (int?)rule : null)
++                 .Where(r => r is not null).Select(r => r!.Value)];
++
++    /// <summary>The request's settings in place of the user's (taken aside); false when an override already runs or the request is empty.</summary>
++    internal static bool Apply(Configuration c, Request r)
++    {
++        if (Active || r.Gearsets.Count == 0 || r.Zones.Count == 0) return false;
++        original = Take(c);
++        // The classes and where: the request's.
++        c.ClassQueue = [.. r.Gearsets.Select(g => new ClassQueueEntry { GearsetIndex = g, StopAtLevel = r.StopAtLevel })];
++        c.AfterClassQueueDone = AfterClassQueueDone.StopRun;
++        c.ApplyClassOnStart = true;
++        c.SelectedZones = [.. r.Zones];
++        // FATEs the character can do: a band around its level, the kinds it cannot do alone left out.
++        c.LevelRangeFilterEnabled = true;
++        c.MaxLevelAbove = r.MaxLevelAbove;
++        c.MaxLevelBelow = r.MaxLevelBelow;
++        c.LevelWindowEnabled = false;
++        c.SkippedFateRules = Rules(r.SkipFateRules);
++        // Solo and nonstop: no goal, cap, break, trade or log-out; the next zone when one has no FATE.
++        c.ModeId = Modes.PlainFatesMode.ModeId;
++        c.MultiboxRole = Multibox.MultiboxRole.Solo;
++        c.StopAfterFatesEnabled = false;
++        c.StopAfterMinutesEnabled = false;
++        c.SwapZonesWhenEmpty = true;
++        c.SwapZoneWaitSec = r.SwapZoneWaitSec;
++        c.HumanizerEnabled = false;
++        c.TradeOnCap = false;
++        c.AfterRun = AfterRunAction.StayLoggedIn;
++        startedAtMs = Environment.TickCount64;
++        return true;
++    }
++
++    /// <summary>The user's settings back (and saved).</summary>
++    internal static void Restore(Configuration c)
++    {
++        if (original is not { } o) return;
++        Put(c, o);
++        original = null;
++        Persist(c);
++    }
++
++    /// <summary>A save while an override runs: the user's settings are written, the run's kept in memory.</summary>
++    internal static bool SaveOriginal(Configuration c)
++    {
++        if (original is not { } o) return false;
++        var now = Take(c);
++        Put(c, o);
++        Persist(c);
++        Put(c, now);
++        return true;
++    }
++
++    /// <summary>Once the run has ended (a few seconds after its start, not running), the user's settings come back.</summary>
++    internal static void Tick(Plugin plugin)
++    {
++        if (!Active || Environment.TickCount64 - startedAtMs < 5_000 || plugin.Controller.Running) return;
++        Svc.Log.Information("[AFG] The run with another plugin's settings ended; your own settings are back.");
++        Restore(Plugin.Cfg);
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Fork/Spread.cs b/AutoFateGrind/Core/Fork/Spread.cs
@@ -476,10 +975,10 @@ index ad2be07..69735ab 100644
  
 diff --git a/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
 new file mode 100644
-index 0000000..f2ca3bb
+index 0000000..aa1a0c5
 --- /dev/null
 +++ b/AutoFateGrind/Core/Ipc/AfgIpcProvider.cs
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,92 @@
 +using Dalamud.Plugin.Ipc;
 +using ECommons.DalamudServices;
 +
@@ -495,6 +994,10 @@ index 0000000..f2ca3bb
 +//                                            FATE after StopWhenSafe); callers wait for false
 +//   AutoFateGrind.GoalReached  () -> bool    the last run ended because its goal was met (e.g. every Yo-kai zone done),
 +//                                            not a stop or a fault: restarting it would end again at once
++//   AutoFateGrind.StartLevelling (json) -> bool  a run with these settings for this run only (Core.Fork.RunOverride.Request:
++//                                            gear sets, the level to stop at, zones, the FATE level band); the user's settings
++//                                            come back when it ends; false when it did not start
++//   AutoFateGrind.IsLevelling  () -> bool    a run started by StartLevelling is going (a caller reloaded mid-run takes it back)
 +internal sealed class AfgIpcProvider : IDisposable
 +{
 +    private const string Prefix = "AutoFateGrind";
@@ -506,6 +1009,9 @@ index 0000000..f2ca3bb
 +    private readonly ICallGateProvider<object> stopWhenSafe;
 +    private readonly ICallGateProvider<object> stop;
 +    private readonly ICallGateProvider<string> phase;
++    private readonly ICallGateProvider<string, bool> startLevelling;
++    private readonly ICallGateProvider<bool> isLevelling;
++    private readonly Plugin plugin;
 +
 +    public AfgIpcProvider(Plugin plugin)
 +    {
@@ -528,7 +1034,27 @@ index 0000000..f2ca3bb
 +        stopWhenSafe.RegisterAction(() => plugin.Controller.StopWhenSafe());
 +        stop.RegisterAction(() => plugin.Controller.Stop());
 +        phase.RegisterFunc(() => plugin.Controller.Phase.ToString());
++
++        this.plugin = plugin;
++        startLevelling = Svc.PluginInterface.GetIpcProvider<string, bool>($"{Prefix}.StartLevelling");
++        startLevelling.RegisterFunc(json =>
++        {
++            if (plugin.Controller.Running) return false;
++            Core.Fork.RunOverride.Request? request;
++            try { request = Newtonsoft.Json.JsonConvert.DeserializeObject<Core.Fork.RunOverride.Request>(json); }
++            catch { return false; }
++            if (request is null || !Core.Fork.RunOverride.Apply(Plugin.Cfg, request)) return false;
++            plugin.StartFromCommand();
++            if (plugin.Controller.Running) return true;
++            Core.Fork.RunOverride.Restore(Plugin.Cfg);
++            return false;
++        });
++        isLevelling = Svc.PluginInterface.GetIpcProvider<bool>($"{Prefix}.IsLevelling");
++        isLevelling.RegisterFunc(() => plugin.Controller.Running && Core.Fork.RunOverride.Active);
++        Svc.Framework.Update += OnUpdate;
 +    }
++
++    private void OnUpdate(Dalamud.Plugin.Services.IFramework _) => Core.Fork.RunOverride.Tick(plugin);
 +
 +    public void Dispose()
 +    {
@@ -539,6 +1065,10 @@ index 0000000..f2ca3bb
 +        stopWhenSafe.UnregisterAction();
 +        stop.UnregisterAction();
 +        phase.UnregisterFunc();
++        startLevelling.UnregisterFunc();
++        isLevelling.UnregisterFunc();
++        Svc.Framework.Update -= OnUpdate;
++        Core.Fork.RunOverride.Restore(Plugin.Cfg); // an unload never leaves the run's settings in place
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs b/AutoFateGrind/Core/Ipc/DefaultCombatPreset.cs
@@ -611,10 +1141,11 @@ index c1e6385..6bacb04 100644
  
 diff --git a/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
 new file mode 100644
-index 0000000..c8a2a55
+index 0000000..7730ad8
 --- /dev/null
 +++ b/AutoFateGrind/Core/Multibox/MultiboxFollowerWatch.cs
 @@ -0,0 +1,258 @@
++using AutoFateGrind.Core.Fork;
 +using AutoFateGrind.Core.Modes;
 +using AutoFateGrind.Core.Tasks;
 +using Dalamud.Game.ClientState.Conditions;
@@ -829,21 +1360,14 @@ index 0000000..c8a2a55
 +    private static bool InInnRoom()
 +        => Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(Svc.ClientState.TerritoryType)?.TerritoryIntendedUse.RowId == 2;
 +
-+    /// <summary>
-+    ///     Lifestream's inn for this character's Grand Company city ("/li inn N" counts its InnData, sorted by territory:
-+    ///     1 Limsa Lominsa, 2 Ul'dah, 3 Gridania); plain "inn" (Lifestream's own pick, same world) without a company.
-+    /// </summary>
-+    private static unsafe string GrandCompanyInnCommand()
++    private static unsafe byte GrandCompany()
 +    {
 +        var state = FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState.Instance();
-+        return (state is null ? (byte)0 : state->GrandCompany) switch
-+        {
-+            1 => "inn 1", // Maelstrom: Limsa Lominsa, The Mizzenmast
-+            2 => "inn 3", // Order of the Twin Adder: Gridania, The Roost
-+            3 => "inn 2", // Immortal Flames: Ul'dah, The Hourglass
-+            _ => "inn",
-+        };
++        return state is null ? (byte)0 : state->GrandCompany;
 +    }
++
++    private static bool VisitingAnotherWorld() =>
++        Svc.Objects.LocalPlayer is { } me && me.CurrentWorld.RowId != 0 && me.CurrentWorld.RowId != me.HomeWorld.RowId;
 +
 +    private static void Park()
 +    {
@@ -851,6 +1375,12 @@ index 0000000..c8a2a55
 +        Dormant = true;              // from here on the slave is left alone (other plugins may use it)
 +        dormantSawLeaderGone = false;
 +        if (Blocked is null) MultiboxParty.LeaveAsSlave(); // the leader stopped (a blocked slave stays in the party)
++        // Another plugin is using the character (BoatRunner, AutoRetainer, ...): dormant where it stands, no trip (README-FORK item 26).
++        if (BusyElsewhere() is { } other && !FollowerPark.Trip(other))
++        {
++            Svc.Log.Info($"[AFG] Multibox: parked where it stands, {other} is using this character.");
++            return;
++        }
 +        // Already in an inn room (any of them): it is parked, no trip (2026-10-04).
 +        if (InInnRoom())
 +        {
@@ -859,7 +1389,7 @@ index 0000000..c8a2a55
 +        }
 +        // Always an inn of the world it is on (an apartment or a house is on the home world and world-travelled the
 +        // slaves away from the leader), and the inn of its Grand Company's city when it has one.
-+        var command = GrandCompanyInnCommand();
++        var command = FollowerPark.InnCommand(GrandCompany(), VisitingAnotherWorld()); // the inn of this world (item 26)
 +        try
 +        {
 +            var busy = Svc.PluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
@@ -1242,7 +1772,7 @@ index 0000000..f7cb1fb
 +        => Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Fate>().GetRowOrDefault(fateId)?.Name.ExtractText() ?? $"FATE {fateId}";
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
-index 840facc..19ee843 100644
+index dc7909d..13e21d4 100644
 --- a/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoCommon.Landing.cs
 @@ -13,6 +13,8 @@ public abstract partial class AutoCommon
@@ -1254,7 +1784,7 @@ index 840facc..19ee843 100644
      private const int LandingCandidateCount = 1 + LandingRingPoints;
      private const float LandingFloorHalfExtentMeters = 3f;
      // Probed from well above, so the floor found is the top layer under the spot and not a cave or tunnel below it.
-@@ -53,6 +55,13 @@ public abstract partial class AutoCommon
+@@ -56,6 +58,13 @@ public abstract partial class AutoCommon
      {
          Status = "Landing";
          var found = FindLandingSpots(around, landingSpots);
@@ -1269,10 +1799,10 @@ index 840facc..19ee843 100644
          {
              Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; descending where the flight ended");
 diff --git a/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs b/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs
-index 045adb0..7e3dede 100644
+index b2d8113..1d2a79f 100644
 --- a/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoCommon.Teleport.cs
-@@ -100,7 +100,7 @@ public abstract partial class AutoCommon
+@@ -106,7 +106,7 @@ public abstract partial class AutoCommon
      }
  
      // Swimming or diving may block the cast; the 2026-05-30 creek wedge left clib spinning on one that never started.
@@ -1282,10 +1812,10 @@ index 045adb0..7e3dede 100644
          || Svc.Condition[ConditionFlag.Swimming];
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-index 893ff8e..1738389 100644
+index 1b2bdbe..192d944 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Engage.cs
-@@ -39,7 +39,11 @@ public sealed partial class AutoFate
+@@ -38,7 +38,11 @@ public sealed partial class AutoFate
          var pickedId = fate.Id;
          var pickedName = fate.Name;
          Status = $"Moving to {fate.Name}";
@@ -1298,7 +1828,7 @@ index 893ff8e..1738389 100644
  
          var moveResult = await MoveToFate(fate);
          if (CancelToken.IsCancellationRequested) return ExitReason.Quit;
-@@ -153,6 +157,7 @@ public sealed partial class AutoFate
+@@ -152,6 +156,7 @@ public sealed partial class AutoFate
  
          var preset = Plugin.Cfg.CombatPresetName;
          EnsureCombatPreset(preset);
@@ -1306,7 +1836,7 @@ index 893ff8e..1738389 100644
          SyncToFate(fateId);
          AssertPresetActive(preset);
          ResetEngageOverrides(preset);
-@@ -201,6 +206,12 @@ public sealed partial class AutoFate
+@@ -200,6 +205,12 @@ public sealed partial class AutoFate
                      break;
                  }
  
@@ -1319,7 +1849,7 @@ index 893ff8e..1738389 100644
                  // A Collect FATE at 100% is won; its row lingers as the hand-in window (leftovers go in below), not a stall.
                  if (isCollect && fate.Progress >= 100) break;
  
-@@ -212,6 +223,7 @@ public sealed partial class AutoFate
+@@ -211,6 +222,7 @@ public sealed partial class AutoFate
                      lastProgress = fate.Progress;
                      lastProgressAtMs = Environment.TickCount64;
                      combatStallBounces = 0;
@@ -1327,7 +1857,7 @@ index 893ff8e..1738389 100644
                  }
                  else if (Environment.TickCount64 - lastProgressAtMs > EngageStallTimeoutMs
                        && Environment.TickCount64 - lastInCombatAtMs > EngageOutOfCombatGraceMs)
-@@ -247,13 +259,16 @@ public sealed partial class AutoFate
+@@ -246,13 +258,16 @@ public sealed partial class AutoFate
                      AssertPresetActive(preset);
                  }
  
@@ -1346,7 +1876,7 @@ index 893ff8e..1738389 100644
                      {
                          lastProgressAtMs = Environment.TickCount64;
                          lastInCombatAtMs = Environment.TickCount64;
-@@ -261,6 +276,7 @@ public sealed partial class AutoFate
+@@ -260,6 +275,7 @@ public sealed partial class AutoFate
                  }
  
                  var chasing = await TickRingChase(fateId, idle, preset);
@@ -1354,7 +1884,7 @@ index 893ff8e..1738389 100644
                  if (!chasing && !isCollect && await TickEngagementWatchdog(fateId, fate, idle))
                  {
                      break;
-@@ -270,12 +286,16 @@ public sealed partial class AutoFate
+@@ -269,12 +285,16 @@ public sealed partial class AutoFate
              }
  
              if (isCollect && sawRunning && PublicEvent.GetFateById(fateId) is { Progress: >= 100 })
@@ -1371,16 +1901,7 @@ index 893ff8e..1738389 100644
              BossModIPC.Instance.ClearActive();
              if (isCollect) DisableTextAdvance();
          }
-@@ -332,7 +352,7 @@ public sealed partial class AutoFate
-             return true;
- 
-         if (Plugin.Cfg.HumanizerEnabled
--         && Plugin.Cfg.HumanizerCities.Count > 0
-+         && AutoHumanize.HasBreakPlace(Plugin.Cfg) // Fork: was HumanizerCities.Count > 0
-          && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
-         {
-             Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
-@@ -386,7 +406,9 @@ public sealed partial class AutoFate
+@@ -357,7 +377,9 @@ public sealed partial class AutoFate
          }
          idle.MarkOutOfReach();
  
@@ -1391,7 +1912,7 @@ index 893ff8e..1738389 100644
          {
              return false;
          }
-@@ -410,28 +432,44 @@ public sealed partial class AutoFate
+@@ -381,28 +403,44 @@ public sealed partial class AutoFate
              return true;
          }
  
@@ -1445,7 +1966,7 @@ index 893ff8e..1738389 100644
              ? EngageMeleeApproachToleranceMeters
              : EngageRangedApproachToleranceMeters);
          var config = MovementConfig.Default.WithTolerance(tolerance);
-@@ -465,7 +503,7 @@ public sealed partial class AutoFate
+@@ -436,7 +474,7 @@ public sealed partial class AutoFate
          Status = $"Searching {fateName}";
          Diag($"No live mob of FATE {fateId} ({fateName}) is loaded; walking to the ring centre {distance:F0}m away to load the rest");
  
@@ -1454,7 +1975,7 @@ index 893ff8e..1738389 100644
          var config = MovementConfig.Default.WithTolerance(EngageCentreSeekToleranceMeters);
  
          bool MobSeenOrGone()
-@@ -519,8 +557,31 @@ public sealed partial class AutoFate
+@@ -490,8 +528,31 @@ public sealed partial class AutoFate
      // again once the target is back within its reach or gone.
      private async Task<bool> TickRingChase(uint fateId, EngageIdleTracker idle, string preset)
      {
@@ -1487,7 +2008,7 @@ index 893ff8e..1738389 100644
              EndRingChase(preset);
              return false;
          }
-@@ -644,6 +705,8 @@ public sealed partial class AutoFate
+@@ -615,6 +676,8 @@ public sealed partial class AutoFate
          ringChaseTargetId = 0;
          ringChaseFailures = 0;
          ringChaseGivenUpTargetId = 0;
@@ -1496,7 +2017,7 @@ index 893ff8e..1738389 100644
          collectPullsHeld = false;
          if (!BossModIPC.Instance.CanClearTransientStrategy)
          {
-@@ -742,7 +805,7 @@ public sealed partial class AutoFate
+@@ -713,7 +776,7 @@ public sealed partial class AutoFate
          var targetDescription = target is null
              ? "none"
              : FateMobScanner.TryGetTargetedMob(fateId, position, out var targetDistance)
@@ -1505,7 +2026,7 @@ index 893ff8e..1738389 100644
                  : $"{target.Name}(not this FATE)";
          var nearest = survey.Any
              ? $"{survey.NearestDistanceToHitbox:F0}m dY={survey.NearestVerticalDelta:F0}"
-@@ -780,6 +843,12 @@ public sealed partial class AutoFate
+@@ -751,6 +814,12 @@ public sealed partial class AutoFate
  
      private bool  ringChaseParked;
      private ulong ringChaseTargetId;
@@ -1518,7 +2039,7 @@ index 893ff8e..1738389 100644
      private int   ringChaseFailures;
      private ulong ringChaseGivenUpTargetId;
  
-@@ -793,7 +862,7 @@ public sealed partial class AutoFate
+@@ -764,7 +833,7 @@ public sealed partial class AutoFate
          public float Meters { get; } = reachMeters;
          public int Repositions { get; private set; }
  
@@ -1527,7 +2048,7 @@ index 893ff8e..1738389 100644
          {
              var now = Environment.TickCount64;
              if (!anchored || Vector3.Distance(anchor, position) > StuckDetector.StuckMoveThresholdMeters)
-@@ -803,11 +872,15 @@ public sealed partial class AutoFate
+@@ -774,11 +843,15 @@ public sealed partial class AutoFate
                  idleSinceMs = now;
                  return false;
              }
@@ -1545,10 +2066,10 @@ index 893ff8e..1738389 100644
          {
              var now = Environment.TickCount64;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
-index d79e384..abcff0b 100644
+index 2e287a8..3bf414d 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.Movement.cs
-@@ -25,7 +25,8 @@ public sealed partial class AutoFate
+@@ -27,7 +27,8 @@ public sealed partial class AutoFate
          await WaitForNavmeshReady(NavmeshReadyWaitMs, 60);
          await GenerateObstacleMap(fate);
  
@@ -1558,7 +2079,7 @@ index d79e384..abcff0b 100644
          var projected = FateGround.Project(rnd) ?? FateGround.Project(fate.Position);
          var dest = projected ?? rnd;
          if (projected is null)
-@@ -178,9 +179,21 @@ public sealed partial class AutoFate
+@@ -188,9 +189,21 @@ public sealed partial class AutoFate
          // Clean arrival. clib only dismounts when it lands inside tolerance; a flying mount routinely
          // stops a few metres ABOVE the point (the Y gap), so it would otherwise enter the FATE still mounted.
          await SafeDismount($"dismount-{targetId}");
@@ -1580,7 +2101,7 @@ index d79e384..abcff0b 100644
      private async Task TryTeleportShortcut(Vector3 fatePos, uint fateId, string fateName)
      {
          if (Plugin.Cfg.EconomyTravel) return;
-@@ -268,7 +281,10 @@ public sealed partial class AutoFate
+@@ -278,7 +291,10 @@ public sealed partial class AutoFate
                  if (IsPlayerKO()) break;
                  // A real FATE may have started on top of us; let the state machine take over. A ring it
                  // left (blacklisted or abandoned) is not one, so the aggro from it still gets cleared.
@@ -1592,7 +2113,7 @@ index d79e384..abcff0b 100644
                  if (Svc.Condition[ConditionFlag.Mounted]) { BossModIPC.Instance.ClearActive(); await SafeDismount("dismount-clearcombat"); }
                  AssertPresetActive(preset);
                  await NextFrame(30);
-@@ -280,7 +296,7 @@ public sealed partial class AutoFate
+@@ -290,7 +306,7 @@ public sealed partial class AutoFate
          }
  
          if (Svc.Condition[ConditionFlag.InCombat])
@@ -1601,7 +2122,7 @@ index d79e384..abcff0b 100644
      }
  
      private void EnsureCombatPreset(string preset)
-@@ -323,9 +339,34 @@ public sealed partial class AutoFate
+@@ -333,9 +349,34 @@ public sealed partial class AutoFate
              return;
          }
          BossModIPC.Instance.AddTransientStrategy(preset, AutoTargetModule, "MaxTargets", PullSize().ToString());
@@ -2669,7 +3190,7 @@ index 67b55f1..40f9144 100644
      private async Task StowFashionAccessory()
      {
 diff --git a/AutoFateGrind/Core/Tasks/AutoFate.cs b/AutoFateGrind/Core/Tasks/AutoFate.cs
-index 8dad4b4..0c549e4 100644
+index 543bc11..6151a01 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFate.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFate.cs
 @@ -53,6 +53,8 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
@@ -2787,35 +3308,19 @@ index 8dad4b4..0c549e4 100644
          var remainingSec = Math.Max(0L, zoneIdleWaitMs - (Environment.TickCount64 - zoneIdleSinceMs)) / 1000;
          Status = swapPending
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs b/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
-index 924cdf3..97580da 100644
+index 8a4cf6b..22cfcc0 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFateController.Handoffs.cs
-@@ -162,7 +162,7 @@ internal sealed partial class AutoFateController
-         owningSession.PendingHumanizeFromZone = null;
+@@ -189,6 +189,9 @@ internal sealed partial class AutoFateController
  
          var cfg = Plugin.Cfg;
--        if (!cfg.HumanizerEnabled || cfg.HumanizerCities.Count == 0)
-+        if (!cfg.HumanizerEnabled || !AutoHumanize.HasBreakPlace(cfg)) // Fork: was HumanizerCities.Count == 0
+         var picked = cfg.HumanizerEnabled ? HumanizeBreaks.Pick(cfg, owningSession.LastIdleSpot, rng) : null;
++        // Fork: a retreat (inn, housing) needs no city or idle spot; the task then has no fallback (territory 0).
++        if (picked is null && cfg.HumanizerEnabled && cfg.HumanizerRetreat != HumanizerRetreat.City)
++            picked = AutoHumanize.RetreatOnlyPlan(cfg);
+         if (picked is not { } plan)
          {
-             Diag("Humanize hand-off skipped: feature disabled or no cities selected.");
-             owningSession.ResetBreakCounter();
-@@ -173,14 +173,14 @@ internal sealed partial class AutoFateController
-         // Filter against the catalog so cities removed from the registry (e.g. Ul'dah, dropped due to
-         // navmesh issues) are ignored even if they're still in an older saved config.
-         var cities = cfg.HumanizerCities.Where(id => Core.Zones.CityCatalog.Find(id) is not null).ToArray();
--        if (cities.Length == 0)
-+        if (cities.Length == 0 && cfg.HumanizerRetreat == HumanizerRetreat.City) // Fork: a retreat needs no city
-         {
-             Diag("Humanize hand-off skipped: no selected cities are in the current catalog.");
-             owningSession.ResetBreakCounter();
-             StartFateGrind(resumeIndex, owningSession);
-             return;
-         }
--        var cityId = cities[rng.Next(cities.Length)];
-+        var cityId = cities.Length == 0 ? 0u : cities[rng.Next(cities.Length)]; // Fork: 0 = no city fallback
-         var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
-         var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
-         var minutes = rng.Next(minMin, maxMin + 1);
+             Diag("Humanize hand-off skipped: feature disabled, or no saved idle spot and no selected city in the current catalog.");
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs b/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
 index 48ea1e8..4f6e5c3 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.RunLifecycle.cs
@@ -2835,7 +3340,7 @@ index 48ea1e8..4f6e5c3 100644
          if (s.DidNothing) { s.Recorded = true; return; }
          s.Recorded = true;
 diff --git a/AutoFateGrind/Core/Tasks/AutoFateController.cs b/AutoFateGrind/Core/Tasks/AutoFateController.cs
-index 481f303..618de20 100644
+index 8ddb79b..14564c4 100644
 --- a/AutoFateGrind/Core/Tasks/AutoFateController.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoFateController.cs
 @@ -42,6 +42,13 @@ internal sealed partial class AutoFateController
@@ -2860,7 +3365,7 @@ index 481f303..618de20 100644
          Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
  
          ApplyStartingClass();
-@@ -93,17 +101,20 @@ internal sealed partial class AutoFateController
+@@ -100,17 +108,20 @@ internal sealed partial class AutoFateController
  
      private bool PlanYokaiZones(AutoFateSession owningSession)
      {
@@ -2887,10 +3392,10 @@ index 481f303..618de20 100644
  
 diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
 new file mode 100644
-index 0000000..59d36f9
+index 0000000..6e79b8b
 --- /dev/null
 +++ b/AutoFateGrind/Core/Tasks/AutoHumanize.Retreat.cs
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,81 @@
 +using Dalamud.Game.ClientState.Conditions;
 +using Dalamud.Plugin.Ipc;
 +using ECommons.DalamudServices;
@@ -2904,13 +3409,17 @@ index 0000000..59d36f9
 +// Fork: takes the break at an inn room or housing instead of a city. Lifestream does the travel (its /li
 +// shortcuts); the wander loop then runs unchanged in whatever territory Lifestream ended in, so a long
 +// "pause between hops" keeps the character standing still for the whole break.
-+public sealed partial class AutoHumanize
++internal sealed partial class AutoHumanize
 +{
 +    public static readonly string[] RetreatLabels = ["City (wander)", "Inn room", "Apartment", "Private house", "Free Company house"];
 +
-+    // Upstream only breaks with a city ticked; a retreat (inn, housing) is a place to break on its own.
++    // Upstream only breaks with a city ticked or an idle spot saved; a retreat (inn, housing) is a place to break on its own.
 +    public static bool HasBreakPlace(Configuration cfg)
-+        => cfg.HumanizerCities.Count > 0 || cfg.HumanizerRetreat != HumanizerRetreat.City;
++        => HumanizeBreaks.HasDestination(cfg) || cfg.HumanizerRetreat != HumanizerRetreat.City;
++
++    // A break with a retreat and nothing upstream would pick: territory 0 means "no fallback" if Lifestream fails.
++    public static BreakPlan RetreatOnlyPlan(Configuration cfg)
++        => new(0, RetreatLabels[(int)cfg.HumanizerRetreat], Spot: null, Wander: cfg.HumanizerBreakActivity == HumanizerBreakActivity.Wander);
 +
 +    private const int RetreatWatchdogMs   = 180_000;
 +    private const int RetreatStartGraceMs = 1_500;
@@ -2969,51 +3478,43 @@ index 0000000..59d36f9
 +    }
 +}
 diff --git a/AutoFateGrind/Core/Tasks/AutoHumanize.cs b/AutoFateGrind/Core/Tasks/AutoHumanize.cs
-index 0878ae6..76a3103 100644
+index d47c2b2..64b4951 100644
 --- a/AutoFateGrind/Core/Tasks/AutoHumanize.cs
 +++ b/AutoFateGrind/Core/Tasks/AutoHumanize.cs
-@@ -11,7 +11,7 @@ namespace AutoFateGrind.Core.Tasks;
- // Idle-break task: teleports to a city aetheryte and wanders between random reachable points until the
- // configured break window elapses. The grind loop calls this through AutoFateController; on return the
- // controller resumes the FATE grind in the origin zone, so this task only owns the in-city portion.
--public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
-+public sealed partial class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
+@@ -13,9 +13,9 @@ namespace AutoFateGrind.Core.Tasks;
+ // stands at a saved spot until the configured break window elapses. The grind loop calls this through
+ // AutoFateController; on return the controller resumes the FATE grind in the origin zone, so this task
+ // only owns the break itself.
+-internal sealed class AutoHumanize(BreakPlan plan, int durationMs) : AutoCommon
++internal sealed partial class AutoHumanize(BreakPlan plan, int durationMs) : AutoCommon // Fork: partial (AutoHumanize.Retreat.cs)
  {
-     private readonly uint cityTerritoryId = cityTerritoryId;
+-    private readonly BreakPlan plan = plan;
++    private BreakPlan plan = plan; // Fork: not readonly; a reached retreat (inn, housing) replaces it
      private readonly int durationMs = durationMs;
-@@ -58,11 +58,20 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
+ 
+     // False until we actually reach the city and start the break. Lets the controller distinguish a real
+@@ -61,6 +61,18 @@ internal sealed class AutoHumanize(BreakPlan plan, int durationMs) : AutoCommon
+ 
+     protected override async Task Execute()
      {
-         var city = CityCatalog.Find(cityTerritoryId);
-         var label = city?.Name ?? $"city {cityTerritoryId}";
-+        // Fork: break at the configured retreat (inn, housing) when Lifestream gets there; the city is the fallback.
-+        var territory = await ReachRetreat() ?? cityTerritoryId;
++        // Fork: break at the configured retreat (inn, housing) when Lifestream gets there; upstream's plan (city or
++        // idle spot) is the fallback. At the retreat the break stays where Lifestream ended: no spot walk.
++        var territory = await ReachRetreat() ?? plan.TerritoryId;
 +        if (CancelToken.IsCancellationRequested) return;
 +        if (territory == 0)
 +        {
-+            Diag("Humanize aborted: the break location was not reached and no city is ticked to fall back to.");
++            Diag("Humanize aborted: the break location was not reached and no city or idle spot is set to fall back to.");
 +            return;
 +        }
-+        if (territory != cityTerritoryId) label = RetreatLabels[(int)Plugin.Cfg.HumanizerRetreat];
++        if (territory != plan.TerritoryId)
++            plan = new BreakPlan(territory, RetreatLabels[(int)Plugin.Cfg.HumanizerRetreat], Spot: null,
++                Wander: Plugin.Cfg.HumanizerBreakActivity == HumanizerBreakActivity.Wander);
+         var label = plan.Place;
          var breakMin = Math.Max(1, durationMs / 60_000);
-         Diag($"Humanize start: {label}, break {durationMs / 1000}s");
-         Svc.Chat.Print($"[AFG] Humanize: taking a ~{breakMin}m break in {label}.");
- 
--        if (Svc.ClientState.TerritoryType != cityTerritoryId)
-+        if (Svc.ClientState.TerritoryType != territory)
-         {
-             var reached = false;
-             await RunWithStatusPinned($"Teleporting to {label}",
-@@ -85,12 +94,20 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
-         while (Environment.TickCount64 < deadline)
-         {
+         Diag($"Humanize start: {plan.Describe()}, break {durationMs / 1000}s");
+@@ -164,6 +176,14 @@ internal sealed class AutoHumanize(BreakPlan plan, int durationMs) : AutoCommon
              if (CancelToken.IsCancellationRequested) return;
--            if (Svc.ClientState.TerritoryType != cityTerritoryId)
-+            if (Svc.ClientState.TerritoryType != territory)
-             {
--                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {cityTerritoryId}); ending early.");
-+                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {territory}); ending early.");
-                 return;
-             }
+             if (LeftBreakTerritory()) return;
  
 +            // Fork: pause before each hop (upstream paused after it), so a long pause means no movement from arrival on.
 +            var (pauseLo, pauseHi) = PauseRangeMs();
@@ -3026,12 +3527,7 @@ index 0878ae6..76a3103 100644
              var player = Svc.Objects.LocalPlayer;
              if (player is null) { await DelayMs(PlayerWaitPollMs); continue; }
  
-@@ -111,17 +128,10 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
-             var perHopBudget = (int)Math.Min(WalkWatchdogMs, deadline - Environment.TickCount64);
-             if (perHopBudget < 4_000) break;
- 
--            var move = new MoveOp(o => o.Move(cityTerritoryId, dest.Value,
-+            var move = new MoveOp(o => o.Move(territory, dest.Value,
+@@ -188,13 +208,6 @@ internal sealed class AutoHumanize(BreakPlan plan, int durationMs) : AutoCommon
                  MovementConfig.Default.WithTolerance(ArrivalTolerance),
                  stopCondition: () => Environment.TickCount64 >= deadline || CancelToken.IsCancellationRequested));
              await RunCancellable(move, perHopBudget, $"humanize-walk-{hops}", StuckDetector.MoveStallAbort($"humanize-walk-{hops}"));
@@ -3045,71 +3541,37 @@ index 0878ae6..76a3103 100644
          }
  
          Diag($"Humanize done in {label} after {hops} hop(s).");
-diff --git a/AutoFateGrind/Core/Zones/ZoneAetherytes.cs b/AutoFateGrind/Core/Zones/ZoneAetherytes.cs
-index 829167d..6305bc1 100644
---- a/AutoFateGrind/Core/Zones/ZoneAetherytes.cs
-+++ b/AutoFateGrind/Core/Zones/ZoneAetherytes.cs
-@@ -69,19 +69,49 @@ internal static class ZoneAetherytes
+diff --git a/AutoFateGrind/Core/Tasks/HandoffTriggers.cs b/AutoFateGrind/Core/Tasks/HandoffTriggers.cs
+index 3f2bc2c..ea5dac3 100644
+--- a/AutoFateGrind/Core/Tasks/HandoffTriggers.cs
++++ b/AutoFateGrind/Core/Tasks/HandoffTriggers.cs
+@@ -24,7 +24,7 @@ internal static class HandoffTriggers
+             return true;
  
-         var territories = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
-         if (territories?.GetRowOrDefault(territoryId) is not { } territory) return null;
--        if (territory.TerritoryIntendedUse.ValueNullable?.RowId != ZoneRegistry.StandardFieldUse) return null;
--
--        var gatewayId = territory.Aetheryte.RowId;
--        if (gatewayId == 0) return null;
-+        // Fork (README-FORK item 13): city districts too. Limsa Upper Decks has no aetheryte, and "already works" was not
-+        // true for AutoRepair: "territory 128 has no aetheryte to teleport to; giving up" after every FATE (2026-10-03,
-+        // the Maelstrom Mender), with the gear at 13%. Inns stay out (reached through the innkeeper).
-+        var intendedUse = territory.TerritoryIntendedUse.ValueNullable?.RowId;
-+        if (intendedUse != ZoneRegistry.StandardFieldUse && intendedUse != TownUse) return null;
+         if (Plugin.Cfg.HumanizerEnabled
+-         && HumanizeBreaks.HasDestination(Plugin.Cfg)
++         && AutoHumanize.HasBreakPlace(Plugin.Cfg) // Fork: was HumanizeBreaks.HasDestination; a retreat (inn, housing) is a place too
+          && session.FatesSinceLastBreak >= session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak))
+         {
+             Diag($"Humanizer threshold {session.FatesBeforeNextBreak(Plugin.Cfg.HumanizerFatesBeforeBreak)} reached (configured {Plugin.Cfg.HumanizerFatesBeforeBreak}, counter {session.FatesSinceLastBreak}); queueing break hand-off.");
+diff --git a/AutoFateGrind/Core/Zones/ZoneStateReader.cs b/AutoFateGrind/Core/Zones/ZoneStateReader.cs
+index 68537bc..084b96d 100644
+--- a/AutoFateGrind/Core/Zones/ZoneStateReader.cs
++++ b/AutoFateGrind/Core/Zones/ZoneStateReader.cs
+@@ -38,6 +38,8 @@ internal static class ZoneStateReader
  
-         var aetherytes = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
--        if (aetherytes?.GetRowOrDefault(gatewayId) is not { IsAetheryte: true } gatewayRow) return null;
--        if (gatewayRow.Territory.RowId == 0 || gatewayRow.Territory.RowId == territoryId) return null;
-+        if (aetherytes is null) return null;
-+        var gatewayId = territory.Aetheryte.RowId;
-+        if (aetherytes.GetRowOrDefault(gatewayId) is not { IsAetheryte: true } gatewayRow
-+            || gatewayRow.Territory.RowId == 0 || gatewayRow.Territory.RowId == territoryId)
-+        {
-+            // Fork: no hub named for the territory: take the main aetheryte of the aethernet one of its shards belongs to.
-+            if (HubOfShardIn(aetherytes, territoryId) is not { } hub) return null;
-+            gatewayRow = hub;
-+            gatewayId = hub.RowId;
-+        }
-         if (!TryResolvePosition(gatewayRow, out var position)) return null;
- 
-         return new ZoneGateway(gatewayId, gatewayRow.Territory.RowId, ResolveName(gatewayRow), position);
-     }
- 
-+    // Fork: TerritoryIntendedUse row 0 is a town (city districts like Limsa Upper Decks).
-+    private const uint TownUse = 0;
-+
-+    // Fork: the main aetheryte (outside the territory) of the aethernet that one of the territory's shards belongs to.
-+    private static Lumina.Excel.Sheets.Aetheryte? HubOfShardIn(Lumina.Excel.ExcelSheet<Lumina.Excel.Sheets.Aetheryte> aetherytes, uint territoryId)
-+    {
-+        foreach (var shard in aetherytes)
-+        {
-+            if (shard.IsAetheryte || shard.Territory.RowId != territoryId || shard.AethernetGroup == 0) continue;
-+            foreach (var main in aetherytes)
-+            {
-+                if (main.IsAetheryte && main.AethernetGroup == shard.AethernetGroup
-+                    && main.Territory.RowId != 0 && main.Territory.RowId != territoryId)
-+                {
-+                    return main;
-+                }
-+            }
-+        }
-+        return null;
-+    }
-+
-     private static uint[] ResolveAttunableIds(uint territoryId)
+     private static HashSet<uint> AttunedSet()
      {
-         var sheet = Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>();
++        // Fork: item 25 (README-FORK): never read the list while logging in or loading; it crashed the game.
++        if (!Core.Fork.AetheryteListGuard.CanReadNow()) return attunedAetheryteCache ?? [];
+         var now = Environment.TickCount64;
+         if (attunedAetheryteCache is null || now - attunedCacheTickMs > AttunedCacheLifetimeMs)
+         {
 diff --git a/AutoFateGrind/Plugin.cs b/AutoFateGrind/Plugin.cs
-index 0929b02..1810b4b 100644
+index 3616d72..74930b0 100644
 --- a/AutoFateGrind/Plugin.cs
 +++ b/AutoFateGrind/Plugin.cs
-@@ -85,8 +85,15 @@ public sealed class Plugin : IDalamudPlugin
+@@ -87,8 +87,15 @@ public sealed class Plugin : IDalamudPlugin
  
          Svc.ClientState.Login += OnLogin;
          if (Svc.ClientState.IsLoggedIn) OnLogin();
@@ -3125,7 +3587,7 @@ index 0929b02..1810b4b 100644
      // vnavmesh/BossMod run their obstacle-map and pathfind IPC on fire-and-forget Tasks we never get a
      // handle to (we only see a TaskStatus), so we can't ObserveLeak them. When one faults — e.g. a bitmap
      // build issued while the zone navmesh is still creating — its exception reaches the finalizer as
-@@ -103,6 +110,11 @@ public sealed class Plugin : IDalamudPlugin
+@@ -105,6 +112,11 @@ public sealed class Plugin : IDalamudPlugin
  
      public void Dispose()
      {
@@ -3137,7 +3599,7 @@ index 0929b02..1810b4b 100644
          TaskScheduler.UnobservedTaskException -= unobservedTaskHandler;
  
          PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-@@ -154,7 +166,7 @@ public sealed class Plugin : IDalamudPlugin
+@@ -157,7 +169,7 @@ public sealed class Plugin : IDalamudPlugin
          }
      }
  
@@ -3221,10 +3683,10 @@ index 8e1d186..57ffdfb 100644
              Loc.T(L.Settings.LivePopoutHelp),
              SettingsControls.ToggleWidth,
 diff --git a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
-index 6377e9a..a453708 100644
+index 0e06e46..883535e 100644
 --- a/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
 +++ b/AutoFateGrind/Windows/Sections/Config/HumanizerSettings.cs
-@@ -164,7 +164,7 @@ internal static class HumanizerSettings
+@@ -279,7 +279,7 @@ internal static class HumanizerSettings
              SettingsControls.RangeInlineWidth(),
              () => SettingsControls.DrawRangeInline(cfg, "##hum_pause_min", "##hum_pause_max",
                  () => cfg.HumanizerPauseMinSec, v => cfg.HumanizerPauseMinSec = v,
@@ -3233,7 +3695,7 @@ index 6377e9a..a453708 100644
  
          SettingsRow.Draw(Loc.T(L.Settings.WalkDistance),
              Loc.T(L.Settings.WalkDistanceHelp),
-@@ -174,10 +174,27 @@ internal static class HumanizerSettings
+@@ -289,10 +289,27 @@ internal static class HumanizerSettings
                  () => cfg.HumanizerWanderMaxMeters, v => cfg.HumanizerWanderMaxMeters = v, 200, 5, Loc.T(L.Settings.MetersFormat)));
      }
  
@@ -3246,7 +3708,7 @@ index 6377e9a..a453708 100644
  
 +        // Fork: break location; the cities below stay the fallback when Lifestream cannot get there.
 +        SettingsRow.Draw("Break location",
-+            "City wanders as upstream. Inn and housing are reached with Lifestream (/li inn, apartment, home, fc); a private or FC house is only entered when Lifestream's house registration says \"Enter house\". If Lifestream can't get there, the break falls back to a city below.",
++            "City is upstream's break (a city below, or a saved idle spot). Inn and housing are reached with Lifestream (/li inn, apartment, home, fc); a private or FC house is only entered when Lifestream's house registration says \"Enter house\". There the break wanders or idles as the break activity says. If Lifestream can't get there, the break falls back to upstream's (city or idle spot).",
 +            SettingsControls.RowComboWidth,
 +            () =>
 +            {
@@ -3261,7 +3723,7 @@ index 6377e9a..a453708 100644
          SettingsRow.DrawBlock(Loc.T(L.Settings.AllowedCities),
              Loc.T(L.Settings.AllowedCitiesHelp),
              () => DrawHumanizerCityList(cfg));
-@@ -209,7 +226,7 @@ internal static class HumanizerSettings
+@@ -324,7 +341,7 @@ internal static class HumanizerSettings
              ImGui.Spacing();
          }
  
@@ -3560,7 +4022,7 @@ index 0000000..a7c0dd9
 +        => ECommons.DalamudServices.Svc.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText() ?? territory.ToString();
 +}
 diff --git a/AutoFateGrind/Windows/Shell/ActionDock.cs b/AutoFateGrind/Windows/Shell/ActionDock.cs
-index db3ea9c..5e0aa49 100644
+index fab6661..d5b7aa8 100644
 --- a/AutoFateGrind/Windows/Shell/ActionDock.cs
 +++ b/AutoFateGrind/Windows/Shell/ActionDock.cs
 @@ -29,13 +29,24 @@ internal static class ActionDock
