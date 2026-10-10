@@ -1,3 +1,4 @@
+using AutoFateGrind.Core.Game.Watchers;
 using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Zones;
 using clib.TaskSystem;
@@ -26,10 +27,15 @@ public abstract partial class AutoCommon
     private const int ReturnHomePollMs = 250;
     private const int TeleportRetryBackoffMs = 2_000;
 
-    internal readonly record struct TeleportOutcome(bool Completed, Exception? Fault)
+    internal readonly record struct TeleportOutcome(bool Completed, Exception? Fault, TeleportRefusal? Refusal)
     {
         public bool Succeeded => Completed && Fault is null;
     }
+
+    private protected TeleportRefusal? LastTeleportRefusal { get; private set; }
+
+    internal static string DescribeRefusal(TeleportRefusal? refusal)
+        => refusal is null ? "no refusal message" : $"\"{refusal.Text}\" (LogMessage {refusal.LogMessageId})";
 
     private static readonly ConditionFlag[] ActionBlockingFlags =
     {
@@ -155,6 +161,10 @@ public abstract partial class AutoCommon
         {
             return outcome;
         }
+        if (outcome.Refusal is { IsPermanent: true } or { IsAlreadyUnderway: true })
+        {
+            return outcome;
+        }
 
         Diag($"{scope}: teleport did not go through while mounted ({ConditionTag()}); dismounting and casting once more");
         if (!await SafeDismount($"{scope}-dismount"))
@@ -167,9 +177,16 @@ public abstract partial class AutoCommon
     // The idle-stall guard catches a teleport that was accepted but never started casting in ~8s, not the full watchdog.
     private async Task<TeleportOutcome> RunTeleportOnce(uint territoryId, Vector3 destination, bool allowSameZoneTeleport, int timeoutMs, string scope)
     {
+        var startedAt = Environment.TickCount64;
         var operation = new MoveOp(move => move.Teleport(territoryId, destination, allowSameZoneTeleport));
         var completed = await RunCancellable(operation, timeoutMs, scope, StuckDetector.IdleStallAbort(StuckDetector.IdleStallTimeoutMs));
-        return new TeleportOutcome(completed, operation.Fault);
+        var refusal = TeleportRefusals.Since(startedAt);
+        if (refusal is not null)
+        {
+            LastTeleportRefusal = refusal;
+            Diag($"{scope}: the game refused the teleport: {DescribeRefusal(refusal)}");
+        }
+        return new TeleportOutcome(completed, operation.Fault, refusal);
     }
 
     private const int  ReturnHomeWaitMs    = 30_000;
@@ -209,7 +226,7 @@ public abstract partial class AutoCommon
         return false;
     }
 
-    protected static unsafe bool UseGeneralAction(uint generalActionId)
+    internal static unsafe bool UseGeneralAction(uint generalActionId)
     {
         var actionManager = ActionManager.Instance();
         if (actionManager is null)
@@ -258,7 +275,9 @@ public abstract partial class AutoCommon
             return TerritoryTeleportResult.Unreachable;
         }
 
+        LastTeleportRefusal = null;
         var returnedHome = false;
+        var lockReported = false;
         var casts = 0;
         var stalls = 0;
         var faults = 0;
@@ -283,6 +302,17 @@ public abstract partial class AutoCommon
                 {
                     stalls++;
                 }
+
+                if (outcome.Refusal is { IsInsufficientGil: true })
+                {
+                    throw new UnrecoverableRunException("Not enough gil to teleport. Restock gil, then start again.");
+                }
+                if (outcome.Refusal is { IsPermanent: true })
+                {
+                    Warn($"{label}: teleport refused for good: {DescribeRefusal(outcome.Refusal)}; giving up");
+                    return TerritoryTeleportResult.Unreachable;
+                }
+                lockReported |= outcome.Refusal is { IsAlreadyUnderway: true };
             }
 
             if (viaGateway && Svc.ClientState.TerritoryType == hopTerritoryId)
@@ -296,9 +326,9 @@ public abstract partial class AutoCommon
                 break;
             }
 
-            // After two stalled attempts the teleport is almost certainly blocked by one "already underway";
-            // Return home (a separate path) clears it, and the next attempt teleports from the home city.
-            if (!returnedHome && stalls >= StallsBeforeReturnHome)
+            // The game reporting "another teleport is already underway", or two stalled attempts, means the lock is
+            // set; Return home (a separate path) clears it, and the next attempt teleports from the home city.
+            if (!returnedHome && (lockReported || stalls >= StallsBeforeReturnHome))
             {
                 returnedHome = true;
                 await TryReturnHome(label);
@@ -322,18 +352,26 @@ public abstract partial class AutoCommon
     private const int AethernetLegMs = 90_000;
     private const int AethernetNavmeshWaitMs = 60_000;
 
-    // Second leg of a gateway zone: walk to the hub's aetheryte and ride the aethernet in. Deliberately
-    // runs without IdleStallAbort — the walk-up, the aetheryte menu and the shard hop all hold the
-    // character still in states that guard reads as a teleport that never started.
+    // Second leg of a gateway zone: walk to the hub's aetheryte and ride the aethernet in. AFG plans the
+    // hop itself, so the shard it rides to is attuned and placed from AFG's own positions (issue #75).
+    // Deliberately runs without IdleStallAbort — the walk-up, the aetheryte menu and the shard hop all
+    // hold the character still in states that guard reads as a teleport that never started.
     private async Task RideAethernetInto(uint territoryId, Vector3 dest, ZoneGateway gateway, string scope)
     {
         Status = $"Riding the aethernet from {gateway.Name}";
-        Diag($"{scope}: reached {gateway.Name}; riding its aethernet into territory {territoryId}");
 
         await WaitForNavmeshReady(AethernetNavmeshWaitMs, 60);
         if (CancelToken.IsCancellationRequested) return;
+        if (Svc.Objects.LocalPlayer is not { } player) return;
 
-        var op = new MoveOp(o => o.Aethernet(territoryId, dest));
+        if (!CityAethernet.TryPlanEntry(Svc.ClientState.TerritoryType, player.Position, territoryId, dest, gateway.AethernetGroup, out var hop))
+        {
+            Warn($"{scope}: no attuned aethernet shard of {gateway.Name} leads into territory {territoryId}; attune one there first");
+            return;
+        }
+
+        Diag($"{scope}: reached {gateway.Name}; aethernet {CityAethernet.ShardName(hop.Source.Id)} → {CityAethernet.ShardName(hop.Destination.Id)} into territory {territoryId}");
+        var op = new MoveOp(o => o.RideAethernet(hop));
         await RunCancellable(op, AethernetLegMs, $"{scope}-aethernet");
         if (op.Fault is { } fault) Diag($"{scope}: aethernet leg faulted: {fault.Message}");
     }

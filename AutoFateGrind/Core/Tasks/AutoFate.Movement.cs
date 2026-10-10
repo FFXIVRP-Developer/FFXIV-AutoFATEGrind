@@ -20,6 +20,8 @@ namespace AutoFateGrind.Core.Tasks;
 
 public sealed partial class AutoFate
 {
+    private const float ShortHopWalkMeters = 30f;
+
     private async Task<MoveStopReason> MoveToFate(PublicEvent fate)
     {
         await WaitForNavmeshReady(NavmeshReadyWaitMs, 60);
@@ -39,7 +41,15 @@ public sealed partial class AutoFate
         {
             Diag($"In combat; walking toward FATE {targetId} ({fate.Name}) on foot until combat drops");
         }
-        var config = (walkingInCombat ? MovementConfig.Default : MovementConfig.Everything).WithTolerance(3f);
+        // A summon and a dismount cost more than they save on a short hop, and mounting for a few steps reads as a bot (issue #83).
+        var shortHop = !Svc.Condition[ConditionFlag.Mounted]
+            && Svc.Objects.LocalPlayer is { } mover
+            && Vector3.Distance(mover.Position, dest) < ShortHopWalkMeters;
+        if (shortHop && !walkingInCombat)
+        {
+            Diag($"FATE {targetId} ({fate.Name}) is under {ShortHopWalkMeters:F0}m away; walking instead of mounting");
+        }
+        var config = (walkingInCombat || shortHop ? MovementConfig.Default : MovementConfig.Everything).WithTolerance(3f);
         var label = $"Moving to {fate.Name}";
 
         await TryTeleportShortcut(fate.Position, targetId, fate.Name);
@@ -131,7 +141,7 @@ public sealed partial class AutoFate
             Diag(Svc.Condition[ConditionFlag.InCombat]
                 ? $"Move to FATE {targetId} ({fate.Name}) stalled in combat ({kind}); cancelling to clear aggro (teleport is blocked in combat)"
                 : kind == StallKind.NavWedge
-                    ? $"Move to FATE {targetId} ({fate.Name}) wedged: no progress toward the next waypoint in {StuckDetector.NavWedgeTimeoutMs / 1000}s; cancelling to retry"
+                    ? $"Move to FATE {targetId} ({fate.Name}) wedged: no progress toward the next waypoint in {StuckDetector.NavWedgeTimeoutMs / 1000}s, even after a jump where one was possible; cancelling to retry"
                     : $"Move to FATE {targetId} ({fate.Name}) idle: no nav/cast/mount progress in {StuckDetector.IdleStallTimeoutMs/1000}s (clib teleport likely never started); cancelling to retry");
             return true;
         }

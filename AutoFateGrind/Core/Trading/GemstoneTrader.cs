@@ -168,6 +168,19 @@ public static class GemstoneTrader
         return anyHub ?? sellers[0];
     }
 
+    public static bool Sells(TraderLocation trader, GemstoneTradeItem item)
+    {
+        for (var shopIndex = 0; shopIndex < item.ShopRowIds.Length; shopIndex++)
+        {
+            if (ShopToTraders.TryGetValue(item.ShopRowIds[shopIndex], out var owners) && Array.IndexOf(owners, trader) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // The zones an item can be bought in, attuned or not, so a locked target can say where to go.
     public static string DescribeSellerZones(uint itemId)
     {
@@ -178,7 +191,7 @@ public static class GemstoneTrader
         var zones = new List<string>(ListedZoneLimit);
         for (var index = 0; index < sellers.Count && zones.Count < ListedZoneLimit; index++)
         {
-            var name = ZoneName(sellers[index].TerritoryId);
+            var name = TerritoryNames.Of(sellers[index].TerritoryId);
             if (!zones.Contains(name)) zones.Add(name);
         }
         return string.Join(", ", zones);
@@ -196,12 +209,5 @@ public static class GemstoneTrader
                 if (!sellers.Contains(t)) sellers.Add(t);
         }
         return sellers;
-    }
-
-    private static string ZoneName(uint territoryId)
-    {
-        var name = Svc.Data.GetExcelSheet<TerritoryType>()?
-            .GetRowOrDefault(territoryId)?.PlaceName.ValueNullable?.Name.ExtractText();
-        return string.IsNullOrWhiteSpace(name) ? $"territory {territoryId}" : name;
     }
 }

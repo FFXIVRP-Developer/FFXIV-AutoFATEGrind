@@ -88,6 +88,7 @@ internal static class Segmented
             }
 
             DrawContent(items[index], metrics[index], segmentMin, segmentWidth, size.Y, isSelected, hover, enabled);
+            if (hit.Hovered && IsTruncated(metrics[index], segmentWidth)) Tooltip.Show(items[index].Label);
             segmentX += segmentWidth;
         }
 
@@ -136,16 +137,18 @@ internal static class Segmented
         return new Metrics(icon, label, content);
     }
 
+    private static bool IsTruncated(Metrics metric, float segmentWidth) =>
+        metric.Content > segmentWidth - SegmentPadX * 2f * ImGuiHelpers.GlobalScale;
+
     private static void DrawContent(Item item, Metrics metric, Vector2 segmentMin, float segmentWidth, float height, bool selected, float hover, bool enabled)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var iconSpan = item.Icon is not null ? metric.Icon.X + IconGap * scale : 0f;
-        var available = segmentWidth - SegmentPadX * 2f * scale;
         var label = item.Label;
         var labelWidth = metric.Label.X;
-        if (metric.Content > available)
+        if (IsTruncated(metric, segmentWidth))
         {
-            label = TextDraw.Truncate(label, MathF.Max(0f, available - iconSpan));
+            label = TextDraw.Truncate(label, MathF.Max(0f, segmentWidth - SegmentPadX * 2f * scale - iconSpan));
             labelWidth = TextDraw.Measure(label).X;
         }
 

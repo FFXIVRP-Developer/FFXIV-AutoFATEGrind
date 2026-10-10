@@ -546,7 +546,7 @@ public sealed partial class AutoFate(IReadOnlyList<ZoneInfo> zones, AutoFateSess
 
     private void FaultIfCharacterStaysBlocked()
     {
-        var blocker = ConditionTag();
+        var blocker = $"{ConditionTag()}; {DescribeRefusal(LastTeleportRefusal)}";
         Warn($"No teleport cast toward {zone.Name} could start (failure {consecutiveZoneTeleportFailures}, {blocker}); the character is held, so the zone stays reachable.");
         if (consecutiveZoneTeleportFailures < WrongZoneFaultAfterFailures)
         {

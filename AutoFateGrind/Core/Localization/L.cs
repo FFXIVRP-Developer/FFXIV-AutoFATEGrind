@@ -424,25 +424,33 @@ internal static class L
 
         public static readonly LocString[] Release21800 =
         [
-            new("changelog.r21800.1", "Added the Mount option under Settings > Travel: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83"),
-            new("changelog.r21800.2", "Fixed FATEs whose center lies below the ground, like the ones at The Imperious in Kozama'uka: the flight there no longer dives into the floor and stalls on arrival. Reported in issue #82"),
-            new("changelog.r21800.3", "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82"),
-            new("changelog.r21800.4", "Split Settings > General in two: mount choice, economy mode, zone swaps, Twist of Fate and Collect hand-ins now live in the new Settings > Travel tab, while General keeps language, window and run options"),
-            new("changelog.r21800.5", "Added the Vary dodging in combat option under Settings > Humanizer: each FATE picks its own dodge delay, movement delay and extra room from danger from ranges you set, so dodging looks less mechanical. Off by default. Contributed by blackappleD"),
+            new("changelog.r21800.1", "Added a Mount option under Settings > Travel to pick which flying mount to ride instead of the mount roulette"),
+            new("changelog.r21800.2", "Added Vary dodging in combat under Settings > Humanizer, giving each FATE its own dodge timing from ranges you set. Contributed by blackappleD"),
+            new("changelog.r21800.3", "Added A number of levels to How long on the Grind page: the run ends once your job gains that many levels. Contributed by mmkhatib"),
+            new("changelog.r21800.4", "Added a shopping list to auto-trade under Settings > Gemstones: items are bought from the top down, and collectibles you own are skipped"),
+            new("changelog.r21800.5", "Added Idle at a spot as a break activity under Settings > Humanizer: breaks stand still at a place you saved instead of wandering a city"),
+            new("changelog.r21800.6", "Moved the mount, economy mode, zone swap, Twist of Fate and Collect hand-in options into the new Settings > Travel tab"),
+            new("changelog.r21800.7", "Fixed flights to FATEs whose center lies below the ground, like those at The Imperious, diving into the floor"),
+            new("changelog.r21800.8", "Fixed getting stuck on walls in FATEs while picking up Collect items or attacking from range"),
+            new("changelog.r21800.9", "Fixed gemstone auto-trade stalling at the trader's dialogue when TextAdvance is switched off"),
+            new("changelog.r21800.10", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already over the threshold"),
+            new("changelog.r21800.11", "Fixed auto-trade going back to the trader after every FATE when a purchase fails"),
+            new("changelog.r21800.12", "Fixed the live tracker getting wider every time it was dragged to the left"),
+            new("changelog.r21800.13", "Fixed NPC repair at the Maelstrom mender and returning to the Limsa Lominsa inn giving up before the teleport"),
         ];
 
         public static readonly LocString[] Release21700 =
         [
-            new("changelog.r21700.1", "Added the Mount while waiting for FATEs option under Settings > General: mounts after a short delay while you wait for a FATE to spawn, and stays off on Yo-kai medal runs. Contributed by lizvik"),
-            new("changelog.r21700.2", "Fixed trips to a FATE staying on the ground when flying became available only after the route was planned: travel now replans for flight, up to twice. Contributed by lizvik"),
-            new("changelog.r21700.3", "Added Economy mode under Settings > General: skips the teleport to the aetheryte nearest the next FATE in the same zone and flies there instead to save gil. Teleports to other zones and stuck recovery still happen"),
+            new("changelog.r21700.1", "Added Mount while waiting for FATEs under Settings > General, which mounts up after a short delay between FATEs. Contributed by lizvik"),
+            new("changelog.r21700.2", "Added Economy mode under Settings > General: flies to the next FATE in the same zone instead of teleporting, to save gil"),
+            new("changelog.r21700.3", "Fixed trips to a FATE staying on the ground when flying became available after the route was planned. Contributed by lizvik"),
         ];
 
         public static readonly LocString[] Release21600 =
         [
-            new("changelog.r21600.1", "Added your Bicolor Gemstone count to the title strip and the live tracker, turning amber at your auto-trade threshold and rose at the 1500 cap"),
-            new("changelog.r21600.2", "Added the Summon chocobo toggle under Settings > Consumables: turn it off to keep BossMod's FATE helper from using Gysahl Greens during runs, without changing your BossMod preset. Contributed by lizvik"),
-            new("changelog.r21600.3", "Added a Buy Me a Coffee button under Patreon on the About page"),
+            new("changelog.r21600.1", "Added your Bicolor Gemstone count to the title strip and live tracker, colored at your trade threshold and at the cap"),
+            new("changelog.r21600.2", "Added the Summon chocobo toggle under Settings > Consumables to keep BossMod from using Gysahl Greens. Contributed by lizvik"),
+            new("changelog.r21600.3", "Added a Buy Me a Coffee button to the About page"),
         ];
 
         public static readonly LocString[] Release21500 =
@@ -453,13 +461,13 @@ internal static class L
 
         public static readonly LocString[] Release21400 =
         [
-            new("changelog.r21400.1", "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards"),
-            new("changelog.r21400.2", "Added the Shared FATE ranks goal: grinds each zone until its rank is maxed, then moves on, with the rank shown on every Shadowbringers and later zone card"),
-            new("changelog.r21400.3", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste"),
-            new("changelog.r21400.4", "Added run limits that work with any goal: stop after a number of FATEs or a length of time"),
-            new("changelog.r21400.5", "Added /afg start, stop, stop soft and run <count>, and Ctrl+click on Stop to finish the current FATE first"),
-            new("changelog.r21400.6", "Added filters for long FATEs and a fixed level window, and a Keep Twist of Fate option that holds zone swaps while the bonus is up"),
-            new("changelog.r21400.7", "Added a setting for how long to wait in an empty zone before swapping, which the pacing roll now respects"),
+            new("changelog.r21400.1", "Added the Shared FATE ranks goal: grinds each zone until its rank is maxed, then moves on, with the rank shown on every Shadowbringers and later zone card"),
+            new("changelog.r21400.2", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste"),
+            new("changelog.r21400.3", "Added run limits that work with any goal: stop after a number of FATEs or a length of time"),
+            new("changelog.r21400.4", "Added /afg start, stop, stop soft and run <count>, and Ctrl+click on Stop to finish the current FATE first"),
+            new("changelog.r21400.5", "Added filters for long FATEs and a fixed level window, and a Keep Twist of Fate option that holds zone swaps while the bonus is up"),
+            new("changelog.r21400.6", "Added a setting for how long to wait in an empty zone before swapping, which the pacing roll now respects"),
+            new("changelog.r21400.7", "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards"),
             new("changelog.r21400.8", "Improved the live tracker: passed-over FATEs are listed with the reason, a click walks you to a FATE while idle, and the FATE name format is configurable"),
             new("changelog.r21400.9", "Fixed the level range and skipped FATE types not applying to a FATE you were already standing in or died in"),
             new("changelog.r21400.10", "Fixed FATEs skipped for routing trouble staying skipped for the whole session; they are retried after the next completion"),
@@ -718,17 +726,31 @@ internal static class L
 
         public static readonly LocString GemsTrigger = new("settings.gems.trigger", "Trade trigger");
         public static readonly LocString AutoTrade = new("settings.gems.autoTrade", "Auto-trade at threshold");
-        public static readonly LocString AutoTradeHelp = new("settings.gems.autoTradeHelp", "When your Bicolor Gemstone inventory reaches the threshold below, the plugin teleports to a trader and buys the item.");
+        public static readonly LocString AutoTradeHelp = new("settings.gems.autoTradeHelp", "When your Bicolor Gemstone inventory reaches the threshold below, the plugin teleports to a trader and buys from your shopping list.");
         public static readonly LocString AutoTradeOff = new("settings.gems.autoTradeOff", "Auto-trade is off. Enable it to configure the trade.");
         public static readonly LocString Threshold = new("settings.gems.threshold", "Trade threshold");
         public static readonly LocString ThresholdHelp = new("settings.gems.thresholdHelp", "Gem count that triggers the trade. Game cap is 1500. Lower values trade more often so fewer FATEs are wasted near cap.");
         public static readonly LocString GemsFormat = new("settings.gems.gemsFormat", "%d gems");
         public static readonly LocString GemsItem = new("settings.gems.item", "What to buy");
-        public static readonly LocString ItemToBuy = new("settings.gems.itemToBuy", "Item to buy");
+        public static readonly LocString AddTradeItem = new("settings.gems.addItem", "Add an item");
         public static readonly LocString ItemToBuyHelp = new("settings.gems.itemToBuyHelp", "Pulled live from game data, sorted A-Z. Type to search. Cost shown in gems per one.");
         public static readonly LocString NoShopItems = new("settings.gems.noShopItems", "No gem-shop items found.");
         public static readonly LocString TraderLocked = new("settings.gems.traderLocked", "No trader you can reach sells {0}. It is only sold in {1}. Attune an aetheryte there, or pick another item.");
         public static readonly LocString TraderMissing = new("settings.gems.traderMissing", "No known Bicolor trader sells {0}. Pick another item.");
+        public static readonly LocString AlreadyListed = new("settings.gems.alreadyListed", "Already on the list.");
+        public static readonly LocString ShoppingList = new("settings.gems.list", "Shopping list");
+        public static readonly LocString ShoppingListHelp = new("settings.gems.listHelp", "Bought from the top down. Each trade goes to a trader for the first item still needed and also buys the items below it that the same trader sells. Collectibles such as minions and orchestrion rolls are bought once and skipped after you own or learn them.");
+        public static readonly LocString ShoppingListEmpty = new("settings.gems.listEmpty", "The list is empty, so auto-trade has nothing to buy. Add an item above.");
+        public static readonly LocString UnknownTradeItem = new("settings.gems.unknownItem", "Unknown item ({0})");
+        public static readonly LocString StatusLearned = new("settings.gems.statusLearned", "Learned");
+        public static readonly LocString StatusHeld = new("settings.gems.statusHeld", "In your inventory");
+        public static readonly LocString StatusHave = new("settings.gems.statusHave", "You have {0}");
+        public static readonly LocString StatusHaveOf = new("settings.gems.statusHaveOf", "You have {0} of {1}");
+        public static readonly LocString StatusNoTrader = new("settings.gems.statusNoTrader", "No trader you can reach");
+        public static readonly LocString StatusSkipped = new("settings.gems.statusSkipped", "Skipped for this run");
+        public static readonly LocString BuyOnce = new("settings.gems.buyOnce", "Buy once");
+        public static readonly LocString KeepBuying = new("settings.gems.keepBuying", "Keep buying");
+        public static readonly LocString StopAtCount = new("settings.gems.stopAtCount", "Stop at %d");
         public static readonly LocString GemsSpend = new("settings.gems.spend", "How much to spend");
         public static readonly LocString SpendStrategy = new("settings.gems.spendStrategy", "Spend strategy");
         public static readonly LocString SpendStrategyHelp = new("settings.gems.spendStrategyHelp", "How much each trade spends when it fires.");
@@ -737,12 +759,12 @@ internal static class L
         public static readonly LocString SpendUpToName = new("settings.gems.spendUpTo.name", "Spend up to a set amount");
         public static readonly LocString SpendUpToDetail = new("settings.gems.spendUpTo.detail", "Cap how many gems each trade is allowed to spend.");
         public static readonly LocString BuyFixedName = new("settings.gems.buyFixed.name", "Buy a fixed number");
-        public static readonly LocString BuyFixedDetail = new("settings.gems.buyFixed.detail", "Buy a set quantity of the item on each trade.");
+        public static readonly LocString BuyFixedDetail = new("settings.gems.buyFixed.detail", "Buy a set quantity of each item on each trade.");
         public static readonly LocString SpendUpTo = new("settings.gems.spendUpToRow", "Spend up to");
         public static readonly LocString SpendUpToHelp = new("settings.gems.spendUpToRowHelp", "Maximum gems spent per trade.");
         public static readonly LocString BuyQuantity = new("settings.gems.buyQuantity", "Buy quantity");
-        public static readonly LocString BuyQuantityHelp = new("settings.gems.buyQuantityHelp", "How many of the item to buy per trade.");
-        public static readonly LocString BuyQuantityFormat = new("settings.gems.buyQuantityFormat", "%d x item");
+        public static readonly LocString BuyQuantityHelp = new("settings.gems.buyQuantityHelp", "How many of each item to buy per trade.");
+        public static readonly LocString BuyQuantityFormat = new("settings.gems.buyQuantityFormat", "%d of each");
         public static readonly LocString Reserve = new("settings.gems.reserve", "Keep in reserve");
         public static readonly LocString ReserveHelp = new("settings.gems.reserveHelp", "Gems left untouched on every trade. Use this when you want to save toward a pricier item without turning auto-trade off.");
         public static readonly LocString GemsAfter = new("settings.gems.after", "After the trade");
@@ -752,8 +774,9 @@ internal static class L
         public static readonly LocString AfterResumeDetail = new("settings.gems.afterResume.detail", "Keep grinding FATEs in the same zone after the buy.");
         public static readonly LocString AfterStopName = new("settings.gems.afterStop.name", "Stop the run");
         public static readonly LocString AfterStopDetail = new("settings.gems.afterStop.detail", "End the run once the buy succeeds.");
-        public static readonly LocString PreviewCannotAfford = new("settings.gems.previewCannotAfford", "Threshold/reserve won't afford any {0} at {1}g each.");
-        public static readonly LocString PreviewBuy = new("settings.gems.previewBuy", "At threshold {0}g (keeping {1}g), next trade buys ~{2} x {3} for {4}g.");
+        public static readonly LocString PreviewPlan = new("settings.gems.previewPlan", "At threshold {0}g (keeping {1}g), the next trade buys {2} for {3}g.");
+        public static readonly LocString PreviewItem = new("settings.gems.previewItem", "{0} x {1}");
+        public static readonly LocString PreviewNothing = new("settings.gems.previewNothing", "At threshold {0}g (keeping {1}g), nothing on the list can be bought.");
         public static readonly LocString ItemCostLabel = new("settings.gems.itemCostLabel", "{0}  ({1}g)");
 
         public static readonly LocString RepairTrigger = new("settings.repair.trigger", "Repair trigger");
@@ -807,7 +830,7 @@ internal static class L
 
         public static readonly LocString HumanizerBreaks = new("settings.humanizer.breaks", "Breaks");
         public static readonly LocString HumanizerEnable = new("settings.humanizer.enable", "Take periodic city breaks");
-        public static readonly LocString HumanizerEnableHelp = new("settings.humanizer.enableHelp", "Every N FATEs, teleport to a random selected city and wander around for a few minutes before resuming. Helps you avoid player reports by acting a little more human, useful when you leave the PC running for long sessions and don't want others noticing you grinding FATEs non-stop.");
+        public static readonly LocString HumanizerEnableHelp = new("settings.humanizer.enableHelp", "Every N FATEs, take a few minutes off: wander around a random city or stand at one of your saved spots, then resume. Helps you avoid player reports by acting a little more human, useful when you leave the PC running for long sessions and don't want others noticing you grinding FATEs non-stop.");
         public static readonly LocString HumanizerOff = new("settings.humanizer.off", "Humanizer is off. Enable it to configure breaks.");
         public static readonly LocString FatesBetween = new("settings.humanizer.fatesBetween", "FATEs between breaks");
         public static readonly LocString FatesBetweenHelp = new("settings.humanizer.fatesBetweenHelp", "Take a break after this many completed FATEs. The counter resets after each break.");
@@ -815,6 +838,12 @@ internal static class L
         public static readonly LocString BreakLength = new("settings.humanizer.breakLength", "Break length");
         public static readonly LocString BreakLengthHelp = new("settings.humanizer.breakLengthHelp", "A random duration between these two values is rolled for each break.");
         public static readonly LocString MinutesFormat = new("settings.humanizer.minutesFormat", "%d min");
+        public static readonly LocString BreakActivity = new("settings.humanizer.breakActivity", "Break activity");
+        public static readonly LocString BreakActivityHelp = new("settings.humanizer.breakActivityHelp", "What your character does during a break.");
+        public static readonly LocString BreakActivityWanderName = new("settings.humanizer.activityWanderName", "Wander a city");
+        public static readonly LocString BreakActivityWanderDetail = new("settings.humanizer.activityWanderDetail", "Teleport to one of your cities and walk between random points until the break ends.");
+        public static readonly LocString BreakActivityIdleName = new("settings.humanizer.activityIdleName", "Idle at a spot");
+        public static readonly LocString BreakActivityIdleDetail = new("settings.humanizer.activityIdleDetail", "Go to one of your saved spots, such as a summoning bell, a vendor or an aetheryte, and stand there until the break ends.");
         public static readonly LocString HumanizerWandering = new("settings.humanizer.wandering", "Wandering");
         public static readonly LocString PauseBetween = new("settings.humanizer.pauseBetween", "Pause between walks");
         public static readonly LocString PauseBetweenHelp = new("settings.humanizer.pauseBetweenHelp", "After arriving at each random point, stand still for a random duration in this range before walking somewhere else.");
@@ -826,6 +855,14 @@ internal static class L
         public static readonly LocString AllowedCities = new("settings.humanizer.allowedCities", "Allowed cities");
         public static readonly LocString AllowedCitiesHelp = new("settings.humanizer.allowedCitiesHelp", "Tick the cities the plugin is allowed to teleport to. One is picked at random each break. Untick cities you haven't unlocked or don't want visited.");
         public static readonly LocString NoCities = new("settings.humanizer.noCities", "No cities selected - Humanizer will skip the break and keep grinding.");
+        public static readonly LocString IdleSpots = new("settings.humanizer.idleSpots", "Idle spots");
+        public static readonly LocString SavedSpots = new("settings.humanizer.savedSpots", "Saved spots");
+        public static readonly LocString SavedSpotsHelp = new("settings.humanizer.savedSpotsHelp", "Stand where you want to idle and press Save this spot. Target the bell, vendor or aetheryte first and the spot takes its name. With more than one saved, each break picks one at random and never the same one twice in a row.");
+        public static readonly LocString NoSpots = new("settings.humanizer.noSpots", "No spots saved yet. Until you save one, breaks idle next to the aetheryte of one of the cities below.");
+        public static readonly LocString SaveSpot = new("settings.humanizer.saveSpot", "Save this spot");
+        public static readonly LocString SpotSavedChat = new("settings.humanizer.spotSavedChat", "[AFG] Idle spot saved in {0}.");
+        public static readonly LocString SpotAirborneChat = new("settings.humanizer.spotAirborneChat", "[AFG] Land first: an idle spot has to be on the ground.");
+        public static readonly LocString SpotNoAetheryteChat = new("settings.humanizer.spotNoAetheryteChat", "[AFG] AFG can't teleport here, so a break could never come back to this spot. Save one in a city or a zone with an aetheryte.");
         public static readonly LocString Pacing = new("settings.humanizer.pacing", "Pacing");
         public static readonly LocString PacingEnable = new("settings.humanizer.pacingEnable", "Vary timing between FATEs");
         public static readonly LocString PacingEnableHelp = new("settings.humanizer.pacingEnableHelp", "Every player running AFG sees a FATE end at the same moment, so without this they all move on, teleport and swap zones in perfect sync. When on, each step waits a short random delay, and the teleport shortcut distance, zone swap wait, follow-up watch, release after a KO and FATEs between breaks are rolled fresh every time.");

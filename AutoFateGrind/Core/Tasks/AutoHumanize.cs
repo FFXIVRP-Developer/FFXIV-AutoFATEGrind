@@ -4,16 +4,18 @@ using clib.TaskSystem;
 using Dalamud.Game.ClientState.Conditions;
 using ECommons.DalamudServices;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AutoFateGrind.Core.Tasks;
 
-// Idle-break task: teleports to a city aetheryte and wanders between random reachable points until the
-// configured break window elapses. The grind loop calls this through AutoFateController; on return the
-// controller resumes the FATE grind in the origin zone, so this task only owns the in-city portion.
-public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCommon
+// Break task: teleports to the plan's territory, then either wanders between random reachable points or
+// stands at a saved spot until the configured break window elapses. The grind loop calls this through
+// AutoFateController; on return the controller resumes the FATE grind in the origin zone, so this task
+// only owns the break itself.
+internal sealed class AutoHumanize(BreakPlan plan, int durationMs) : AutoCommon
 {
-    private readonly uint cityTerritoryId = cityTerritoryId;
+    private readonly BreakPlan plan = plan;
     private readonly int durationMs = durationMs;
 
     // False until we actually reach the city and start the break. Lets the controller distinguish a real
@@ -33,6 +35,9 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
     // than mesh noise ends at a wall and would then push straight through it.
     private const float PartialRouteGapMeters = 0.75f;
     private const float MaxDetourRatio        = 2f;
+    private const int   IdleStatusRefreshMs   = 5_000;
+    private const float SpotArrivalTolerance  = 1f;
+    private const float SpotMountMinMeters    = 50f;
 
     private static readonly Random rng = new();
 
@@ -56,17 +61,16 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
 
     protected override async Task Execute()
     {
-        var city = CityCatalog.Find(cityTerritoryId);
-        var label = city?.Name ?? $"city {cityTerritoryId}";
+        var label = plan.Place;
         var breakMin = Math.Max(1, durationMs / 60_000);
-        Diag($"Humanize start: {label}, break {durationMs / 1000}s");
+        Diag($"Humanize start: {plan.Describe()}, break {durationMs / 1000}s");
         Svc.Chat.Print($"[AFG] Humanize: taking a ~{breakMin}m break in {label}.");
 
-        if (Svc.ClientState.TerritoryType != cityTerritoryId)
+        if (Svc.ClientState.TerritoryType != plan.TerritoryId)
         {
             var reached = false;
             await RunWithStatusPinned($"Teleporting to {label}",
-                async () => reached = await TeleportToTerritory(cityTerritoryId, Vector3.Zero, "humanize-teleport", TeleportWatchdogMs));
+                async () => reached = await TeleportToTerritory(plan.TerritoryId, TeleportTarget(), "humanize-teleport", TeleportWatchdogMs));
             if (!reached)
             {
                 Diag($"Humanize aborted: could not reach {label} (still in {Svc.ClientState.TerritoryType}).");
@@ -78,18 +82,87 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
         await WaitForNavmeshReady(NavmeshReadyWaitMs);
         if (CancelToken.IsCancellationRequested) return;
 
+        var deadline = Environment.TickCount64 + durationMs;
+        if (plan.Wander)
+        {
+            await Wander(label, deadline);
+            return;
+        }
+        await Idle(label, deadline);
+    }
+
+    // A spot beside a border shard would resolve to the neighbouring city (issue #21), so the teleport
+    // aims at the zone's own aetheryte nearest the spot and the walk covers the rest.
+    private Vector3 TeleportTarget()
+    {
+        if (plan.Spot is not { } spot) return Vector3.Zero;
+        return ZoneAetherytes.TryFindNearest(plan.TerritoryId, spot.Position, out var aetheryte) ? aetheryte.Position : spot.Position;
+    }
+
+    private bool LeftBreakTerritory()
+    {
+        if (Svc.ClientState.TerritoryType == plan.TerritoryId) return false;
+        Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {plan.TerritoryId}); ending early.");
+        return true;
+    }
+
+    private async Task Idle(string label, long deadline)
+    {
+        if (plan.Spot is { } spot)
+        {
+            await WalkToSpot(spot.Position, deadline);
+            if (CancelToken.IsCancellationRequested) return;
+        }
+
+        await SafeDismount("humanize-idle-dismount");
+
+        while (Environment.TickCount64 < deadline)
+        {
+            if (CancelToken.IsCancellationRequested) return;
+            if (LeftBreakTerritory()) return;
+
+            var remainingSec = Math.Max(0, (deadline - Environment.TickCount64) / 1000);
+            Status = $"Idling in {label} (~{remainingSec}s left)";
+            await IdleFor(IdleStatusRefreshMs, deadline);
+        }
+
+        Diag($"Humanize done: idled in {label}.");
+    }
+
+    // Arriving anywhere still counts as the break: a walk that ends short idles where it stopped.
+    private async Task WalkToSpot(Vector3 spot, long deadline)
+    {
+        await RideAethernetShortcut(spot, "humanize-aethernet");
+        if (CancelToken.IsCancellationRequested) return;
+
+        Status = $"Walking to the idle spot in {plan.Place}";
+        var territoryId = plan.TerritoryId;
+        var arrived = await WalkWithRetries(
+            () => new MoveOp(o => o.Move(territoryId, spot, SpotMovement(spot),
+                stopCondition: () => Environment.TickCount64 >= deadline || CancelToken.IsCancellationRequested)),
+            WalkWatchdogMs, "humanize-spot-walk",
+            () => WithinReach(spot, SpotArrivalTolerance) || Environment.TickCount64 >= deadline);
+        if (!arrived && !CancelToken.IsCancellationRequested)
+        {
+            Diag($"Humanize: could not reach the idle spot {spot}; idling where the walk ended.");
+        }
+    }
+
+    private static MovementConfig SpotMovement(Vector3 spot)
+    {
+        var far = Svc.Objects.LocalPlayer is { } player && Vector3.Distance(player.Position, spot) >= SpotMountMinMeters;
+        return (far ? MovementConfig.Everything : MovementConfig.Default).WithTolerance(SpotArrivalTolerance);
+    }
+
+    private async Task Wander(string label, long deadline)
+    {
         await SafeDismount("humanize-dismount");
 
-        var deadline = Environment.TickCount64 + durationMs;
         var hops = 0;
         while (Environment.TickCount64 < deadline)
         {
             if (CancelToken.IsCancellationRequested) return;
-            if (Svc.ClientState.TerritoryType != cityTerritoryId)
-            {
-                Diag($"Humanize: territory changed to {Svc.ClientState.TerritoryType} (expected {cityTerritoryId}); ending early.");
-                return;
-            }
+            if (LeftBreakTerritory()) return;
 
             var player = Svc.Objects.LocalPlayer;
             if (player is null) { await DelayMs(PlayerWaitPollMs); continue; }
@@ -111,7 +184,7 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
             var perHopBudget = (int)Math.Min(WalkWatchdogMs, deadline - Environment.TickCount64);
             if (perHopBudget < 4_000) break;
 
-            var move = new MoveOp(o => o.Move(cityTerritoryId, dest.Value,
+            var move = new MoveOp(o => o.Move(plan.TerritoryId, dest.Value,
                 MovementConfig.Default.WithTolerance(ArrivalTolerance),
                 stopCondition: () => Environment.TickCount64 >= deadline || CancelToken.IsCancellationRequested));
             await RunCancellable(move, perHopBudget, $"humanize-walk-{hops}", StuckDetector.MoveStallAbort($"humanize-walk-{hops}"));
@@ -159,12 +232,13 @@ public sealed class AutoHumanize(uint cityTerritoryId, int durationMs) : AutoCom
 
     private async Task<List<Vector3>?> QueryWalkRoute(Vector3 from, Vector3 to)
     {
-        var pending = NavmeshIPC.Instance.Pathfind(from, to, fly: false);
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(CancelToken);
+        cancel.CancelAfter(RouteQueryTimeoutMs);
+        var pending = NavmeshIPC.Instance.Pathfind(from, to, fly: false, cancel.Token);
         if (pending is null) return null;
-        var deadline = Environment.TickCount64 + RouteQueryTimeoutMs;
         while (!pending.IsCompleted)
         {
-            if (CancelToken.IsCancellationRequested || Environment.TickCount64 >= deadline) return null;
+            if (cancel.IsCancellationRequested) return null;
             await NextFrame();
         }
         return pending.IsCompletedSuccessfully ? pending.Result : null;
