@@ -12,7 +12,7 @@ namespace AutoFateGrind.Windows.Sections;
 // Two questions, each answered with one segmented row: how long the run goes, and what happens afterwards.
 internal static class StopRow
 {
-    private enum Limit { GoalOnly, Fates, Minutes }
+    private enum Limit { GoalOnly, Fates, Minutes, Levels }
 
     private const float PadX = 18f;
     private const float PadY = 14f;
@@ -24,6 +24,7 @@ internal static class StopRow
     private const float SegmentHeight = 36f;
     private const int FateStep = 5;
     private const int MinuteStep = 5;
+    private const int LevelStep = 1;
 
     private static readonly AfterRunAction[] afterOrder =
         [AfterRunAction.StayLoggedIn, AfterRunAction.ReturnToInn, AfterRunAction.Logout, AfterRunAction.CloseGame];
@@ -36,7 +37,7 @@ internal static class StopRow
         (L.Grind.AfterCloseShort, L.Grind.AfterCloseDetail),
     ];
 
-    private static readonly Segmented.Item[] limitItems = new Segmented.Item[3];
+    private static readonly Segmented.Item[] limitItems = new Segmented.Item[4];
     private static readonly Segmented.Item[] afterItems = new Segmented.Item[4];
 
     public static void Draw(Configuration cfg, AutoFateController ctrl)
@@ -82,14 +83,14 @@ internal static class StopRow
         var limit = CurrentLimit(cfg);
 
         var controlX = DrawRowLabel(Loc.T(L.Grind.HowLong), left, y, rowHeight);
-        var unit = limit == Limit.Minutes ? Loc.T(L.Grind.UnitMinutes) : Loc.T(L.Grind.UnitFates);
-        var stepperArea = limit == Limit.GoalOnly ? 0f : gap + StepperWidth * scale + gap + TextDraw.Measure(unit).X;
+        var stepperArea = limit == Limit.GoalOnly ? 0f : gap + StepperWidth * scale + gap + TextDraw.Measure(UnitFor(limit)).X;
         var segmentedWidth = MathF.Min(SegmentedMaxWidth * scale, right - controlX - stepperArea);
 
         limitItems[(int)Limit.GoalOnly] = new Segmented.Item(GoalSummary.HasTarget(cfg) ? FontAwesomeIcon.CheckCircle : FontAwesomeIcon.HandPaper,
             GoalSummary.HasTarget(cfg) ? Loc.T(L.Grind.UntilGoalDone) : Loc.T(L.Grind.UntilYouStopIt));
         limitItems[(int)Limit.Fates] = new Segmented.Item(FontAwesomeIcon.ListOl, Loc.T(L.Grind.ANumberOfFates));
         limitItems[(int)Limit.Minutes] = new Segmented.Item(FontAwesomeIcon.Stopwatch, Loc.T(L.Grind.ALengthOfTime));
+        limitItems[(int)Limit.Levels] = new Segmented.Item(FontAwesomeIcon.LevelUpAlt, Loc.T(L.Grind.ANumberOfLevels));
 
         ImGui.SetCursorScreenPos(new Vector2(controlX, y));
         var selected = (int)limit;
@@ -112,19 +113,29 @@ internal static class StopRow
         var scale = ImGuiHelpers.GlobalScale;
         var frameHeight = ImGui.GetFrameHeight();
         var midY = y + rowHeight * 0.5f;
-        var fates = limit == Limit.Fates;
-        var max = fates ? RunLimits.MaxFates : RunLimits.MaxMinutes;
-        var value = Math.Clamp(fates ? cfg.TargetFateCount : cfg.TargetMinutes, 1, max);
+        var (id, step, max, current) = limit switch
+        {
+            Limit.Fates   => ("##afg_limit_fates", FateStep, RunLimits.MaxFates, cfg.TargetFateCount),
+            Limit.Minutes => ("##afg_limit_minutes", MinuteStep, RunLimits.MaxMinutes, cfg.TargetMinutes),
+            _             => ("##afg_limit_levels", LevelStep, RunLimits.MaxLevels, cfg.TargetLevels),
+        };
+        var value = Math.Clamp(current, 1, max);
 
         ImGui.SetCursorScreenPos(new Vector2(x, midY - frameHeight * 0.5f));
-        if (Stepper.Draw(fates ? "##afg_limit_fates" : "##afg_limit_minutes", ref value, fates ? FateStep : MinuteStep, 1, max, "%d", StepperWidth) && editable)
+        if (Stepper.Draw(id, ref value, step, 1, max, "%d", StepperWidth) && editable)
         {
-            if (fates) cfg.TargetFateCount = Math.Clamp(value, 1, max);
-            else cfg.TargetMinutes = Math.Clamp(value, 1, max);
+            var clamped = Math.Clamp(value, 1, max);
+            switch (limit)
+            {
+                case Limit.Fates:   cfg.TargetFateCount = clamped; break;
+                case Limit.Minutes: cfg.TargetMinutes = clamped; break;
+                default:            cfg.TargetLevels = clamped; break;
+            }
+
             cfg.SaveDebounced();
         }
 
-        var unit = fates ? Loc.T(L.Grind.UnitFates) : Loc.T(L.Grind.UnitMinutes);
+        var unit = UnitFor(limit);
         var unitSize = TextDraw.Measure(unit);
         TextDraw.At(unit, new Vector2(x + StepperWidth * scale + Gap * scale, midY - unitSize.Y * 0.5f), Styling.TextDim);
     }
@@ -167,11 +178,19 @@ internal static class StopRow
         return left + MathF.Max(LabelWidth * scale, labelSize.X + Gap * scale);
     }
 
-    // One cap at a time keeps the row a single choice; a config that has both on (older versions) reads as the FATE count.
+    private static string UnitFor(Limit limit) => limit switch
+    {
+        Limit.Minutes => Loc.T(L.Grind.UnitMinutes),
+        Limit.Levels  => Loc.T(L.Grind.UnitLevels),
+        _             => Loc.T(L.Grind.UnitFates),
+    };
+
+    // One cap at a time keeps the row a single choice; a config that has several on (older versions) reads as the FATE count.
     private static Limit CurrentLimit(Configuration cfg)
     {
         if (cfg.StopAfterFatesEnabled) return Limit.Fates;
         if (cfg.StopAfterMinutesEnabled) return Limit.Minutes;
+        if (cfg.StopAfterLevelsEnabled) return Limit.Levels;
         return Limit.GoalOnly;
     }
 
@@ -179,6 +198,7 @@ internal static class StopRow
     {
         cfg.StopAfterFatesEnabled = limit == Limit.Fates;
         cfg.StopAfterMinutesEnabled = limit == Limit.Minutes;
+        cfg.StopAfterLevelsEnabled = limit == Limit.Levels;
         cfg.SaveDebounced();
     }
 }

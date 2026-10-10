@@ -36,11 +36,13 @@ public sealed class Configuration : IPluginConfiguration
     public int TargetMinutes { get; set; } = 60;
     public int TargetYokaiMedals { get; set; } = 10;
     public int TargetRelicCount { get; set; } = 1;
+    public int TargetLevels { get; set; } = 10;
     public HashSet<uint> YokaiSkippedMinionIds { get; set; } = [];
 
     // Caps that end the run whatever the goal; the run-count and time-boxed goals of older versions map onto them.
     public bool StopAfterFatesEnabled { get; set; } = false;
     public bool StopAfterMinutesEnabled { get; set; } = false;
+    public bool StopAfterLevelsEnabled { get; set; } = false;
 
     public string CombatPresetName { get; set; } = Core.AfgConstants.BundledCombatPresetName;
     public int BundledCombatPresetRevision { get; set; } = 0;

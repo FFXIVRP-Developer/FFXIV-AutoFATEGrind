@@ -109,6 +109,7 @@ internal static class L
         public static readonly LocString UntilYouStopIt = new("grind.untilYouStopIt", "Until you stop it");
         public static readonly LocString ANumberOfFates = new("grind.aNumberOfFates", "A number of FATEs");
         public static readonly LocString ALengthOfTime = new("grind.aLengthOfTime", "A length of time");
+        public static readonly LocString ANumberOfLevels = new("grind.aNumberOfLevels", "A number of levels");
         public static readonly LocString Afterwards = new("grind.afterwards", "Afterwards");
         public static readonly LocString AfterStayShort = new("grind.after.stay.short", "Stay put");
         public static readonly LocString AfterInnShort = new("grind.after.inn.short", "Go to the inn");
@@ -128,6 +129,7 @@ internal static class L
         public static readonly LocString GoalGemstones = new("grind.goal.gemstones", "{0} gemstones");
         public static readonly LocString GoalFates = new("grind.goal.fates", "{0} FATEs");
         public static readonly LocString GoalMinutes = new("grind.goal.minutes", "{0} minutes");
+        public static readonly LocString GoalLevels = new("grind.goal.levels", "{0} levels");
         public static readonly LocString GoalYokai = new("grind.goal.yokai", "{0} medals per yo-kai");
         public static readonly LocString GoalSharedFates = new("grind.goal.sharedFates", "every Shared FATE rank is maxed");
         public static readonly LocString GoalAtma = new("grind.goal.atma", "your Atma are collected");
@@ -150,6 +152,7 @@ internal static class L
         public static readonly LocString UnitGemstones = new("grind.unit.gemstones", "gemstones");
         public static readonly LocString UnitFates = new("grind.unit.fates", "FATEs");
         public static readonly LocString UnitMinutes = new("grind.unit.minutes", "minutes");
+        public static readonly LocString UnitLevels = new("grind.unit.levels", "levels");
         public static readonly LocString UnitYokaiMedals = new("grind.unit.yokaiMedals", "medals per yo-kai");
         public static readonly LocString NoteGemstones = new("grind.note.gemstones", "You have {0} right now.");
         public static readonly LocString NoteYokai = new("grind.note.yokai", "Summons each yo-kai minion you own, grinds its zones, and moves on once it holds this many Legendary Medals. Keep the Yo-kai Watch equipped or in your armoury chest.");
@@ -226,6 +229,7 @@ internal static class L
         public static readonly LocString InContent = new("grind.inContent", "in content");
         public static readonly LocString ReasonInstall = new("grind.reason.install", "install the required plugins");
         public static readonly LocString ReasonPickZone = new("grind.reason.pickZone", "pick at least one zone");
+        public static readonly LocString ReasonAtLevelCap = new("grind.reason.atLevelCap", "your job is already at the level cap");
         public static readonly LocString ReasonNoYokai = new("grind.reason.noYokai", "no yo-kai left to farm");
         public static readonly LocString ReasonNoWatch = new("grind.reason.noWatch", "get the Yo-kai Watch first");
         public static readonly LocString ReasonNoRankedZones = new("grind.reason.noRankedZones", "pick a Shadowbringers or later zone");
@@ -271,6 +275,7 @@ internal static class L
         public static readonly LocString GemsToGo = new("run.goal.gemsToGo", "{0} gems to go");
         public static readonly LocString TargetReached = new("run.goal.targetReached", "target reached");
         public static readonly LocString FatesLeft = new("run.goal.fatesLeft", "{0} FATEs left");
+        public static readonly LocString LevelsLeft = new("run.goal.levelsLeft", "{0} levels left");
         public static readonly LocString YokaiToGo = new("run.goal.yokaiToGo", "{0}  ·  {1} medals to go");
         public static readonly LocString SharedRank = new("run.goal.sharedRank", "Rank {0} of {1}  ·  {2}/{3} to the next rank");
         public static readonly LocString SharedMaxedHere = new("run.goal.sharedMaxedHere", "rank maxed here");
