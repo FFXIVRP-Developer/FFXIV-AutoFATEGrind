@@ -103,6 +103,27 @@ internal static unsafe class ClassSwitcher
         return -1;
     }
 
+    public static bool LevelingJobAtMax(Configuration cfg)
+    {
+        var jobId = LevelingJobId(cfg);
+        return jobId != 0 && UnsyncedLevelForJobId(jobId) >= GameMaxLevel;
+    }
+
+    // The queue's pick rather than the live job: a run starts on it, and a mid-run swap lands a few frames after the pick.
+    private static byte LevelingJobId(Configuration cfg)
+    {
+        if (cfg.ApplyClassOnStart && cfg.ClassQueue.Count > 0)
+        {
+            var entryIndex = FindActiveEntryIndex(cfg.ClassQueue);
+            if (entryIndex >= 0)
+            {
+                return JobIdForUserIndex(cfg.ClassQueue[entryIndex].GearsetIndex);
+            }
+        }
+
+        return (byte)(Svc.Objects.LocalPlayer?.ClassJob.RowId ?? 0);
+    }
+
     // Fire-and-forget: the actual class change is async game-side; callers shouldn't block.
     public static bool TryEquip(ClassQueueEntry entry)
     {

@@ -105,18 +105,19 @@ internal sealed partial class AutoFateController
 
         owningSession.PendingTradeFromZone = null;
 
-        var itemId = GemstoneCatalog.EnsurePersistedTarget();
-        if (itemId == 0)
+        var plan = TradeList.Plan(owningSession.GemstoneCurrent, origin.TerritoryId, origin.Expansion, owningSession.TradeSkippedItemIds);
+        if (plan is null)
         {
-            Diag("Trade hand-off aborted: EnsurePersistedTarget returned 0 (no purchasable item resolvable). Run ends.");
-            EndRun(owningSession);
+            Diag("Trade hand-off dropped: nothing on the shopping list can be bought any more; resuming the grind.");
+            ResumeGrindOrHumanize(owningSession, ResumeIndexFor(origin));
             return;
         }
 
         Phase = AutoPhase.Trading;
-        Diag($"Trade phase entering: item {itemId}, origin zone {origin.Name} ({origin.TerritoryId}).");
+        Diag($"Trade phase entering: {plan.Trader.Name} for {plan.DescribeItems()}, origin zone {origin.Name} ({origin.TerritoryId}).");
+        var trade = new AutoTrade(plan);
         RunTask(
-            new AutoTrade(itemId, origin.TerritoryId, origin.Expansion),
+            trade,
             () =>
             {
                 if (owningSession != session)
@@ -125,6 +126,7 @@ internal sealed partial class AutoFateController
                     EndRun(owningSession);
                     return;
                 }
+                SkipFailedTradeItems(owningSession, plan, trade);
                 if (Plugin.Cfg.AfterTrade != AfterTradeAction.Resume)
                 {
                     Diag($"AutoTrade finished: AfterTrade = {Plugin.Cfg.AfterTrade}; not resuming.");
@@ -145,9 +147,33 @@ internal sealed partial class AutoFateController
             });
     }
 
+    private static void SkipFailedTradeItems(AutoFateSession owningSession, TradePlan plan, AutoTrade trade)
+    {
+        var failedNames = new List<string>(plan.Orders.Length);
+        for (var orderIndex = 0; orderIndex < plan.Orders.Length; orderIndex++)
+        {
+            var item = plan.Orders[orderIndex].Item;
+            if (!trade.Failed(item.ItemId) || !owningSession.TradeSkippedItemIds.Add(item.ItemId))
+            {
+                continue;
+            }
+
+            failedNames.Add(item.ItemName);
+        }
+
+        if (failedNames.Count == 0)
+        {
+            return;
+        }
+
+        var names = string.Join(", ", failedNames);
+        Diag($"AutoTrade could not buy {names}; skipping them for the rest of the run.");
+        ECommons.DalamudServices.Svc.Chat.PrintError($"[AFG] Auto-trade could not buy {names}, so the rest of this run skips them. /xllog has the details.");
+    }
+
     // Runs after every other post-FATE hand-off has cleared. If the humanize threshold tripped while
     // we were repairing/trading, this is where the break actually fires; otherwise we resume the grind
-    // directly. Bookkeeping (FatesSinceLastBreak reset, origin zone, city selection) lives here so the
+    // directly. Bookkeeping (FatesSinceLastBreak reset, origin zone, break destination) lives here so the
     // trigger site only has to set a flag.
     private void ResumeGrindOrHumanize(AutoFateSession owningSession, int resumeIndex)
     {
@@ -162,25 +188,18 @@ internal sealed partial class AutoFateController
         owningSession.PendingHumanizeFromZone = null;
 
         var cfg = Plugin.Cfg;
-        if (!cfg.HumanizerEnabled || !AutoHumanize.HasBreakPlace(cfg)) // Fork: was HumanizerCities.Count == 0
+        var picked = cfg.HumanizerEnabled ? HumanizeBreaks.Pick(cfg, owningSession.LastIdleSpot, rng) : null;
+        // Fork: a retreat (inn, housing) needs no city or idle spot; the task then has no fallback (territory 0).
+        if (picked is null && cfg.HumanizerEnabled && cfg.HumanizerRetreat != HumanizerRetreat.City)
+            picked = AutoHumanize.RetreatOnlyPlan(cfg);
+        if (picked is not { } plan)
         {
-            Diag("Humanize hand-off skipped: feature disabled or no cities selected.");
+            Diag("Humanize hand-off skipped: feature disabled, or no saved idle spot and no selected city in the current catalog.");
             owningSession.ResetBreakCounter();
             StartFateGrind(resumeIndex, owningSession);
             return;
         }
-
-        // Filter against the catalog so cities removed from the registry (e.g. Ul'dah, dropped due to
-        // navmesh issues) are ignored even if they're still in an older saved config.
-        var cities = cfg.HumanizerCities.Where(id => Core.Zones.CityCatalog.Find(id) is not null).ToArray();
-        if (cities.Length == 0 && cfg.HumanizerRetreat == HumanizerRetreat.City) // Fork: a retreat needs no city
-        {
-            Diag("Humanize hand-off skipped: no selected cities are in the current catalog.");
-            owningSession.ResetBreakCounter();
-            StartFateGrind(resumeIndex, owningSession);
-            return;
-        }
-        var cityId = cities.Length == 0 ? 0u : cities[rng.Next(cities.Length)]; // Fork: 0 = no city fallback
+        owningSession.LastIdleSpot = plan.Spot;
         var minMin = Math.Max(1, cfg.HumanizerBreakMinMinutes);
         var maxMin = Math.Max(minMin, cfg.HumanizerBreakMaxMinutes);
         var minutes = rng.Next(minMin, maxMin + 1);
@@ -191,8 +210,8 @@ internal sealed partial class AutoFateController
         var resumeIdx = ResumeIndexFor(origin, resumeIndex);
 
         Phase = AutoPhase.Humanizing;
-        Diag($"Humanize phase entering: city {cityId}, duration {minutes}m, resume zone {activeZones[resumeIdx].Name}.");
-        var humanize = new AutoHumanize(cityId, durationMs);
+        Diag($"Humanize phase entering: {plan.Describe()}, duration {minutes}m, resume zone {activeZones[resumeIdx].Name}.");
+        var humanize = new AutoHumanize(plan, durationMs);
         RunTask(
             humanize,
             () =>
@@ -212,7 +231,7 @@ internal sealed partial class AutoFateController
                 }
                 else
                 {
-                    Diag($"Humanize did not take a break (could not reach city); leaving counter at {owningSession.FatesSinceLastBreak} to retry next FATE. Resuming at {activeZones[resumeIdx].Name}.");
+                    Diag($"Humanize did not take a break (could not reach {plan.Place}); leaving counter at {owningSession.FatesSinceLastBreak} to retry next FATE. Resuming at {activeZones[resumeIdx].Name}.");
                 }
                 StartFateGrind(resumeIdx, owningSession);
             });

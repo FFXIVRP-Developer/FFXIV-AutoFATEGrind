@@ -90,6 +90,12 @@ internal static class GameTextGlyphs
     {
         Add(configuration.PreferredRepairNpc?.Name);
 
+        var idleSpots = configuration.HumanizerIdleSpots;
+        for (var index = 0; index < idleSpots.Count; index++)
+        {
+            Add(idleSpots[index].Name);
+        }
+
         var consumables = configuration.AutoConsumeItems;
         for (var index = 0; index < consumables.Count; index++)
         {

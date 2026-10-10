@@ -40,11 +40,13 @@ public sealed class Configuration : IPluginConfiguration
     public int TargetMinutes { get; set; } = 60;
     public int TargetYokaiMedals { get; set; } = 10;
     public int TargetRelicCount { get; set; } = 1;
+    public int TargetLevels { get; set; } = 10;
     public HashSet<uint> YokaiSkippedMinionIds { get; set; } = [];
 
     // Caps that end the run whatever the goal; the run-count and time-boxed goals of older versions map onto them.
     public bool StopAfterFatesEnabled { get; set; } = false;
     public bool StopAfterMinutesEnabled { get; set; } = false;
+    public bool StopAfterLevelsEnabled { get; set; } = false;
 
     public string CombatPresetName { get; set; } = Core.AfgConstants.BundledCombatPresetName;
     public int BundledCombatPresetRevision { get; set; } = 0;
@@ -121,7 +123,9 @@ public sealed class Configuration : IPluginConfiguration
     [Newtonsoft.Json.JsonIgnore]
     public HashSet<uint> RuntimeBadObstacleMaps { get; set; } = [];
 
+    // Single item from before the shopping list; MigrateTradeList moves it onto TradeList.
     public uint TargetTradeItemId { get; set; } = 0;
+    public List<TradeListEntry> TradeList { get; set; } = [];
     public bool TradeOnCap { get; set; } = false;
     // Game-imposed Bicolor cap is 1500.
     public int TradeThreshold { get; set; } = 1500;
@@ -173,6 +177,8 @@ public sealed class Configuration : IPluginConfiguration
     public int HumanizerFatesBeforeBreak { get; set; } = 20;
     public int HumanizerBreakMinMinutes { get; set; } = 5;
     public int HumanizerBreakMaxMinutes { get; set; } = 10;
+    public HumanizerBreakActivity HumanizerBreakActivity { get; set; } = HumanizerBreakActivity.Wander;
+    public List<IdleSpot> HumanizerIdleSpots { get; set; } = [];
     public int HumanizerPauseMinSec { get; set; } = 3;
     public int HumanizerPauseMaxSec { get; set; } = 8;
     public int HumanizerWanderMinMeters { get; set; } = 25;
@@ -240,6 +246,23 @@ public sealed class Configuration : IPluginConfiguration
         }
 
         return changed;
+    }
+
+    public bool MigrateTradeList()
+    {
+        if (TargetTradeItemId == 0)
+        {
+            return false;
+        }
+
+        var itemId = TargetTradeItemId;
+        TargetTradeItemId = 0;
+        if (!TradeList.Exists(entry => entry.ItemId == itemId))
+        {
+            TradeList.Insert(0, new TradeListEntry { ItemId = itemId });
+        }
+
+        return true;
     }
 
     // Fork: while another plugin's run settings are in place (Core.Fork.RunOverride), a save writes the user's own settings.

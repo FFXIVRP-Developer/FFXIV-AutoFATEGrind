@@ -110,6 +110,8 @@ Every change in the code is marked with a `// Fork:` comment.
     "territory 128 has no aetheryte to teleport to; giving up" (2026-10-03, gear at 13 %, NPC-only repair). Town
     territories (TerritoryIntendedUse 0) now use the gateway too; inns stay out. When the territory names no hub, the
     main aetheryte of the aethernet one of its shards belongs to is used (Upper Decks → Limsa Lower Decks).
+    **Upstream does this itself since v2.18.0.0** ("Route teleports into aetheryte-less city districts through the
+    aethernet"): the fork's change was dropped in that merge and upstream's gateway rule is used.
 
 See DRIFT.md for where each item hooks into upstream and how to recover from rebase conflicts.
 

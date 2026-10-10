@@ -1,15 +1,27 @@
+using AutoFateGrind.Core.Game.Ops;
 using AutoFateGrind.Core.Ipc;
 using AutoFateGrind.Core.Localization;
 using AutoFateGrind.Core.Zones;
 using AutoFateGrind.Windows.Components;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
+using ECommons.DalamudServices;
 
 namespace AutoFateGrind.Windows.Sections.Config;
 
 internal static class HumanizerSettings
 {
     private const long ModuleCheckIntervalMs = 5_000;
+
+    private static readonly HumanizerBreakActivity[] breakActivities =
+        [HumanizerBreakActivity.Wander, HumanizerBreakActivity.IdleAtSpot];
+
+    private static readonly SettingsControls.Choices.Choice[] breakActivityChoices =
+    [
+        new(L.Settings.BreakActivityWanderName, L.Settings.BreakActivityWanderDetail),
+        new(L.Settings.BreakActivityIdleName, L.Settings.BreakActivityIdleDetail),
+    ];
 
     private static string? moduleCheckPreset;
     private static long moduleCheckTick;
@@ -26,8 +38,20 @@ internal static class HumanizerSettings
             return;
         }
 
-        DrawWanderingGroup(cfg);
-        DrawCitiesGroup(cfg);
+        var idle = cfg.HumanizerBreakActivity == HumanizerBreakActivity.IdleAtSpot;
+        if (idle)
+        {
+            DrawIdleSpotsGroup(cfg);
+        }
+        else
+        {
+            DrawWanderingGroup(cfg);
+        }
+
+        if (!idle || cfg.HumanizerIdleSpots.Count == 0)
+        {
+            DrawCitiesGroup(cfg);
+        }
     }
 
     private static void DrawPacingGroup(Configuration cfg)
@@ -153,6 +177,97 @@ internal static class HumanizerSettings
             () => SettingsControls.DrawRangeInline(cfg, "##hum_min", "##hum_max",
                 () => cfg.HumanizerBreakMinMinutes, v => cfg.HumanizerBreakMinMinutes = v,
                 () => cfg.HumanizerBreakMaxMinutes, v => cfg.HumanizerBreakMaxMinutes = v, 60, 1, Loc.T(L.Settings.MinutesFormat)));
+
+        var activity = Math.Max(0, Array.IndexOf(breakActivities, cfg.HumanizerBreakActivity));
+        SettingsRow.Draw(Loc.T(L.Settings.BreakActivity),
+            Loc.T(L.Settings.BreakActivityHelp),
+            SettingsControls.RowComboWidth,
+            () => SettingsControls.Choices.DrawCombo("##hum_activity", breakActivityChoices, activity, choice =>
+            {
+                cfg.HumanizerBreakActivity = breakActivities[choice];
+                cfg.SaveDebounced();
+            }));
+        SettingsRow.Caption(Loc.T(breakActivityChoices[activity].Detail));
+    }
+
+    private static void DrawIdleSpotsGroup(Configuration cfg)
+    {
+        using var group = SettingsGroup.Begin(Loc.T(L.Settings.IdleSpots));
+
+        SettingsRow.DrawBlock(Loc.T(L.Settings.SavedSpots),
+            Loc.T(L.Settings.SavedSpotsHelp),
+            () => DrawIdleSpotList(cfg));
+    }
+
+    private static void DrawIdleSpotList(Configuration cfg)
+    {
+        var spots = cfg.HumanizerIdleSpots;
+        if (spots.Count == 0)
+        {
+            SettingsRow.Note(Loc.T(L.Settings.NoSpots));
+        }
+
+        var removeIndex = -1;
+        var buttonSize = ImGui.GetFrameHeight();
+        for (var spotIndex = 0; spotIndex < spots.Count; spotIndex++)
+        {
+            var spot = spots[spotIndex];
+            using var id = ImRaii.PushId(spotIndex);
+            ImGui.AlignTextToFramePadding();
+            using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextStrong))
+            {
+                ImGui.TextUnformatted(spot.Name.Length > 0 ? spot.Name : TerritoryNames.Of(spot.TerritoryId));
+            }
+
+            if (spot.Name.Length > 0)
+            {
+                ImGui.SameLine();
+                using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextMuted))
+                {
+                    ImGui.TextUnformatted(TerritoryNames.Of(spot.TerritoryId));
+                }
+            }
+
+            ImGui.SameLine(SettingsGroup.InnerRightLocalX() - buttonSize);
+            if (IconButton.Draw(FontAwesomeIcon.Times, "##hum_spot_rm", buttonSize, Styling.AccentRose, Loc.T(L.Common.Remove)))
+            {
+                removeIndex = spotIndex;
+            }
+        }
+
+        if (removeIndex >= 0)
+        {
+            spots.RemoveAt(removeIndex);
+            cfg.SaveDebounced();
+        }
+
+        using (ImRaii.Disabled(Svc.Objects.LocalPlayer is null))
+        using (ImRaii.PushColor(ImGuiCol.Text, Styling.AccentMint))
+        {
+            if (ImGui.Button($"{Loc.T(L.Settings.SaveSpot)}##hum_spot_save"))
+            {
+                SaveCurrentSpot(cfg);
+            }
+        }
+    }
+
+    private static void SaveCurrentSpot(Configuration cfg)
+    {
+        switch (IdleSpotOps.TryCapture(out var spot))
+        {
+            case IdleSpotCapture.Saved:
+                cfg.HumanizerIdleSpots.Add(spot!);
+                GameTextGlyphs.Add(spot!.Name);
+                cfg.SaveDebounced();
+                Svc.Chat.Print(Loc.T(L.Settings.SpotSavedChat, TerritoryNames.Of(spot.TerritoryId)));
+                break;
+            case IdleSpotCapture.Airborne:
+                Svc.Chat.PrintError(Loc.T(L.Settings.SpotAirborneChat));
+                break;
+            case IdleSpotCapture.NoAetheryte:
+                Svc.Chat.PrintError(Loc.T(L.Settings.SpotNoAetheryteChat));
+                break;
+        }
     }
 
     private static void DrawWanderingGroup(Configuration cfg)
@@ -183,7 +298,7 @@ internal static class HumanizerSettings
 
         // Fork: break location; the cities below stay the fallback when Lifestream cannot get there.
         SettingsRow.Draw("Break location",
-            "City wanders as upstream. Inn and housing are reached with Lifestream (/li inn, apartment, home, fc); a private or FC house is only entered when Lifestream's house registration says \"Enter house\". If Lifestream can't get there, the break falls back to a city below.",
+            "City is upstream's break (a city below, or a saved idle spot). Inn and housing are reached with Lifestream (/li inn, apartment, home, fc); a private or FC house is only entered when Lifestream's house registration says \"Enter house\". There the break wanders or idles as the break activity says. If Lifestream can't get there, the break falls back to upstream's (city or idle spot).",
             SettingsControls.RowComboWidth,
             () =>
             {

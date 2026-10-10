@@ -49,16 +49,16 @@ re-apply the items one by one from this file. Every item is small and self-conta
 | File | Hook | Must stay true |
 |---|---|---|
 | `Core/Tasks/AutoHumanize.Retreat.cs` | **new file**: `HumanizerRetreat` enum, `RetreatLabels`, `ReachRetreat()` (Lifestream IPC `ExecuteCommand`, `IsBusy`, `Abort`) | Copy as-is. Only breaks if Lifestream renames its IPC or its `/li` keywords (`inn`, `apartment`, `home`, `fc`). |
-| `Core/Tasks/AutoHumanize.cs` class line | `sealed class` → `sealed partial class` | Needed for the new file. |
-| same, `Execute()` top | `var territory = await ReachRetreat() ?? cityTerritoryId;` then the cancel check and label swap; the teleport `if` compares with `territory` | Upstream teleports to `cityTerritoryId`. Keep that call as it is: the teleport only runs when no retreat was reached, so `territory == cityTerritoryId` there. |
-| same, wander loop | territory check and `o.Move(territory, ...)` use `territory`; **the pause moved from after the walk to before it** | The point of the change: the first thing after arriving is the pause, so a 999-minute pause means no movement at all. If upstream restructures the loop, keep pause-first. |
+| `Core/Tasks/AutoHumanize.cs` class line | `sealed class` → `sealed partial class`; the `plan` field is not `readonly` | Needed for the new file and for the retreat swap below. |
+| same, `Execute()` top | `var territory = await ReachRetreat() ?? plan.TerritoryId;` then the cancel check, the territory-0 abort, and when a retreat was reached `plan` is replaced by one for that territory (`Spot: null`, `Wander` from `HumanizerBreakActivity`) | Since v2.18.0.0 upstream passes a `BreakPlan` (city or saved idle spot). Everything after uses `plan`, so the teleport only runs when no retreat was reached. |
+| same, wander loop | **the pause moved from after the walk to before it** | The point of the change: the first thing after arriving is the pause, so a 999-minute pause means no movement at all. If upstream restructures the loop, keep pause-first. |
 | `Configuration.cs` | `HumanizerRetreat` property after `HumanizerWanderMaxMeters` | The saved JSON is shared with the store build. The store build ignores the extra key. |
 | `Windows/Sections/Config/HumanizerSettings.cs` | `MaxPauseSec = 999 * 60` used as the pause range max (upstream: `60`); "Break location" row at the top of `DrawCitiesGroup` | The UI text is literal English, not localised, on purpose: no `L.cs` / `Localization/*.json` changes to conflict. |
-| `Core/Tasks/AutoFate.Engage.cs` `QueueHandoffIfDue` | `HumanizerCities.Count > 0` → `AutoHumanize.HasBreakPlace(Plugin.Cfg)` | A retreat alone must be enough to queue a break. |
-| `Core/Tasks/AutoFateController.Handoffs.cs` `ResumeGrindOrHumanize` | the `Count == 0` skip uses `!HasBreakPlace(cfg)`; the "no catalog city" skip only applies with `HumanizerRetreat.City`; `cityId` is `0` when no city is ticked | `0` means "no city fallback". `AutoHumanize.Execute` aborts the break (BreakTaken stays false) when the retreat fails and the city is `0`. Never teleport to territory 0. |
+| `Core/Tasks/HandoffTriggers.cs` `QueueIfDue` (was `AutoFate.Engage.cs` `QueueHandoffIfDue`) | `HumanizeBreaks.HasDestination` → `AutoHumanize.HasBreakPlace` (`HasDestination` or a retreat) | A retreat alone must be enough to queue a break. |
+| `Core/Tasks/AutoFateController.Handoffs.cs` `ResumeGrindOrHumanize` | when `HumanizeBreaks.Pick` returns null and a retreat is set, `AutoHumanize.RetreatOnlyPlan(cfg)` (territory `0`) | `0` means "no fallback". `AutoHumanize.Execute` aborts the break (BreakTaken stays false) when the retreat fails and the territory is `0`. Never teleport to territory 0. |
 | `Windows/Sections/Config/HumanizerSettings.cs` | the "No cities selected" warning only shows with `HumanizerRetreat.City` | Cosmetic. |
 
-The controller still picks a city (when any is ticked) and passes it in as the fallback for a failed retreat.
+The controller still picks upstream's plan (city or idle spot, when any is set) and passes it in as the fallback for a failed retreat.
 
 ### 5. Landing over water (README-FORK item 5)
 
@@ -127,8 +127,8 @@ files match upstream again. Do not re-add a resume-on-load: BoatRunner owns when
 
 | File | Hook | Must stay true |
 |---|---|---|
-| `Core/Zones/ZoneAetherytes.cs` `ResolveGateway` | field-only check widened to field or town (`TownUse = 0`); a missing/invalid hub falls back to `HubOfShardIn` | Inns (use 2) stay excluded. If upstream fixes Upper Decks another way, drop this. |
-| same, helpers | `TownUse`, `HubOfShardIn` before `ResolveAttunableIds` | Pure addition. |
+Dropped in the v2.18.0.0 merge: upstream's `ResolveGateway` now takes any territory without an aetheryte that
+holds a shard of its hub's aethernet (`CityAethernet.HoldsShardOf`), Upper Decks included. No fork hook left.
 
 ### ECommons submodule
 

@@ -25,7 +25,10 @@ public abstract partial class AutoCommon
     private const int GroundDismountWatchdogMs = 8_000;
     private const float LandingBackOffMeters = 8f;
     private const int LandingBackOffMs = 1_500;
-    private const uint JumpGeneralActionId = 2;
+    internal const uint JumpGeneralActionId = 2;
+    private const uint DismountGeneralActionId = 23;
+    private const int VerticalDescentWatchdogMs = 15_000;
+    private const int VerticalDescentReissueMs = 250;
 
     private readonly Vector3[] landingSpots = new Vector3[LandingCandidateCount];
 
@@ -65,7 +68,7 @@ public abstract partial class AutoCommon
         if (found == 0)
         {
             Diag($"{scope}: no landable floor within {LandingRingRadiusMeters:F0}m of {FormatPosition(around)}; descending where the flight ended");
-            return await DescendAndDismount(scope);
+            return await DescendAndDismount(scope) || await DescendInPlace(scope);
         }
 
         var attempts = Math.Min(found, MaxLandingSpots);
@@ -100,6 +103,11 @@ public abstract partial class AutoCommon
             await BackOffInFlight(legScope);
         }
 
+        if (await DescendInPlace(scope))
+        {
+            return true;
+        }
+
         Warn($"{scope}: could not land near {FormatPosition(around)} after {attempts} spot(s) ({ConditionTag()})");
         return false;
     }
@@ -125,6 +133,48 @@ public abstract partial class AutoCommon
         Diag($"{scope}: the descent did not land ({ConditionTag()})");
         CancelDescent();
         return false;
+    }
+
+    // The game's own air dismount sinks straight down at the current spot, so there is no landing point that a
+    // nearest-polygon search could put on a wall edge (issue #66). Kept as the last rung: it lands wherever is below.
+    private async Task<bool> DescendInPlace(string scope)
+    {
+        if (!Svc.Condition[ConditionFlag.InFlight])
+        {
+            return await DescendAndDismount(scope);
+        }
+
+        var descentScope = $"{scope}-vertical";
+        Diag($"{descentScope}: descending straight down from {FormatPosition(Svc.Objects.LocalPlayer?.Position ?? default)}");
+        NavmeshIPC.Instance.Stop();
+        var frozen = StuckDetector.AirborneFreezeAbort(descentScope);
+        var deadline = Environment.TickCount64 + VerticalDescentWatchdogMs;
+        var nextPressAtMs = 0L;
+        while (Svc.Condition[ConditionFlag.InFlight] && Environment.TickCount64 < deadline)
+        {
+            if (CancelToken.IsCancellationRequested)
+            {
+                return false;
+            }
+            if (frozen())
+            {
+                break;
+            }
+            if (Environment.TickCount64 >= nextPressAtMs && GeneralActionStatus(DismountGeneralActionId) == 0)
+            {
+                UseGeneralAction(DismountGeneralActionId);
+                nextPressAtMs = Environment.TickCount64 + VerticalDescentReissueMs;
+            }
+            await NextFrame();
+        }
+
+        if (Svc.Condition[ConditionFlag.InFlight])
+        {
+            Diag($"{descentScope}: still airborne after the straight descent ({ConditionTag()})");
+            CancelDescent();
+            return false;
+        }
+        return await GroundDismount(descentScope);
     }
 
     private async Task<bool> GroundDismount(string scope)

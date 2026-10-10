@@ -96,6 +96,13 @@ internal sealed partial class AutoFateController
         Diag($"Run starting: {activeZones.Count} zone(s), mode {Plugin.Cfg.ActiveMode.DisplayName}, wallet {startWallet}g, threshold {Plugin.Cfg.TradeThreshold}g, trade-on-cap {(Plugin.Cfg.TradeOnCap ? "on" : "off")}.");
 
         ApplyStartingClass();
+        if (HandoffTriggers.QueueIfDue(s, activeZones[startIndex]))
+        {
+            Diag("Hand-off due at run start; running it before the first FATE.");
+            HandlePostFateHandoffs(s);
+            return;
+        }
+
         StartFateGrind(startIndex, s);
     }
 

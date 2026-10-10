@@ -51,6 +51,7 @@ public sealed class Plugin : IDalamudPlugin
         ECommonsMain.Init(PluginInterface, this);
         CLibMain.Init(PluginInterface, this, CLibModule.Automation);
         Core.Game.SharedFates.SharedFateProgress.Initialize();
+        Core.Game.Watchers.TeleportRefusals.Initialize();
 
         unobservedTaskHandler = OnUnobservedTaskException;
         TaskScheduler.UnobservedTaskException += unobservedTaskHandler;
@@ -58,6 +59,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Cfg = Configuration;
         if (Configuration.MigrateGoal()) Configuration.Save();
+        if (Configuration.MigrateTradeList()) Configuration.Save();
         if (Core.Zones.CityCatalog.MigrateSelection(Configuration.HumanizerCities)) Configuration.Save();
         History = new RunHistory();
         Controller = new AutoFateController();
@@ -137,6 +139,7 @@ public sealed class Plugin : IDalamudPlugin
         partyInviteWatcher.Dispose();
         dutyWatcher.Dispose();
 
+        Core.Game.Watchers.TeleportRefusals.Shutdown();
         Core.Game.SharedFates.SharedFateProgress.Shutdown();
         CLibMain.Dispose();
         ECommonsMain.Dispose();

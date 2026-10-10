@@ -1,4 +1,6 @@
 using AutoFateGrind.Core.Game.Items;
+using AutoFateGrind.Core.Game.Player;
+using AutoFateGrind.Core.Modes;
 using ECommons.DalamudServices;
 using System.Threading.Tasks;
 
@@ -41,6 +43,20 @@ public sealed partial class AutoFate
     {
         ReportYokaiGoalMet();
         ReportItemGoalMet();
+        ReportLevelLimitCutShort();
+    }
+
+    private void ReportLevelLimitCutShort()
+    {
+        var cfg = Plugin.Cfg;
+        var levelCap = RunLimits.LevelCap(cfg);
+        if (!cfg.StopAfterLevelsEnabled || session.LevelsGained >= levelCap || !ClassSwitcher.LevelingJobAtMax(cfg))
+        {
+            return;
+        }
+
+        Diag($"Level limit: the job is at max level after {session.LevelsGained} of {levelCap} levels; ending the run");
+        Svc.Chat.Print($"[AFG] Your job reached the level cap after {session.LevelsGained} of {levelCap} levels, so the run ends here.");
     }
 
     private void ReportItemGoalMet()

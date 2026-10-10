@@ -11,13 +11,17 @@ public enum HumanizerRetreat { City, Inn, Apartment, PrivateHouse, FreeCompanyHo
 // Fork: takes the break at an inn room or housing instead of a city. Lifestream does the travel (its /li
 // shortcuts); the wander loop then runs unchanged in whatever territory Lifestream ended in, so a long
 // "pause between hops" keeps the character standing still for the whole break.
-public sealed partial class AutoHumanize
+internal sealed partial class AutoHumanize
 {
     public static readonly string[] RetreatLabels = ["City (wander)", "Inn room", "Apartment", "Private house", "Free Company house"];
 
-    // Upstream only breaks with a city ticked; a retreat (inn, housing) is a place to break on its own.
+    // Upstream only breaks with a city ticked or an idle spot saved; a retreat (inn, housing) is a place to break on its own.
     public static bool HasBreakPlace(Configuration cfg)
-        => cfg.HumanizerCities.Count > 0 || cfg.HumanizerRetreat != HumanizerRetreat.City;
+        => HumanizeBreaks.HasDestination(cfg) || cfg.HumanizerRetreat != HumanizerRetreat.City;
+
+    // A break with a retreat and nothing upstream would pick: territory 0 means "no fallback" if Lifestream fails.
+    public static BreakPlan RetreatOnlyPlan(Configuration cfg)
+        => new(0, RetreatLabels[(int)cfg.HumanizerRetreat], Spot: null, Wander: cfg.HumanizerBreakActivity == HumanizerBreakActivity.Wander);
 
     private const int RetreatWatchdogMs   = 180_000;
     private const int RetreatStartGraceMs = 1_500;

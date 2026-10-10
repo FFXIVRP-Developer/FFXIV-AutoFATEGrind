@@ -7,6 +7,8 @@ public readonly struct ModeContext
     public int CompletedCount { get; init; }
     public IReadOnlyList<ZoneInfo> Zones { get; init; }
     public TimeSpan Elapsed { get; init; }
+    public int LevelsGained { get; init; }
+    public bool LevelingJobAtMax { get; init; }
 }
 
 public interface IFateGrindMode
