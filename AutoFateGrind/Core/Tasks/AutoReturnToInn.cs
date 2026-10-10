@@ -54,7 +54,7 @@ public sealed class AutoReturnToInn : AutoCommon
         {
             var reached = false;
             await RunWithStatusPinned($"Teleporting to {inn.City}",
-                async () => reached = await TeleportToTerritory(inn.CityTerritory, Vector3.Zero, "inn-teleport", TeleportWatchdogMs));
+                async () => reached = await TeleportToTerritory(inn.CityTerritory, inn.InnkeeperPos, "inn-teleport", TeleportWatchdogMs));
             if (!reached)
             {
                 Diag($"Return to inn aborted: could not reach {inn.City} (still in {Svc.ClientState.TerritoryType}).");

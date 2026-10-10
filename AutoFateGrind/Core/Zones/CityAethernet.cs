@@ -43,6 +43,31 @@ internal static unsafe class CityAethernet
         return true;
     }
 
+    // Entering a district from its hub has no walk to compare against, so the hop is planned whenever an
+    // attuned shard of the hub's aethernet stands in the district: the one nearest the destination.
+    public static bool TryPlanEntry(uint fromTerritoryId, Vector3 from, uint toTerritoryId, Vector3 to, uint group, out AethernetHop hop)
+    {
+        hop = default;
+        if (!TryFindNearestAttuned(ShardsIn(toTerritoryId), to, group, out var destination)) return false;
+        if (!TryFindNearestAttuned(ShardsIn(fromTerritoryId), from, group, out var source)) return false;
+        if (FindShardObject(source.Id) is not { } sourceObject) return false;
+
+        source = source with { Position = sourceObject.Position };
+        var rideMeters = FlatDistance(from, source.Position) + HopCostMeters + FlatDistance(destination.Position, to);
+        hop = new AethernetHop(source, destination, float.PositiveInfinity, rideMeters);
+        return true;
+    }
+
+    public static bool HoldsShardOf(uint territoryId, uint group)
+    {
+        var shards = ShardsIn(territoryId);
+        for (var index = 0; index < shards.Length; index++)
+        {
+            if (shards[index].Group == group && !shards[index].IsAetheryte) return true;
+        }
+        return false;
+    }
+
     public static Dalamud.Game.ClientState.Objects.Types.IGameObject? FindShardObject(uint aetheryteId)
     {
         foreach (var gameObject in Svc.Objects)
@@ -75,6 +100,22 @@ internal static unsafe class CityAethernet
             nearest = shards[index];
         }
         return nearest;
+    }
+
+    private static bool TryFindNearestAttuned(AethernetShard[] shards, Vector3 point, uint group, out AethernetShard nearest)
+    {
+        nearest = default;
+        var bestDistance = float.MaxValue;
+        for (var index = 0; index < shards.Length; index++)
+        {
+            var shard = shards[index];
+            if (shard.Group != group || !IsAttuned(shard.Id)) continue;
+            var distance = FlatDistance(shard.Position, point);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            nearest = shard;
+        }
+        return bestDistance < float.MaxValue;
     }
 
     // Marker positions carry no height, so every comparison stays on the ground plane.

@@ -352,18 +352,26 @@ public abstract partial class AutoCommon
     private const int AethernetLegMs = 90_000;
     private const int AethernetNavmeshWaitMs = 60_000;
 
-    // Second leg of a gateway zone: walk to the hub's aetheryte and ride the aethernet in. Deliberately
-    // runs without IdleStallAbort — the walk-up, the aetheryte menu and the shard hop all hold the
-    // character still in states that guard reads as a teleport that never started.
+    // Second leg of a gateway zone: walk to the hub's aetheryte and ride the aethernet in. AFG plans the
+    // hop itself, so the shard it rides to is attuned and placed from AFG's own positions (issue #75).
+    // Deliberately runs without IdleStallAbort — the walk-up, the aetheryte menu and the shard hop all
+    // hold the character still in states that guard reads as a teleport that never started.
     private async Task RideAethernetInto(uint territoryId, Vector3 dest, ZoneGateway gateway, string scope)
     {
         Status = $"Riding the aethernet from {gateway.Name}";
-        Diag($"{scope}: reached {gateway.Name}; riding its aethernet into territory {territoryId}");
 
         await WaitForNavmeshReady(AethernetNavmeshWaitMs, 60);
         if (CancelToken.IsCancellationRequested) return;
+        if (Svc.Objects.LocalPlayer is not { } player) return;
 
-        var op = new MoveOp(o => o.Aethernet(territoryId, dest));
+        if (!CityAethernet.TryPlanEntry(Svc.ClientState.TerritoryType, player.Position, territoryId, dest, gateway.AethernetGroup, out var hop))
+        {
+            Warn($"{scope}: no attuned aethernet shard of {gateway.Name} leads into territory {territoryId}; attune one there first");
+            return;
+        }
+
+        Diag($"{scope}: reached {gateway.Name}; aethernet {CityAethernet.ShardName(hop.Source.Id)} → {CityAethernet.ShardName(hop.Destination.Id)} into territory {territoryId}");
+        var op = new MoveOp(o => o.RideAethernet(hop));
         await RunCancellable(op, AethernetLegMs, $"{scope}-aethernet");
         if (op.Fault is { } fault) Diag($"{scope}: aethernet leg faulted: {fault.Message}");
     }
