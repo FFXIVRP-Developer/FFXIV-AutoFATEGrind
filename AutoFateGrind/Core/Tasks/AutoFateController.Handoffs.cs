@@ -105,17 +105,17 @@ internal sealed partial class AutoFateController
 
         owningSession.PendingTradeFromZone = null;
 
-        var itemId = GemstoneCatalog.EnsurePersistedTarget();
-        if (itemId == 0)
+        var plan = TradeList.Plan(owningSession.GemstoneCurrent, origin.TerritoryId, origin.Expansion, owningSession.TradeSkippedItemIds);
+        if (plan is null)
         {
-            Diag("Trade hand-off aborted: EnsurePersistedTarget returned 0 (no purchasable item resolvable). Run ends.");
-            EndRun(owningSession);
+            Diag("Trade hand-off dropped: nothing on the shopping list can be bought any more; resuming the grind.");
+            ResumeGrindOrHumanize(owningSession, ResumeIndexFor(origin));
             return;
         }
 
         Phase = AutoPhase.Trading;
-        Diag($"Trade phase entering: item {itemId}, origin zone {origin.Name} ({origin.TerritoryId}).");
-        var trade = new AutoTrade(itemId, origin.TerritoryId, origin.Expansion);
+        Diag($"Trade phase entering: {plan.Trader.Name} for {plan.DescribeItems()}, origin zone {origin.Name} ({origin.TerritoryId}).");
+        var trade = new AutoTrade(plan);
         RunTask(
             trade,
             () =>
@@ -126,10 +126,7 @@ internal sealed partial class AutoFateController
                     EndRun(owningSession);
                     return;
                 }
-                if (!trade.Bought)
-                {
-                    SkipUnboughtTradeItem(owningSession, itemId);
-                }
+                SkipFailedTradeItems(owningSession, plan, trade);
                 if (Plugin.Cfg.AfterTrade != AfterTradeAction.Resume)
                 {
                     Diag($"AutoTrade finished: AfterTrade = {Plugin.Cfg.AfterTrade}; not resuming.");
@@ -150,12 +147,28 @@ internal sealed partial class AutoFateController
             });
     }
 
-    private static void SkipUnboughtTradeItem(AutoFateSession owningSession, uint itemId)
+    private static void SkipFailedTradeItems(AutoFateSession owningSession, TradePlan plan, AutoTrade trade)
     {
-        owningSession.TradeSkippedItemIds.Add(itemId);
-        var name = GemstoneCatalog.FindById(itemId)?.ItemName ?? $"item {itemId}";
-        Diag($"AutoTrade bought nothing; skipping {name} ({itemId}) for the rest of the run.");
-        ECommons.DalamudServices.Svc.Chat.PrintError($"[AFG] Auto-trade could not buy {name}, so it is skipped for the rest of this run. /xllog has the details.");
+        var failedNames = new List<string>(plan.Orders.Length);
+        for (var orderIndex = 0; orderIndex < plan.Orders.Length; orderIndex++)
+        {
+            var item = plan.Orders[orderIndex].Item;
+            if (!trade.Failed(item.ItemId) || !owningSession.TradeSkippedItemIds.Add(item.ItemId))
+            {
+                continue;
+            }
+
+            failedNames.Add(item.ItemName);
+        }
+
+        if (failedNames.Count == 0)
+        {
+            return;
+        }
+
+        var names = string.Join(", ", failedNames);
+        Diag($"AutoTrade could not buy {names}; skipping them for the rest of the run.");
+        ECommons.DalamudServices.Svc.Chat.PrintError($"[AFG] Auto-trade could not buy {names}, so the rest of this run skips them. /xllog has the details.");
     }
 
     // Runs after every other post-FATE hand-off has cleared. If the humanize threshold tripped while

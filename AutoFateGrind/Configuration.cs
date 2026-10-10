@@ -99,7 +99,9 @@ public sealed class Configuration : IPluginConfiguration
     [Newtonsoft.Json.JsonIgnore]
     public HashSet<uint> RuntimeBadObstacleMaps { get; set; } = [];
 
+    // Single item from before the shopping list; MigrateTradeList moves it onto TradeList.
     public uint TargetTradeItemId { get; set; } = 0;
+    public List<TradeListEntry> TradeList { get; set; } = [];
     public bool TradeOnCap { get; set; } = false;
     // Game-imposed Bicolor cap is 1500.
     public int TradeThreshold { get; set; } = 1500;
@@ -216,6 +218,23 @@ public sealed class Configuration : IPluginConfiguration
         }
 
         return changed;
+    }
+
+    public bool MigrateTradeList()
+    {
+        if (TargetTradeItemId == 0)
+        {
+            return false;
+        }
+
+        var itemId = TargetTradeItemId;
+        TargetTradeItemId = 0;
+        if (!TradeList.Exists(entry => entry.ItemId == itemId))
+        {
+            TradeList.Insert(0, new TradeListEntry { ItemId = itemId });
+        }
+
+        return true;
     }
 
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);

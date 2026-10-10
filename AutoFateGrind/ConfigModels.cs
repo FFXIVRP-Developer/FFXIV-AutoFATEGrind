@@ -40,3 +40,11 @@ public sealed class ClassQueueEntry
     // 0 = no cap; otherwise advance when unsynced level >= cap.
     public int StopAtLevel { get; set; }
 }
+
+[Serializable]
+public sealed class TradeListEntry
+{
+    public uint ItemId { get; set; }
+    // 0 = buy on every trade; otherwise stop once this many are held. Collectibles ignore it.
+    public int StopAtCount { get; set; }
+}

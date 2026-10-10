@@ -168,6 +168,19 @@ public static class GemstoneTrader
         return anyHub ?? sellers[0];
     }
 
+    public static bool Sells(TraderLocation trader, GemstoneTradeItem item)
+    {
+        for (var shopIndex = 0; shopIndex < item.ShopRowIds.Length; shopIndex++)
+        {
+            if (ShopToTraders.TryGetValue(item.ShopRowIds[shopIndex], out var owners) && Array.IndexOf(owners, trader) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // The zones an item can be bought in, attuned or not, so a locked target can say where to go.
     public static string DescribeSellerZones(uint itemId)
     {

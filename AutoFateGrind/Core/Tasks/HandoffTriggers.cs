@@ -38,43 +38,14 @@ internal static class HandoffTriggers
 
     private static bool TryQueueTrade(AutoFateSession session, ZoneInfo zone)
     {
-        var targetId = GemstoneCatalog.EnsurePersistedTarget();
-        if (targetId == 0)
+        var plan = TradeList.Plan(session.GemstoneCurrent, zone.TerritoryId, zone.Expansion, session.TradeSkippedItemIds);
+        if (plan is null)
         {
-            Diag("Trade-on-cap skipped: EnsurePersistedTarget returned 0 (no gem catalog item maps to a registered Bicolor trader).");
+            Diag($"Trade-on-cap skipped, nothing on the shopping list can be bought now: {TradeList.DescribeBlocked(session.GemstoneCurrent, session.TradeSkippedItemIds)}.");
             return false;
         }
 
-        var target = GemstoneCatalog.FindById(targetId);
-        if (target is null)
-        {
-            Diag($"Trade-on-cap skipped: saved target id {targetId} is not in the gem catalog (was the item removed or renamed?).");
-            return false;
-        }
-
-        if (session.TradeSkippedItemIds.Contains(targetId))
-        {
-            Diag($"Trade-on-cap skipped: an earlier trade this run could not buy {target.ItemName}.");
-            return false;
-        }
-
-        var qty = GemstoneCatalog.ComputeBuyQuantity(session.GemstoneCurrent, target.CostPerOne);
-        if (qty <= 0)
-        {
-            Diag($"Trade-on-cap skipped: spend mode {Plugin.Cfg.SpendMode} with {Plugin.Cfg.KeepGemstonesReserve}g reserve buys 0× {target.ItemName} ({target.CostPerOne}g each, wallet {session.GemstoneCurrent}g).");
-            return false;
-        }
-
-        var trader = GemstoneTrader.PickForItem(targetId, zone.TerritoryId, zone.Expansion, out var availability);
-        if (trader is null)
-        {
-            Diag(availability == TraderAvailability.AllLocked
-                ? $"Trade-on-cap skipped: every Bicolor trader selling {target.ItemName} stands in an unattuned zone ({GemstoneTrader.DescribeSellerZones(targetId)}). Pick a different item in /afg config → Trader."
-                : $"Trade-on-cap skipped: no registered Bicolor trader sells {target.ItemName}. Pick a different item in /afg config → Trader.");
-            return false;
-        }
-
-        Diag($"Gemstone threshold {Plugin.Cfg.TradeThreshold}g reached: queueing auto-trade for {qty}× {target.ItemName} at {trader.Name} (territory {trader.TerritoryId}).");
+        Diag($"Gemstone threshold {Plugin.Cfg.TradeThreshold}g reached: queueing auto-trade at {plan.Trader.Name} (territory {plan.Trader.TerritoryId}) for {plan.DescribeItems()}.");
         session.PendingTradeFromZone = zone;
         return true;
     }

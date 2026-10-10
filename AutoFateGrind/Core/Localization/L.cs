@@ -434,6 +434,7 @@ internal static class L
             new("changelog.r21800.8", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already at or above the trade threshold: AFG now trades before its first FATE, and also repairs first if your gear is already worn. Reported in issue #90"),
             new("changelog.r21800.9", "Fixed the live tracker getting wider every time it was dragged to the left: it now keeps its size wherever you move it. Reported in issue #93"),
             new("changelog.r21800.10", "Fixed auto-trade going back to the trader after every FATE when a purchase fails, for example when the item is a minion or orchestrion roll already in your inventory: AFG now skips that item for the rest of the run and tells you in chat"),
+            new("changelog.r21800.11", "Added a shopping list to auto-trade under Settings > Gemstones: add as many items as you like and AFG buys them from the top down, also picking up items further down the list when the same trader sells them. Minions, orchestrion rolls and other collectibles are bought once and skipped after you own or learn them, and a stop count keeps a material stocked without overbuying. Your current item moves onto the list. Requested in issue #96"),
         ];
 
         public static readonly LocString[] Release21700 =
@@ -723,17 +724,31 @@ internal static class L
 
         public static readonly LocString GemsTrigger = new("settings.gems.trigger", "Trade trigger");
         public static readonly LocString AutoTrade = new("settings.gems.autoTrade", "Auto-trade at threshold");
-        public static readonly LocString AutoTradeHelp = new("settings.gems.autoTradeHelp", "When your Bicolor Gemstone inventory reaches the threshold below, the plugin teleports to a trader and buys the item.");
+        public static readonly LocString AutoTradeHelp = new("settings.gems.autoTradeHelp", "When your Bicolor Gemstone inventory reaches the threshold below, the plugin teleports to a trader and buys from your shopping list.");
         public static readonly LocString AutoTradeOff = new("settings.gems.autoTradeOff", "Auto-trade is off. Enable it to configure the trade.");
         public static readonly LocString Threshold = new("settings.gems.threshold", "Trade threshold");
         public static readonly LocString ThresholdHelp = new("settings.gems.thresholdHelp", "Gem count that triggers the trade. Game cap is 1500. Lower values trade more often so fewer FATEs are wasted near cap.");
         public static readonly LocString GemsFormat = new("settings.gems.gemsFormat", "%d gems");
         public static readonly LocString GemsItem = new("settings.gems.item", "What to buy");
-        public static readonly LocString ItemToBuy = new("settings.gems.itemToBuy", "Item to buy");
+        public static readonly LocString AddTradeItem = new("settings.gems.addItem", "Add an item");
         public static readonly LocString ItemToBuyHelp = new("settings.gems.itemToBuyHelp", "Pulled live from game data, sorted A-Z. Type to search. Cost shown in gems per one.");
         public static readonly LocString NoShopItems = new("settings.gems.noShopItems", "No gem-shop items found.");
         public static readonly LocString TraderLocked = new("settings.gems.traderLocked", "No trader you can reach sells {0}. It is only sold in {1}. Attune an aetheryte there, or pick another item.");
         public static readonly LocString TraderMissing = new("settings.gems.traderMissing", "No known Bicolor trader sells {0}. Pick another item.");
+        public static readonly LocString AlreadyListed = new("settings.gems.alreadyListed", "Already on the list.");
+        public static readonly LocString ShoppingList = new("settings.gems.list", "Shopping list");
+        public static readonly LocString ShoppingListHelp = new("settings.gems.listHelp", "Bought from the top down. Each trade goes to a trader for the first item still needed and also buys the items below it that the same trader sells. Collectibles such as minions and orchestrion rolls are bought once and skipped after you own or learn them.");
+        public static readonly LocString ShoppingListEmpty = new("settings.gems.listEmpty", "The list is empty, so auto-trade has nothing to buy. Add an item above.");
+        public static readonly LocString UnknownTradeItem = new("settings.gems.unknownItem", "Unknown item ({0})");
+        public static readonly LocString StatusLearned = new("settings.gems.statusLearned", "Learned");
+        public static readonly LocString StatusHeld = new("settings.gems.statusHeld", "In your inventory");
+        public static readonly LocString StatusHave = new("settings.gems.statusHave", "You have {0}");
+        public static readonly LocString StatusHaveOf = new("settings.gems.statusHaveOf", "You have {0} of {1}");
+        public static readonly LocString StatusNoTrader = new("settings.gems.statusNoTrader", "No trader you can reach");
+        public static readonly LocString StatusSkipped = new("settings.gems.statusSkipped", "Skipped for this run");
+        public static readonly LocString BuyOnce = new("settings.gems.buyOnce", "Buy once");
+        public static readonly LocString KeepBuying = new("settings.gems.keepBuying", "Keep buying");
+        public static readonly LocString StopAtCount = new("settings.gems.stopAtCount", "Stop at %d");
         public static readonly LocString GemsSpend = new("settings.gems.spend", "How much to spend");
         public static readonly LocString SpendStrategy = new("settings.gems.spendStrategy", "Spend strategy");
         public static readonly LocString SpendStrategyHelp = new("settings.gems.spendStrategyHelp", "How much each trade spends when it fires.");
@@ -742,12 +757,12 @@ internal static class L
         public static readonly LocString SpendUpToName = new("settings.gems.spendUpTo.name", "Spend up to a set amount");
         public static readonly LocString SpendUpToDetail = new("settings.gems.spendUpTo.detail", "Cap how many gems each trade is allowed to spend.");
         public static readonly LocString BuyFixedName = new("settings.gems.buyFixed.name", "Buy a fixed number");
-        public static readonly LocString BuyFixedDetail = new("settings.gems.buyFixed.detail", "Buy a set quantity of the item on each trade.");
+        public static readonly LocString BuyFixedDetail = new("settings.gems.buyFixed.detail", "Buy a set quantity of each item on each trade.");
         public static readonly LocString SpendUpTo = new("settings.gems.spendUpToRow", "Spend up to");
         public static readonly LocString SpendUpToHelp = new("settings.gems.spendUpToRowHelp", "Maximum gems spent per trade.");
         public static readonly LocString BuyQuantity = new("settings.gems.buyQuantity", "Buy quantity");
-        public static readonly LocString BuyQuantityHelp = new("settings.gems.buyQuantityHelp", "How many of the item to buy per trade.");
-        public static readonly LocString BuyQuantityFormat = new("settings.gems.buyQuantityFormat", "%d x item");
+        public static readonly LocString BuyQuantityHelp = new("settings.gems.buyQuantityHelp", "How many of each item to buy per trade.");
+        public static readonly LocString BuyQuantityFormat = new("settings.gems.buyQuantityFormat", "%d of each");
         public static readonly LocString Reserve = new("settings.gems.reserve", "Keep in reserve");
         public static readonly LocString ReserveHelp = new("settings.gems.reserveHelp", "Gems left untouched on every trade. Use this when you want to save toward a pricier item without turning auto-trade off.");
         public static readonly LocString GemsAfter = new("settings.gems.after", "After the trade");
@@ -757,8 +772,9 @@ internal static class L
         public static readonly LocString AfterResumeDetail = new("settings.gems.afterResume.detail", "Keep grinding FATEs in the same zone after the buy.");
         public static readonly LocString AfterStopName = new("settings.gems.afterStop.name", "Stop the run");
         public static readonly LocString AfterStopDetail = new("settings.gems.afterStop.detail", "End the run once the buy succeeds.");
-        public static readonly LocString PreviewCannotAfford = new("settings.gems.previewCannotAfford", "Threshold/reserve won't afford any {0} at {1}g each.");
-        public static readonly LocString PreviewBuy = new("settings.gems.previewBuy", "At threshold {0}g (keeping {1}g), next trade buys ~{2} x {3} for {4}g.");
+        public static readonly LocString PreviewPlan = new("settings.gems.previewPlan", "At threshold {0}g (keeping {1}g), the next trade buys {2} for {3}g.");
+        public static readonly LocString PreviewItem = new("settings.gems.previewItem", "{0} x {1}");
+        public static readonly LocString PreviewNothing = new("settings.gems.previewNothing", "At threshold {0}g (keeping {1}g), nothing on the list can be bought.");
         public static readonly LocString ItemCostLabel = new("settings.gems.itemCostLabel", "{0}  ({1}g)");
 
         public static readonly LocString RepairTrigger = new("settings.repair.trigger", "Repair trigger");

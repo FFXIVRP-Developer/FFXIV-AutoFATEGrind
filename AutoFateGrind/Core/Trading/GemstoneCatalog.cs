@@ -4,11 +4,13 @@ using Lumina.Excel.Sheets;
 
 namespace AutoFateGrind.Core.Trading;
 
+// Collectibles (unique, or learned on use like minions and orchestrion rolls) are only ever worth one copy.
 public sealed record GemstoneTradeItem(
     uint ItemId,
     string ItemName,
     uint CostPerOne,
-    uint[] ShopRowIds);
+    uint[] ShopRowIds,
+    bool IsCollectible);
 
 public static class GemstoneCatalog
 {
@@ -36,37 +38,19 @@ public static class GemstoneCatalog
         return true;
     }
 
-    // Picks the cheapest item with a trader the character can reach, so fresh installs don't no-op
-    // trade-on-cap or default to a vendor sitting behind an expansion they don't own (issue #54).
-    // A target the player picked themselves is never re-pointed: only an unset or stale id is replaced.
-    public static uint EnsurePersistedTarget()
-    {
-        var cfg = Plugin.Cfg;
-        if (cfg.TargetTradeItemId != 0 && FindById(cfg.TargetTradeItemId) is not null)
-            return cfg.TargetTradeItemId;
-        var fallback = Array.Find(All, i => GemstoneTrader.PickForItem(i.ItemId, null, null, out _) is not null);
-        if (fallback is null) return 0;
-        cfg.TargetTradeItemId = fallback.ItemId;
-        cfg.Save();
-        return cfg.TargetTradeItemId;
-    }
-
-    public static int ComputeBuyQuantity(int wallet, uint costPerOne)
+    // spentThisTrade counts earlier purchases on the same trip, so the spend-up-to cap covers the whole list.
+    public static int ComputeBuyQuantity(int wallet, uint costPerOne, int need, int spentThisTrade)
     {
         var cost = (int)costPerOne;
-        if (cost <= 0) return 0;
+        if (cost <= 0 || need <= 0) return 0;
 
         var cfg = Plugin.Cfg;
         var spendable = Math.Max(0, wallet - cfg.KeepGemstonesReserve);
-        var affordable = spendable / cost;
+        if (cfg.SpendMode == GemstoneSpendMode.SpendGems)
+            spendable = Math.Min(spendable, Math.Max(0, cfg.SpendGemsAmount - spentThisTrade));
 
-        return cfg.SpendMode switch
-        {
-            GemstoneSpendMode.SpendAll    => affordable,
-            GemstoneSpendMode.SpendGems   => Math.Min(affordable, cfg.SpendGemsAmount / cost),
-            GemstoneSpendMode.BuyQuantity => Math.Min(affordable, cfg.BuyQuantityAmount),
-            _ => affordable,
-        };
+        var quantity = Math.Min(spendable / cost, need);
+        return cfg.SpendMode == GemstoneSpendMode.BuyQuantity ? Math.Min(quantity, cfg.BuyQuantityAmount) : quantity;
     }
 
     private static GemstoneTradeItem[] LoadFromLumina()
@@ -75,7 +59,7 @@ public static class GemstoneCatalog
         var items = Svc.Data.GetExcelSheet<Item>();
         if (shops is null || items is null) return [];
 
-        var byItem = new Dictionary<uint, (uint cost, string name, List<uint> shopIds)>(capacity: 128);
+        var byItem = new Dictionary<uint, (uint cost, string name, List<uint> shopIds, bool collectible)>(capacity: 128);
 
         foreach (var shop in shops)
         {
@@ -103,9 +87,10 @@ public static class GemstoneCatalog
 
                     if (!byItem.TryGetValue(rowId, out var data))
                     {
-                        var name = items.GetRowOrDefault(rowId)?.Name.ExtractText() ?? "";
+                        if (items.GetRowOrDefault(rowId) is not { } row) continue;
+                        var name = row.Name.ExtractText();
                         if (string.IsNullOrWhiteSpace(name)) continue;
-                        data = (bicolorCost, name, new List<uint>());
+                        data = (bicolorCost, name, new List<uint>(), row.IsUnique || Svc.UnlockState.IsItemUnlockable(row));
                         byItem[rowId] = data;
                     }
                     if (!data.shopIds.Contains(shop.RowId))
@@ -119,7 +104,8 @@ public static class GemstoneCatalog
                 ItemId: kv.Key,
                 ItemName: kv.Value.name,
                 CostPerOne: kv.Value.cost,
-                ShopRowIds: [.. kv.Value.shopIds]))
+                ShopRowIds: [.. kv.Value.shopIds],
+                IsCollectible: kv.Value.collectible))
             .OrderBy(i => i.CostPerOne)
             .ThenBy(i => i.ItemName, StringComparer.OrdinalIgnoreCase)];
     }
