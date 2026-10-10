@@ -38,6 +38,8 @@ public sealed class LiveFateWindow : Window, IDisposable
             MaximumSize = new Vector2(600, 700),
         };
         RespectCloseHotkey = true;
+        AllowPinning = false;
+        AllowClickthrough = false;
     }
 
     public void Dispose() { }
@@ -90,14 +92,6 @@ public sealed class LiveFateWindow : Window, IDisposable
         var origin = ImGui.GetCursorScreenPos();
         var dl = ImGui.GetWindowDrawList();
         var buttonSize = 24f * scale;
-
-        ImGui.InvisibleButton("##afg_live_drag", new Vector2(width - buttonSize - 6f * scale, height));
-        if (ImGui.IsItemActive())
-        {
-            var delta = ImGui.GetIO().MouseDelta;
-            if (delta != Vector2.Zero) ImGui.SetWindowPos(ImGui.GetWindowPos() + delta, ImGuiCond.Always);
-        }
-
         var midY = origin.Y + height * 0.5f;
         var accent = controller.Paused ? Styling.AccentAmber : controller.Running ? Styling.AccentBlue : Styling.TextDim;
         var dot = controller.Running && !controller.Paused ? Styling.PulseColor(accent, Styling.AccentBlueSoft, Styling.PulseMedium) : accent;
