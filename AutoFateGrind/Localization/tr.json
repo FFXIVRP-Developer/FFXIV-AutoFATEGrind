@@ -405,6 +405,7 @@
   "changelog.r21800.10": "Düzeltildi: Çalışma, Bicolor Gemstone sayısı zaten takas eşiğindeyken başlayınca otomatik takas ilk FATE'i bekliyordu",
   "changelog.r21800.11": "Düzeltildi: Bir satın alma başarısız olunca otomatik takas her FATE'ten sonra tüccara dönüyordu",
   "changelog.r21800.12": "Düzeltildi: Canlı FATE takipçisi sola her sürüklendiğinde genişliyordu",
+  "changelog.r21800.13": "Düzeltildi: Maelstrom NPC'sinde onarım ve Limsa Lominsa hanına dönüş ışınlanmadan önce vazgeçiyordu",
   "changelog.r21700.1": "Eklendi: Ayarlar > Genel altında FATE beklerken bineğe bin seçeneği; FATE'ler arasında kısa bir gecikmeden sonra bineğe biner. Katkı: lizvik",
   "changelog.r21700.2": "Eklendi: Ayarlar > Genel altında Ekonomi modu; gil tasarrufu için aynı bölgedeki bir sonraki FATE'e ışınlanmak yerine uçar",
   "changelog.r21700.3": "Düzeltildi: Rota planlandıktan sonra uçuş açılınca FATE yolculuğu yerde kalıyordu. Katkı: lizvik",

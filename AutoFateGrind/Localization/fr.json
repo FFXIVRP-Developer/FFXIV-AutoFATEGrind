@@ -405,6 +405,7 @@
   "changelog.r21800.10": "Correction de l'échange automatique qui attendait le premier ALÉA quand une session démarre avec des gemmes déjà au seuil",
   "changelog.r21800.11": "Correction de l'échange automatique qui retournait chez le marchand après chaque ALÉA quand un achat échouait",
   "changelog.r21800.12": "Correction du suivi en direct qui s'élargissait à chaque déplacement vers la gauche",
+  "changelog.r21800.13": "Correction de la réparation auprès du PNJ du Maelstrom et du retour à l'auberge de Limsa Lominsa, qui abandonnaient avant la téléportation",
   "changelog.r21700.1": "Ajout de l'option Monter en attendant les ALÉA dans Réglages > Général, qui monte en selle après un court délai entre les ALÉA. Contribution de lizvik",
   "changelog.r21700.2": "Ajout du Mode économie dans Réglages > Général : vole vers le prochain ALÉA de la même zone au lieu de se téléporter, pour économiser des gils",
   "changelog.r21700.3": "Correction des trajets vers un ALÉA qui restaient au sol quand le vol devenait possible après le calcul de l'itinéraire. Contribution de lizvik",

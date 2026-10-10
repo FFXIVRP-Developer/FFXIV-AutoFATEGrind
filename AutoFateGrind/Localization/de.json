@@ -405,6 +405,7 @@
   "changelog.r21800.10": "Behoben: Der automatische Tausch wartete auf das erste FATE, wenn ein Lauf mit Steinen über der Tausch-Schwelle beginnt",
   "changelog.r21800.11": "Behoben: Der automatische Tausch ging nach jedem FATE zurück zum Händler, wenn ein Kauf fehlschlug",
   "changelog.r21800.12": "Behoben: Der Live-Tracker wurde bei jedem Ziehen nach links breiter",
+  "changelog.r21800.13": "Behoben: Die NPC-Reparatur beim Mahlstrom und die Rückkehr ins Gasthaus in Limsa Lominsa brachen vor dem Teleport ab",
   "changelog.r21700.1": "Hinzugefügt: Option „Beim Warten auf FATEs aufsitzen“ unter Einstellungen > Allgemein, die zwischen FATEs nach kurzer Verzögerung aufsitzt. Beigetragen von lizvik",
   "changelog.r21700.2": "Hinzugefügt: Sparmodus unter Einstellungen > Allgemein: fliegt in derselben Zone zum nächsten FATE, statt zu teleportieren, um Gil zu sparen",
   "changelog.r21700.3": "Behoben: Wege zu einem FATE blieben am Boden, wenn Fliegen erst nach der Routenplanung möglich wurde. Beigetragen von lizvik",

@@ -405,6 +405,7 @@
   "changelog.r21800.10": "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already over the threshold",
   "changelog.r21800.11": "Fixed auto-trade going back to the trader after every FATE when a purchase fails",
   "changelog.r21800.12": "Fixed the live tracker getting wider every time it was dragged to the left",
+  "changelog.r21800.13": "Fixed NPC repair at the Maelstrom mender and returning to the Limsa Lominsa inn giving up before the teleport",
   "changelog.r21700.1": "Added Mount while waiting for FATEs under Settings > General, which mounts up after a short delay between FATEs. Contributed by lizvik",
   "changelog.r21700.2": "Added Economy mode under Settings > General: flies to the next FATE in the same zone instead of teleporting, to save gil",
   "changelog.r21700.3": "Fixed trips to a FATE staying on the ground when flying became available after the route was planned. Contributed by lizvik",

@@ -405,6 +405,7 @@
   "changelog.r21800.10": "Corregido el canje automático que esperaba al primer FATE cuando una sesión empieza con las gemas ya en el umbral",
   "changelog.r21800.11": "Corregido que el canje automático volviera al comerciante después de cada FATE cuando una compra fallaba",
   "changelog.r21800.12": "Corregido que el rastreador en vivo se ensanchara cada vez que se arrastraba hacia la izquierda",
+  "changelog.r21800.13": "Corregido que la reparación con el PNJ de la Hidra y la vuelta a la posada de Limsa Lominsa se rindieran antes del teletransporte",
   "changelog.r21700.1": "Añadida la opción Usar montura mientras esperas FATEs en Ajustes > General, que monta tras una breve espera entre FATE. Contribución de lizvik",
   "changelog.r21700.2": "Añadido el Modo ahorro en Ajustes > General: vuela al siguiente FATE de la misma zona en lugar de teletransportarse, para ahorrar guiles",
   "changelog.r21700.3": "Corregido que los trayectos a un FATE siguieran por tierra cuando el vuelo se habilitaba después de planificar la ruta. Contribución de lizvik",

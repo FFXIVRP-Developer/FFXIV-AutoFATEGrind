@@ -405,6 +405,7 @@
   "changelog.r21800.10": "Corrigida a troca automática que esperava a primeira FATE quando uma sessão começa com as gemas já no limite",
   "changelog.r21800.11": "Corrigida a troca automática que voltava ao comerciante depois de cada FATE quando uma compra falhava",
   "changelog.r21800.12": "Corrigido o rastreador ao vivo que ficava mais largo cada vez que era arrastado para a esquerda",
+  "changelog.r21800.13": "Corrigido o reparo com o NPC do Maelstrom e o retorno à pousada de Limsa Lominsa, que desistiam antes do teleporte",
   "changelog.r21700.1": "Adicionada a opção Montar enquanto espera FATEs em Configurações > Geral, que monta após um breve atraso entre FATEs. Contribuição de lizvik",
   "changelog.r21700.2": "Adicionado o Modo econômico em Configurações > Geral: voa até a próxima FATE na mesma zona em vez de teleportar, para economizar gil",
   "changelog.r21700.3": "Corrigido o trajeto até uma FATE continuar por terra quando o voo ficava disponível só depois de planejar a rota. Contribuição de lizvik",

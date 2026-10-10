@@ -436,6 +436,7 @@ internal static class L
             new("changelog.r21800.10", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already over the threshold"),
             new("changelog.r21800.11", "Fixed auto-trade going back to the trader after every FATE when a purchase fails"),
             new("changelog.r21800.12", "Fixed the live tracker getting wider every time it was dragged to the left"),
+            new("changelog.r21800.13", "Fixed NPC repair at the Maelstrom mender and returning to the Limsa Lominsa inn giving up before the teleport"),
         ];
 
         public static readonly LocString[] Release21700 =
