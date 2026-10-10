@@ -435,6 +435,7 @@ internal static class L
             new("changelog.r21800.9", "Fixed the live tracker getting wider every time it was dragged to the left: it now keeps its size wherever you move it. Reported in issue #93"),
             new("changelog.r21800.10", "Fixed auto-trade going back to the trader after every FATE when a purchase fails, for example when the item is a minion or orchestrion roll already in your inventory: AFG now skips that item for the rest of the run and tells you in chat"),
             new("changelog.r21800.11", "Added a shopping list to auto-trade under Settings > Gemstones: add as many items as you like and AFG buys them from the top down, also picking up items further down the list when the same trader sells them. Minions, orchestrion rolls and other collectibles are bought once and skipped after you own or learn them, and a stop count keeps a material stocked without overbuying. Your current item moves onto the list. Requested in issue #96"),
+            new("changelog.r21800.12", "Added Idle at a spot as a break activity under Settings > Humanizer: save the places you would stand when stepping away, like a summoning bell, a vendor or an aetheryte, and each break goes to one of them and stands still there instead of wandering around a city. Wandering stays the default"),
         ];
 
         public static readonly LocString[] Release21700 =
