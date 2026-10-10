@@ -44,6 +44,11 @@ internal static class GoalSummary
             Join(Loc.T(L.Grind.GoalMinutes, RunLimits.MinuteCap(cfg)));
         }
 
+        if (cfg.StopAfterLevelsEnabled)
+        {
+            Join(Loc.T(L.Grind.GoalLevels, RunLimits.LevelCap(cfg)));
+        }
+
         return builder.Length == 0 ? Loc.T(L.Grind.GoalEndless) : builder.ToString();
     }
 
