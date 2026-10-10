@@ -424,32 +424,32 @@ internal static class L
 
         public static readonly LocString[] Release21800 =
         [
-            new("changelog.r21800.1", "Added the Mount option under Settings > Travel: pick which of your flying mounts AFG rides when it travels or mounts up while waiting, instead of the mount roulette. Requested in issue #83"),
-            new("changelog.r21800.2", "Fixed FATEs whose center lies below the ground, like the ones at The Imperious in Kozama'uka: the flight there no longer dives into the floor and stalls on arrival. Reported in issue #82"),
-            new("changelog.r21800.3", "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82"),
-            new("changelog.r21800.4", "Split Settings > General in two: mount choice, economy mode, zone swaps, Twist of Fate and Collect hand-ins now live in the new Settings > Travel tab, while General keeps language, window and run options"),
-            new("changelog.r21800.5", "Added the Vary dodging in combat option under Settings > Humanizer: each FATE picks its own dodge delay, movement delay and extra room from danger from ranges you set, so dodging looks less mechanical. Off by default. Contributed by blackappleD"),
-            new("changelog.r21800.6", "Fixed gemstone auto-trade getting stuck at the trader's dialogue when TextAdvance is installed but switched off: AFG now clicks through the trader's dialogue itself, so trading no longer needs TextAdvance"),
-            new("changelog.r21800.7", "Added A number of levels to the How long row on the Grind page: the run ends once your job has gained that many levels, counted across Class queue switches, or earlier if the job reaches the level cap. Contributed by mmkhatib"),
-            new("changelog.r21800.8", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already at or above the trade threshold: AFG now trades before its first FATE, and also repairs first if your gear is already worn. Reported in issue #90"),
-            new("changelog.r21800.9", "Fixed the live tracker getting wider every time it was dragged to the left: it now keeps its size wherever you move it. Reported in issue #93"),
-            new("changelog.r21800.10", "Fixed auto-trade going back to the trader after every FATE when a purchase fails, for example when the item is a minion or orchestrion roll already in your inventory: AFG now skips that item for the rest of the run and tells you in chat"),
-            new("changelog.r21800.11", "Added a shopping list to auto-trade under Settings > Gemstones: add as many items as you like and AFG buys them from the top down, also picking up items further down the list when the same trader sells them. Minions, orchestrion rolls and other collectibles are bought once and skipped after you own or learn them, and a stop count keeps a material stocked without overbuying. Your current item moves onto the list. Requested in issue #96"),
-            new("changelog.r21800.12", "Added Idle at a spot as a break activity under Settings > Humanizer: save the places you would stand when stepping away, like a summoning bell, a vendor or an aetheryte, and each break goes to one of them and stands still there instead of wandering around a city. Wandering stays the default"),
+            new("changelog.r21800.1", "Added a Mount option under Settings > Travel to pick which flying mount to ride instead of the mount roulette"),
+            new("changelog.r21800.2", "Added Vary dodging in combat under Settings > Humanizer, giving each FATE its own dodge timing from ranges you set. Contributed by blackappleD"),
+            new("changelog.r21800.3", "Added A number of levels to How long on the Grind page: the run ends once your job gains that many levels. Contributed by mmkhatib"),
+            new("changelog.r21800.4", "Added a shopping list to auto-trade under Settings > Gemstones: items are bought from the top down, and collectibles you own are skipped"),
+            new("changelog.r21800.5", "Added Idle at a spot as a break activity under Settings > Humanizer: breaks stand still at a place you saved instead of wandering a city"),
+            new("changelog.r21800.6", "Moved the mount, economy mode, zone swap, Twist of Fate and Collect hand-in options into the new Settings > Travel tab"),
+            new("changelog.r21800.7", "Fixed flights to FATEs whose center lies below the ground, like those at The Imperious, diving into the floor"),
+            new("changelog.r21800.8", "Fixed getting stuck on walls in FATEs while picking up Collect items or attacking from range"),
+            new("changelog.r21800.9", "Fixed gemstone auto-trade stalling at the trader's dialogue when TextAdvance is switched off"),
+            new("changelog.r21800.10", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already over the threshold"),
+            new("changelog.r21800.11", "Fixed auto-trade going back to the trader after every FATE when a purchase fails"),
+            new("changelog.r21800.12", "Fixed the live tracker getting wider every time it was dragged to the left"),
         ];
 
         public static readonly LocString[] Release21700 =
         [
-            new("changelog.r21700.1", "Added the Mount while waiting for FATEs option under Settings > General: mounts after a short delay while you wait for a FATE to spawn, and stays off on Yo-kai medal runs. Contributed by lizvik"),
-            new("changelog.r21700.2", "Fixed trips to a FATE staying on the ground when flying became available only after the route was planned: travel now replans for flight, up to twice. Contributed by lizvik"),
-            new("changelog.r21700.3", "Added Economy mode under Settings > General: skips the teleport to the aetheryte nearest the next FATE in the same zone and flies there instead to save gil. Teleports to other zones and stuck recovery still happen"),
+            new("changelog.r21700.1", "Added Mount while waiting for FATEs under Settings > General, which mounts up after a short delay between FATEs. Contributed by lizvik"),
+            new("changelog.r21700.2", "Added Economy mode under Settings > General: flies to the next FATE in the same zone instead of teleporting, to save gil"),
+            new("changelog.r21700.3", "Fixed trips to a FATE staying on the ground when flying became available after the route was planned. Contributed by lizvik"),
         ];
 
         public static readonly LocString[] Release21600 =
         [
-            new("changelog.r21600.1", "Added your Bicolor Gemstone count to the title strip and the live tracker, turning amber at your auto-trade threshold and rose at the 1500 cap"),
-            new("changelog.r21600.2", "Added the Summon chocobo toggle under Settings > Consumables: turn it off to keep BossMod's FATE helper from using Gysahl Greens during runs, without changing your BossMod preset. Contributed by lizvik"),
-            new("changelog.r21600.3", "Added a Buy Me a Coffee button under Patreon on the About page"),
+            new("changelog.r21600.1", "Added your Bicolor Gemstone count to the title strip and live tracker, colored at your trade threshold and at the cap"),
+            new("changelog.r21600.2", "Added the Summon chocobo toggle under Settings > Consumables to keep BossMod from using Gysahl Greens. Contributed by lizvik"),
+            new("changelog.r21600.3", "Added a Buy Me a Coffee button to the About page"),
         ];
 
         public static readonly LocString[] Release21500 =
@@ -460,13 +460,13 @@ internal static class L
 
         public static readonly LocString[] Release21400 =
         [
-            new("changelog.r21400.1", "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards"),
-            new("changelog.r21400.2", "Added the Shared FATE ranks goal: grinds each zone until its rank is maxed, then moves on, with the rank shown on every Shadowbringers and later zone card"),
-            new("changelog.r21400.3", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste"),
-            new("changelog.r21400.4", "Added run limits that work with any goal: stop after a number of FATEs or a length of time"),
-            new("changelog.r21400.5", "Added /afg start, stop, stop soft and run <count>, and Ctrl+click on Stop to finish the current FATE first"),
-            new("changelog.r21400.6", "Added filters for long FATEs and a fixed level window, and a Keep Twist of Fate option that holds zone swaps while the bonus is up"),
-            new("changelog.r21400.7", "Added a setting for how long to wait in an empty zone before swapping, which the pacing roll now respects"),
+            new("changelog.r21400.1", "Added the Shared FATE ranks goal: grinds each zone until its rank is maxed, then moves on, with the rank shown on every Shadowbringers and later zone card"),
+            new("changelog.r21400.2", "Added six relic and item goals: Atma, Luminous Crystals, Memories of the Dying, Haunting and Vexatious Memories, Demiatma and Crystal Paste"),
+            new("changelog.r21400.3", "Added run limits that work with any goal: stop after a number of FATEs or a length of time"),
+            new("changelog.r21400.4", "Added /afg start, stop, stop soft and run <count>, and Ctrl+click on Stop to finish the current FATE first"),
+            new("changelog.r21400.5", "Added filters for long FATEs and a fixed level window, and a Keep Twist of Fate option that holds zone swaps while the bonus is up"),
+            new("changelog.r21400.6", "Added a setting for how long to wait in an empty zone before swapping, which the pacing roll now respects"),
+            new("changelog.r21400.7", "Overhauled the Grind page: a Goal section with Farm, Ranks, Relics and Events tabs, a live status on every goal card, and two plain questions for how long to run and what to do afterwards"),
             new("changelog.r21400.8", "Improved the live tracker: passed-over FATEs are listed with the reason, a click walks you to a FATE while idle, and the FATE name format is configurable"),
             new("changelog.r21400.9", "Fixed the level range and skipped FATE types not applying to a FATE you were already standing in or died in"),
             new("changelog.r21400.10", "Fixed FATEs skipped for routing trouble staying skipped for the whole session; they are retried after the next completion"),
