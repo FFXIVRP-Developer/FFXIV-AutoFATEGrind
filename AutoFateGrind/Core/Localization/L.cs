@@ -431,6 +431,7 @@ internal static class L
             new("changelog.r21800.5", "Added the Vary dodging in combat option under Settings > Humanizer: each FATE picks its own dodge delay, movement delay and extra room from danger from ranges you set, so dodging looks less mechanical. Off by default. Contributed by blackappleD"),
             new("changelog.r21800.6", "Fixed gemstone auto-trade getting stuck at the trader's dialogue when TextAdvance is installed but switched off: AFG now clicks through the trader's dialogue itself, so trading no longer needs TextAdvance"),
             new("changelog.r21800.7", "Added A number of levels to the How long row on the Grind page: the run ends once your job has gained that many levels, counted across Class queue switches, or earlier if the job reaches the level cap. Contributed by mmkhatib"),
+            new("changelog.r21800.8", "Fixed auto-trade waiting for the first FATE when a run starts with gemstones already at or above the trade threshold: AFG now trades before its first FATE, and also repairs first if your gear is already worn. Reported in issue #90"),
         ];
 
         public static readonly LocString[] Release21700 =
