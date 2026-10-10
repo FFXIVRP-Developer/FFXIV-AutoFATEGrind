@@ -369,14 +369,16 @@ public sealed partial class AutoFate
 
     private bool StopConditionMet()
     {
+        var cfg = Plugin.Cfg;
         var context = new ModeContext
         {
             CompletedCount = session.CompletedCount,
             Zones = zones,
             Elapsed = session.Elapsed,
             LevelsGained = session.LevelsGained,
+            LevelingJobAtMax = cfg.StopAfterLevelsEnabled && ClassSwitcher.LevelingJobAtMax(cfg),
         };
-        return Plugin.Cfg.ActiveMode.IsComplete(context) || RunLimits.Reached(Plugin.Cfg, context);
+        return cfg.ActiveMode.IsComplete(context) || RunLimits.Reached(cfg, context);
     }
 
     private bool AdvanceClassQueueIfCapHit()

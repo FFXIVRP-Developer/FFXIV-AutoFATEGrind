@@ -7,10 +7,11 @@ public static class RunLimits
     public const int MaxMinutes = 1440;
     public const int MaxLevels = 99;
 
+    // A job at max level can gain no more, so the level limit ends the run there rather than never.
     public static bool Reached(Configuration cfg, ModeContext ctx)
         => (cfg.StopAfterFatesEnabled && ctx.CompletedCount >= FateCap(cfg))
         || (cfg.StopAfterMinutesEnabled && ctx.Elapsed >= TimeSpan.FromMinutes(MinuteCap(cfg)))
-        || (cfg.StopAfterLevelsEnabled && ctx.LevelsGained >= LevelCap(cfg));
+        || (cfg.StopAfterLevelsEnabled && (ctx.LevelsGained >= LevelCap(cfg) || ctx.LevelingJobAtMax));
 
     public static bool Any(Configuration cfg)
         => cfg.StopAfterFatesEnabled || cfg.StopAfterMinutesEnabled || cfg.StopAfterLevelsEnabled;
