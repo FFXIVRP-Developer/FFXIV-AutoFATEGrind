@@ -424,6 +424,7 @@ internal static class L
             new("changelog.r21800.3", "Fixed getting stuck behind walls in FATEs: in Collect FATEs the character walks around to an item BossMod keeps running into a wall toward, and ranged jobs that are in range of a mob but cannot hit it now walk closer. Reported in issue #82"),
             new("changelog.r21800.4", "Split Settings > General in two: mount choice, economy mode, zone swaps, Twist of Fate and Collect hand-ins now live in the new Settings > Travel tab, while General keeps language, window and run options"),
             new("changelog.r21800.5", "Added the Vary dodging in combat option under Settings > Humanizer: each FATE picks its own dodge delay, movement delay and extra room from danger from ranges you set, so dodging looks less mechanical. Off by default. Contributed by blackappleD"),
+            new("changelog.r21800.6", "Fixed gemstone auto-trade getting stuck at the trader's dialogue when TextAdvance is installed but switched off: AFG now clicks through the trader's dialogue itself, so trading no longer needs TextAdvance"),
         ];
 
         public static readonly LocString[] Release21700 =
